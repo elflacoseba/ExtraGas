@@ -26,7 +26,9 @@ Sistema de gestión para una empresa familiar de venta de **gas envasado**, **ca
 
 - **MySQL 9.6.0** (InnoDB, `utf8mb4` / `utf8mb4_unicode_ci`)
 - Time zone: `America/Argentina/Buenos_Aires`
-- Sin ORM ni framework backend (esta primera entrega es la base de datos)
+- **.NET 10** (ASP.NET Core MVC)
+- **EF Core 9** + **Pomelo 9** (database-first, sin migraciones EF)
+- La BD es la fuente de verdad; los cambios de esquema van por SQL en `db/migrations/`
 
 ## Estructura
 
@@ -34,6 +36,16 @@ Sistema de gestión para una empresa familiar de venta de **gas envasado**, **ca
 /
 ├── AGENTS.md               instrucciones para agentes de IA
 ├── README.md               este archivo
+├── ExtraGasMVC.sln         solución .NET
+├── src/
+│   └── ExtraGasMVC/        aplicación web ASP.NET Core MVC
+│       ├── Data/
+│       │   ├── Context/    ExtraGasDbContext
+│       │   ├── Entities/   modelos POCO (25 tablas + 10 vistas + 1 enum)
+│       │   └── Configurations/  Fluent API por entidad (35 archivos)
+│       ├── Controllers/
+│       ├── Models/         ViewModels
+│       └── Views/
 └── db/
     ├── migrations/         SQL versionado (orden alfabético = orden de ejecución)
     ├── seed/               datos iniciales (provincias, etc.)
