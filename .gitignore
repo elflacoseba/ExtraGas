@@ -1,0 +1,34 @@
+# Resultados de la compilación
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+
+# Paquetes y herramientas de NuGet
+packages/
+project.lock.json
+*.nuget.props
+*.nuget.targets
+
+# Configuración y archivos de Visual Studio / VS Code
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.csproj.user
+.vscode/
+
+# Archivos de entorno y compilación web
+*.Cache
+[Tt]est[Rr]esult*
+*.opendb
+*.VC.db
+
+# Datos de sesión y caché local
+App_Data/Uploads/
+App_Data/TEMP/
+*.tmp
