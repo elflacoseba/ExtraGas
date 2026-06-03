@@ -30,27 +30,31 @@ Sistema de gestión para una empresa familiar de venta de **gas envasado**, **ca
 - **EF Core 9** + **Pomelo 9** (database-first, sin migraciones EF)
 - La BD es la fuente de verdad; los cambios de esquema van por SQL en `db/migrations/`
 
-## Estructura
+## Estructura de la solución
 
 ```
 /
-├── AGENTS.md               instrucciones para agentes de IA
-├── README.md               este archivo
-├── ExtraGasMVC.sln         solución .NET
-├── src/
-│   └── ExtraGasMVC/        aplicación web ASP.NET Core MVC
-│       ├── Data/
-│       │   ├── Context/    ExtraGasDbContext
-│       │   ├── Entities/   modelos POCO (25 tablas + 10 vistas + 1 enum)
-│       │   └── Configurations/  Fluent API por entidad (35 archivos)
-│       ├── Controllers/
-│       ├── Models/         ViewModels
-│       └── Views/
+├── AGENTS.md                       instrucciones para agentes de IA
+├── README.md                       este archivo
+├── ExtraGasMVC.sln                 solución .NET
+│
+├── src/ExtraGasMVC/                aplicación web ASP.NET Core MVC
+│   ├── Data/                       capa de acceso a datos (EF Core)
+│   │   ├── Context/                ExtraGasDbContext (punto de entrada del ORM)
+│   │   ├── Entities/               modelos POCO (25 tablas + 10 vistas + 1 enum)
+│   │   └── Configurations/         Fluent API por entidad (35 archivos separados)
+│   ├── Controllers/                controladores MVC
+│   ├── Models/                     ViewModels para las vistas
+│   ├── Views/                      plantillas Razor
+│   ├── wwwroot/                    archivos estáticos (css, js, lib)
+│   ├── Program.cs                  punto de entrada y registro de servicios
+│   └── appsettings.json            configuración (connection string)
+│
 └── db/
-    ├── migrations/         SQL versionado (orden alfabético = orden de ejecución)
-    ├── seed/               datos iniciales (provincias, etc.)
-    ├── scripts/            install.sh, reset.sh
-    └── docs/               ERD.mmd, DECISIONES.md
+    ├── migrations/                 SQL versionado (orden alfabético = orden de ejecución)
+    ├── seed/                       datos iniciales (provincias, etc.)
+    ├── scripts/                    install.sh, reset.sh
+    └── docs/                       ERD.mmd, DECISIONES.md
 ```
 
 ## Comandos rápidos
