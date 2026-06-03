@@ -1,7 +1,21 @@
+using ExtraGasMVC.Data.Context;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
+var connectionString = builder.Configuration.GetConnectionString("ExtraGas")
+    ?? throw new InvalidOperationException("Connection string 'ExtraGas' not found.");
+
+builder.Services.AddDbContext<ExtraGasDbContext>(opt =>
+    opt.UseMySql(
+        connectionString,
+        ServerVersion.AutoDetect(connectionString),
+        my => my.EnableStringComparisonTranslations()
+                 .CommandTimeout(30)
+                 .MigrationsAssembly(typeof(Program).Assembly.GetName().Name)));
 
 var app = builder.Build();
 
