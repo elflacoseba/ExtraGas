@@ -32,3 +32,4 @@ project.lock.json
 App_Data/Uploads/
 App_Data/TEMP/
 *.tmp
+.DS_Store
