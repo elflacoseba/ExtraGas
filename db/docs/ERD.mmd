@@ -1,0 +1,208 @@
+erDiagram
+    ROLES ||--o{ USUARIOS : "asignado"
+    EMPLEADOS ||--o| USUARIOS : "opcional"
+    PROVINCIAS ||--o{ EMPLEADOS : "reside_en"
+    PROVINCIAS ||--o{ CLIENTES : "reside_en"
+    PROVINCIAS ||--o{ PROVEEDORES : "domiciliado_en"
+    CLIENTES ||--o{ PEDIDOS : "realiza"
+    EMPLEADOS ||--o{ PEDIDOS : "atiende"
+    ESTADOS_PEDIDO ||--o{ PEDIDOS : "estado"
+    CANALES_VENTA ||--o{ PEDIDOS : "canal"
+    MEDIOS_CONTACTO_PEDIDO ||--o{ PEDIDOS : "via"
+    PEDIDOS ||--o{ PEDIDO_ITEMS : "compuesto_por"
+    PRODUCTOS ||--o{ PEDIDO_ITEMS : "referencia"
+    TIPOS_PRODUCTO ||--o{ PRODUCTOS : "clasifica"
+    CLIENTES ||--o{ PAGOS : "paga"
+    PEDIDOS ||--o{ PAGOS : "aplicado_a"
+    FORMAS_PAGO ||--o{ PAGOS : "instrumento"
+    CLIENTES ||--o{ CLIENTE_CONTACTOS : "tiene"
+    TIPOS_CONTACTO_CLIENTE ||--o{ CLIENTE_CONTACTOS : "tipo"
+    PROVEEDORES ||--o{ RECEPCIONES_PROVEEDOR : "abastece"
+    EMPLEADOS ||--o{ RECEPCIONES_PROVEEDOR : "recibe"
+    RECEPCIONES_PROVEEDOR ||--o{ RECEPCION_ITEMS : "compuesto_por"
+    PRODUCTOS ||--o{ RECEPCION_ITEMS : "recibido"
+    RECEPCIONES_PROVEEDOR ||--o{ GARRAFAS : "ingresa"
+    PROVEEDORES ||--o{ GARRAFAS : "origen"
+    ESTADOS_GARRAFA ||--o{ GARRAFAS : "estado_actual"
+    CLIENTES ||--o{ GARRAFAS : "en_poder_de"
+    GARRAFAS ||--o{ MOVIMIENTOS_GARRAFA : "registra"
+    TIPOS_MOVIMIENTO_GARRAFA ||--o{ MOVIMIENTOS_GARRAFA : "tipo"
+    PEDIDOS ||--o{ MOVIMIENTOS_GARRAFA : "origen"
+    RECEPCIONES_PROVEEDOR ||--o{ MOVIMIENTOS_GARRAFA : "origen"
+    PROVEEDORES ||--o{ PAGOS_PROVEEDOR : "recibe"
+    FORMAS_PAGO ||--o{ PAGOS_PROVEEDOR : "instrumento"
+    RECEPCIONES_PROVEEDOR ||--o{ PAGOS_PROVEEDOR : "pagado_por"
+
+    USUARIOS {
+        bigint id PK
+        varchar username UK
+        varchar password_hash
+        varchar email
+        bigint rol_id FK
+        boolean activo
+    }
+
+    ROLES {
+        bigint id PK
+        varchar codigo UK
+        varchar nombre
+    }
+
+    EMPLEADOS {
+        bigint id PK
+        varchar nombre
+        varchar apellido
+        varchar dni UK
+        varchar cuil
+        varchar telefono
+        bigint usuario_id FK
+        boolean activo
+        date fecha_ingreso
+    }
+
+    CLIENTES {
+        bigint id PK
+        varchar codigo
+        varchar nombre
+        varchar apellido
+        varchar dni
+        varchar cuit_cuil
+        varchar telefono_principal
+        varchar telefono_secundario
+        varchar email
+        varchar calle
+        varchar numero
+        varchar piso
+        varchar depto
+        varchar ciudad
+        varchar codigo_postal
+        bigint provincia_id FK
+        date fecha_alta
+        boolean activo
+    }
+
+    PROVEEDORES {
+        bigint id PK
+        varchar codigo
+        varchar razon_social
+        varchar nombre_fantasia
+        varchar cuit UK
+        varchar telefono_principal
+        varchar email
+        varchar calle
+        varchar numero
+        varchar ciudad
+        bigint provincia_id FK
+        boolean activo
+    }
+
+    PRODUCTOS {
+        bigint id PK
+        varchar codigo UK
+        varchar nombre
+        bigint tipo_producto_id FK
+        decimal capacidad_kg
+        varchar unidad_venta
+        decimal precio_actual
+        boolean maneja_garrafa_individual
+        boolean activo
+    }
+
+    PEDIDOS {
+        bigint id PK
+        varchar numero UK
+        datetime fecha
+        datetime fecha_entrega
+        boolean entregado
+        bigint cliente_id FK
+        bigint empleado_id FK
+        bigint estado_pedido_id FK
+        bigint canal_venta_id FK
+        bigint medio_contacto_id FK
+        decimal subtotal
+        decimal descuento
+        decimal total
+        decimal monto_pagado
+        decimal saldo
+    }
+
+    PEDIDO_ITEMS {
+        bigint id PK
+        bigint pedido_id FK
+        bigint producto_id FK
+        enum tipo_linea
+        decimal cantidad
+        decimal precio_unitario
+        decimal subtotal
+    }
+
+    PAGOS {
+        bigint id PK
+        varchar numero_recibo UK
+        datetime fecha
+        bigint cliente_id FK
+        bigint pedido_id FK
+        bigint forma_pago_id FK
+        decimal monto
+        varchar referencia
+    }
+
+    GARRAFAS {
+        bigint id PK
+        varchar codigo UK
+        tinyint capacidad_kg
+        bigint proveedor_id FK
+        bigint recepcion_id FK
+        date fecha_compra
+        bigint estado_garrafa_id FK
+        bigint cliente_id FK
+        boolean activo
+        datetime fecha_ultimo_movimiento
+    }
+
+    MOVIMIENTOS_GARRAFA {
+        bigint id PK
+        bigint garrafa_id FK
+        datetime fecha
+        bigint tipo_movimiento_id FK
+        bigint pedido_id FK
+        bigint recepcion_id FK
+        bigint cliente_id FK
+        bigint estado_origen_id FK
+        bigint estado_destino_id FK
+        bigint empleado_id FK
+    }
+
+    RECEPCIONES_PROVEEDOR {
+        bigint id PK
+        varchar numero UK
+        datetime fecha
+        bigint proveedor_id FK
+        bigint empleado_id FK
+        varchar numero_factura_proveedor
+        decimal subtotal
+        decimal descuento
+        decimal total
+        decimal monto_pagado
+        decimal saldo
+    }
+
+    RECEPCION_ITEMS {
+        bigint id PK
+        bigint recepcion_id FK
+        bigint producto_id FK
+        decimal cantidad
+        decimal precio_unitario
+        decimal subtotal
+    }
+
+    PAGOS_PROVEEDOR {
+        bigint id PK
+        varchar numero UK
+        datetime fecha
+        bigint proveedor_id FK
+        bigint recepcion_id FK
+        bigint forma_pago_id FK
+        decimal monto
+        varchar referencia
+    }
