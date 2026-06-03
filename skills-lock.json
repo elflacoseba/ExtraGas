@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "database-designer": {
+      "source": "alirezarezvani/claude-skills",
+      "sourceType": "github",
+      "skillPath": "engineering/skills/database-designer/SKILL.md",
+      "computedHash": "969abb51a43c750f2b368707023ac8b7b4dfe4025a24632cceebb8e27c2e58d7"
+    }
+  }
+}
