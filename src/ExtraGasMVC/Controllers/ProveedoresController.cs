@@ -1,4 +1,4 @@
-using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
@@ -37,11 +37,11 @@ public class ProveedoresController : Controller
         return View(proveedor);
     }
 
-    public IActionResult Create() => View(new Proveedor { Activo = true });
+    public IActionResult Create() => View(new CreateProveedorDto { Activo = true });
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(Proveedor proveedor, CancellationToken ct = default)
+    public async Task<IActionResult> Create(CreateProveedorDto proveedor, CancellationToken ct = default)
     {
         if (!ModelState.IsValid) return View(proveedor);
         try
@@ -61,12 +61,38 @@ public class ProveedoresController : Controller
     {
         var proveedor = await _proveedorService.GetByIdAsync(id, ct);
         if (proveedor is null) return NotFound();
-        return View(proveedor);
+        
+        var updateDto = new UpdateProveedorDto
+        {
+            Id = proveedor.Id,
+            Codigo = proveedor.Codigo,
+            RazonSocial = proveedor.RazonSocial,
+            NombreFantasia = proveedor.NombreFantasia,
+            Cuit = proveedor.Cuit,
+            TelefonoPrincipal = proveedor.TelefonoPrincipal,
+            TelefonoSecundario = proveedor.TelefonoSecundario,
+            Email = proveedor.Email,
+            Calle = proveedor.Calle,
+            Numero = proveedor.Numero,
+            Piso = proveedor.Piso,
+            Depto = proveedor.Depto,
+            Ciudad = proveedor.Ciudad,
+            CodigoPostal = proveedor.CodigoPostal,
+            ProvinciaId = proveedor.ProvinciaId,
+            Referencias = proveedor.Referencias,
+            ContactoNombre = proveedor.ContactoNombre,
+            ContactoTelefono = proveedor.ContactoTelefono,
+            ContactoEmail = proveedor.ContactoEmail,
+            Observaciones = proveedor.Observaciones,
+            Activo = proveedor.Activo
+        };
+        
+        return View(updateDto);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(ulong id, Proveedor proveedor, CancellationToken ct = default)
+    public async Task<IActionResult> Edit(ulong id, UpdateProveedorDto proveedor, CancellationToken ct = default)
     {
         if (id != proveedor.Id) return BadRequest();
         if (!ModelState.IsValid) return View(proveedor);

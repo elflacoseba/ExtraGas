@@ -1,4 +1,5 @@
 using ExtraGasMVC.Data.Context;
+using ExtraGasMVC.Mappings;
 using ExtraGasMVC.Services.Implementations;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -7,6 +8,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
+// Registrar AutoMapper
+builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 
 var connectionString = builder.Configuration.GetConnectionString("ExtraGas")
     ?? throw new InvalidOperationException("Connection string 'ExtraGas' not found.");

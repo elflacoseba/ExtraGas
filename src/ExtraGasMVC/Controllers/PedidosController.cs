@@ -1,4 +1,4 @@
-using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
@@ -48,7 +48,7 @@ public class PedidosController : Controller
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
         ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-        return View(new Pedido
+        return View(new CreatePedidoDto
         {
             Fecha = DateTime.UtcNow,
             EstadoPedidoId = 1
@@ -57,7 +57,7 @@ public class PedidosController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(Pedido pedido, CancellationToken ct = default)
+    public async Task<IActionResult> Create(CreatePedidoDto pedido, CancellationToken ct = default)
     {
         if (!ModelState.IsValid)
         {
@@ -83,12 +83,31 @@ public class PedidosController : Controller
         var pedido = await _pedidoService.GetByIdAsync(id, ct);
         if (pedido is null) return NotFound();
         ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-        return View(pedido);
+        
+        var updateDto = new UpdatePedidoDto
+        {
+            Id = pedido.Id,
+            Fecha = pedido.Fecha,
+            FechaEntrega = pedido.FechaEntrega,
+            Entregado = pedido.Entregado,
+            ClienteId = pedido.ClienteId,
+            EmpleadoId = pedido.EmpleadoId,
+            EstadoPedidoId = pedido.EstadoPedidoId,
+            CanalVentaId = pedido.CanalVentaId,
+            MedioContactoId = pedido.MedioContactoId,
+            Subtotal = pedido.Subtotal,
+            Descuento = pedido.Descuento,
+            Total = pedido.Total,
+            Observaciones = pedido.Observaciones,
+            DireccionEntrega = pedido.DireccionEntrega
+        };
+        
+        return View(updateDto);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(ulong id, Pedido pedido, CancellationToken ct = default)
+    public async Task<IActionResult> Edit(ulong id, UpdatePedidoDto pedido, CancellationToken ct = default)
     {
         if (id != pedido.Id) return BadRequest();
         if (!ModelState.IsValid)
@@ -99,7 +118,7 @@ public class PedidosController : Controller
         try
         {
             await _pedidoService.UpdateAsync(pedido, ct);
-            TempData["Success"] = $"Pedido {pedido.Numero} actualizado.";
+            TempData["Success"] = "Pedido actualizado.";
             return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)

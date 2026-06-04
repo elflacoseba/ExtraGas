@@ -1,4 +1,4 @@
-@model IEnumerable<ExtraGasMVC.Data.Entities.Garrafa>
+@model IEnumerable<ExtraGasMVC.DTOs.GarrafaDto>
 @{
     ViewData["Title"] = "Garrafas en poder del cliente";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -6,7 +6,7 @@
         new() { Label = "Garrafas", Controller = "Garrafas", Action = "Index" },
         new() { Label = "En clientes" }
     };
-    var cliente = ViewBag.Cliente as ExtraGasMVC.Data.Entities.Cliente;
+    var cliente = ViewBag.Cliente as ExtraGasMVC.DTOs.ClienteDto;
 }
 @section PageHeader {
     <div class="mb-3">

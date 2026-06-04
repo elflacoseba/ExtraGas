@@ -1,4 +1,4 @@
-@model ExtraGasMVC.Data.Entities.Cliente
+@model ExtraGasMVC.DTOs.UpdateClienteDto
 @{
     ViewData["Title"] = "Editar cliente";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -19,7 +19,6 @@
     <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
         @Html.AntiForgeryToken()
         <input type="hidden" asp-for="Id" />
-        <input type="hidden" asp-for="CreatedAt" />
         <div class="card-body">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
             <div class="row g-3">

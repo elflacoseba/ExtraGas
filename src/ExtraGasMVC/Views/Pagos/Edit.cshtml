@@ -1,4 +1,4 @@
-@model ExtraGasMVC.Data.Entities.Pago
+@model ExtraGasMVC.DTOs.UpdatePagoDto
 @{
     ViewData["Title"] = "Editar pago";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -6,8 +6,8 @@
         new() { Label = "Pagos", Controller = "Pagos", Action = "Index" },
         new() { Label = "Editar" }
     };
-    var pedidos = ViewBag.Pedidos as IEnumerable<ExtraGasMVC.Data.Entities.Pedido> ?? Array.Empty<ExtraGasMVC.Data.Entities.Pedido>();
-    var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.Data.Entities.Cliente> ?? Array.Empty<ExtraGasMVC.Data.Entities.Cliente>();
+    var pedidos = ViewBag.Pedidos as IEnumerable<ExtraGasMVC.DTOs.PedidoDto> ?? Array.Empty<ExtraGasMVC.DTOs.PedidoDto>();
+    var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.DTOs.ClienteDto> ?? Array.Empty<ExtraGasMVC.DTOs.ClienteDto>();
     var formas = ViewBag.FormasPago as IEnumerable<ExtraGasMVC.Data.Entities.FormaPago> ?? Array.Empty<ExtraGasMVC.Data.Entities.FormaPago>();
 }
 @section PageHeader {
@@ -20,7 +20,6 @@
     <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
         @Html.AntiForgeryToken()
         <input type="hidden" asp-for="Id" />
-        <input type="hidden" asp-for="CreatedAt" />
         <div class="card-body">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
             <div class="row g-3">

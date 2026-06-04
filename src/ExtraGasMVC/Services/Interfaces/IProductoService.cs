@@ -1,15 +1,15 @@
-using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.DTOs;
 
 namespace ExtraGasMVC.Services.Interfaces;
 
 public interface IProductoService
 {
-    Task<Producto?> GetByIdAsync(ulong id, CancellationToken ct = default);
-    Task<Producto?> GetByCodigoAsync(string codigo, CancellationToken ct = default);
-    Task<IEnumerable<Producto>> GetAllAsync(CancellationToken ct = default);
-    Task<IEnumerable<Producto>> GetActivosAsync(CancellationToken ct = default);
-    Task<IEnumerable<Producto>> GetByTipoAsync(ulong tipoProductoId, CancellationToken ct = default);
-    Task<Producto> CreateAsync(Producto producto, CancellationToken ct = default);
-    Task<Producto> UpdateAsync(Producto producto, CancellationToken ct = default);
+    Task<ProductoDto?> GetByIdAsync(ulong id, CancellationToken ct = default);
+    Task<ProductoDto?> GetByCodigoAsync(string codigo, CancellationToken ct = default);
+    Task<IEnumerable<ProductoDto>> GetAllAsync(CancellationToken ct = default);
+    Task<IEnumerable<ProductoDto>> GetActivosAsync(CancellationToken ct = default);
+    Task<IEnumerable<ProductoDto>> GetByTipoAsync(ulong tipoProductoId, CancellationToken ct = default);
+    Task<ProductoDto> CreateAsync(CreateProductoDto producto, CancellationToken ct = default);
+    Task<ProductoDto> UpdateAsync(UpdateProductoDto producto, CancellationToken ct = default);
     Task<bool> DeleteAsync(ulong id, CancellationToken ct = default);
 }
