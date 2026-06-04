@@ -32,4 +32,8 @@ project.lock.json
 App_Data/Uploads/
 App_Data/TEMP/
 *.tmp
+
+
+#Otros archivos y carpetas a ignorar
+node_modules/
 .DS_Store
