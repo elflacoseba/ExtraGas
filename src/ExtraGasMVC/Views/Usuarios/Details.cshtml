@@ -66,7 +66,7 @@
             <div class="card-body">
                 <dl class="row mb-0">
                     <dt class="col-sm-4">Ultimo login</dt>
-                    <dd class="col-sm-8">@Model.UltimoLogin.ToShortDateTime()</dd>
+                    <dd class="col-sm-8">@(Model.UltimoLogin?.ToShortDateTime() ?? "Nunca")</dd>
                 </dl>
             </div>
         </div>

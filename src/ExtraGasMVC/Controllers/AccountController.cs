@@ -37,17 +37,10 @@ public class AccountController : Controller
             return View();
         }
 
-        var isValid = await _usuarioService.ValidateLoginAsync(usuario, password);
-        if (!isValid)
-        {
-            ModelState.AddModelError(string.Empty, "Usuario o contrasena invalidos.");
-            return View();
-        }
-
-        var userDto = await _usuarioService.GetByUsernameForAuthAsync(usuario);
+        var userDto = await _usuarioService.ValidateAndLoadForAuthAsync(usuario, password);
         if (userDto is null)
         {
-            ModelState.AddModelError(string.Empty, "Error al cargar los datos del usuario.");
+            ModelState.AddModelError(string.Empty, "Usuario o contrasena invalidos.");
             return View();
         }
 
@@ -57,6 +50,9 @@ public class AccountController : Controller
             new(ClaimTypes.Name, userDto.Username),
             new(ClaimTypes.Role, userDto.RolCodigo ?? string.Empty),
         };
+
+        if (!string.IsNullOrEmpty(userDto.RolNombre))
+            claims.Add(new Claim("RoleName", userDto.RolNombre));
 
         if (!string.IsNullOrEmpty(userDto.Email))
             claims.Add(new Claim(ClaimTypes.Email, userDto.Email));
@@ -74,11 +70,11 @@ public class AccountController : Controller
         return RedirectToAction("Index", "Home");
     }
 
-    [HttpGet]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        
         return RedirectToAction(nameof(Login));
     }
 

@@ -1,14 +1,13 @@
-@using ExtraGasMVC.Data.Entities
 @model ExtraGasMVC.DTOs.CreateUsuarioDto
 @{
+    var roles = ViewBag.Roles as List<ExtraGasMVC.DTOs.RolDto>;
+    var empleados = ViewBag.EmpleadosSinUsuario as List<ExtraGasMVC.DTOs.EmpleadoSinUsuarioDto>;
     ViewData["Title"] = "Nuevo usuario";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
     {
         new() { Label = "Usuarios", Controller = "Usuarios", Action = "Index" },
         new() { Label = "Nuevo" }
     };
-    var roles = ViewBag.Roles as List<Rol>;
-    var empleados = ViewBag.EmpleadosSinUsuario as IEnumerable<dynamic>;
 }
 @section PageHeader {
     <div class="mb-3">

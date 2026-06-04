@@ -66,7 +66,7 @@
                         <td><strong>@u.Username</strong></td>
                         <td>@(u.Email ?? "-")</td>
                         <td>@(u.RolNombre ?? "-")</td>
-                        <td>@u.UltimoLogin.ToShortDateTime()</td>
+                        <td>@(u.UltimoLogin?.ToShortDateTime() ?? "-")</td>
                         <td class="text-center">
                             @if (u.Activo)
                             {
@@ -104,16 +104,81 @@
         {
             <nav>
                 <ul class="pagination pagination-sm m-0 float-end">
-                    @for (var i = 1; i <= totalPaginas; i++)
+                    @if (pagina > 1)
                     {
-                        <li class="page-item @(i == pagina ? "active" : "")">
+                        <li class="page-item">
                             <a class="page-link"
                                asp-action="Index"
                                asp-route-busqueda="@busqueda"
                                asp-route-rolId="@rolId"
                                asp-route-soloActivos="@soloActivos"
-                               asp-route-pagina="@i"
-                               asp-route-tamanio="@tamanio">@i</a>
+                               asp-route-pagina="@(pagina - 1)"
+                               asp-route-tamanio="@tamanio">&laquo;</a>
+                        </li>
+                    }
+
+                    @{
+                        var start = Math.Max(1, pagina - 2);
+                        var end = Math.Min(totalPaginas, pagina + 2);
+
+                        if (start > 1)
+                        {
+                            <li class="page-item">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-busqueda="@busqueda"
+                                   asp-route-rolId="@rolId"
+                                   asp-route-soloActivos="@soloActivos"
+                                   asp-route-pagina="1"
+                                   asp-route-tamanio="@tamanio">1</a>
+                            </li>
+                            if (start > 2)
+                            {
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            }
+                        }
+
+                        for (var i = start; i <= end; i++)
+                        {
+                            <li class="page-item @(i == pagina ? "active" : "")">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-busqueda="@busqueda"
+                                   asp-route-rolId="@rolId"
+                                   asp-route-soloActivos="@soloActivos"
+                                   asp-route-pagina="@i"
+                                   asp-route-tamanio="@tamanio">@i</a>
+                            </li>
+                        }
+
+                        if (end < totalPaginas)
+                        {
+                            if (end < totalPaginas - 1)
+                            {
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            }
+                            <li class="page-item">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-busqueda="@busqueda"
+                                   asp-route-rolId="@rolId"
+                                   asp-route-soloActivos="@soloActivos"
+                                   asp-route-pagina="@totalPaginas"
+                                   asp-route-tamanio="@tamanio">@totalPaginas</a>
+                            </li>
+                        }
+                    }
+
+                    @if (pagina < totalPaginas)
+                    {
+                        <li class="page-item">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-busqueda="@busqueda"
+                               asp-route-rolId="@rolId"
+                               asp-route-soloActivos="@soloActivos"
+                               asp-route-pagina="@(pagina + 1)"
+                               asp-route-tamanio="@tamanio">&raquo;</a>
                         </li>
                     }
                 </ul>

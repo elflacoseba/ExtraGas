@@ -77,3 +77,24 @@ public class ChangePasswordDto
     [Compare("NewPassword", ErrorMessage = "Las contrasenas no coinciden.")]
     public string ConfirmPassword { get; set; } = null!;
 }
+
+public class SearchResultDto<T>
+{
+    public List<T> Items { get; set; } = new();
+    public int Total { get; set; }
+    public int Pagina { get; set; }
+    public int Tamanio { get; set; }
+}
+
+public class RolDto
+{
+    public ulong Id { get; set; }
+    public string Nombre { get; set; } = null!;
+    public string Codigo { get; set; } = null!;
+}
+
+public class EmpleadoSinUsuarioDto
+{
+    public ulong Id { get; set; }
+    public string NombreCompleto { get; set; } = null!;
+}

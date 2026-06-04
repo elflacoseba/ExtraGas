@@ -84,7 +84,10 @@
                         {
                             <a asp-controller="Usuarios" asp-action="Details" asp-route-id="@Model.UserId" class="btn btn-outline-secondary">Perfil</a>
                         }
-                        <a asp-controller="Account" asp-action="Logout" class="btn btn-outline-danger float-end">Salir</a>
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline float-end">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-outline-danger">Salir</button>
+                        </form>
                     </li>
                 </ul>
             </li>

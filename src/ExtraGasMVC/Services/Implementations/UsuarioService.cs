@@ -28,39 +28,81 @@ public class UsuarioService : IUsuarioService
         if (usuario is null) return null;
 
         var dto = _mapper.Map<UsuarioDto>(usuario);
-        await EnrichAuditAsync(dto, usuario, ct);
-        await EnrichEmpleadoAsync(dto, ct);
+        await EnrichDtoAsync(dto, usuario, ct);
         return dto;
     }
 
-    public async Task<IEnumerable<UsuarioDto>> GetAllAsync(CancellationToken ct = default)
+    public async Task<SearchResultDto<UsuarioDto>> SearchAsync(
+        string? busqueda, ulong? rolId, bool soloActivos,
+        int pagina, int tamanio, CancellationToken ct = default)
     {
-        var usuarios = await _context.Usuarios
+        var query = _context.Usuarios
             .AsNoTracking()
             .Include(u => u.Rol)
+            .AsQueryable();
+
+        if (soloActivos)
+            query = query.Where(u => u.Activo);
+
+        if (!string.IsNullOrWhiteSpace(busqueda))
+        {
+            var q = busqueda.Trim().ToLower();
+            query = query.Where(u =>
+                u.Username.ToLower().Contains(q)
+                || (u.Email != null && u.Email.ToLower().Contains(q)));
+        }
+
+        if (rolId.HasValue)
+            query = query.Where(u => u.RolId == rolId.Value);
+
+        var total = await query.CountAsync(ct);
+
+        var usuarios = await query
             .OrderBy(u => u.Username)
+            .Skip((pagina - 1) * tamanio)
+            .Take(tamanio)
             .ToListAsync(ct);
 
-        var dtos = _mapper.Map<IEnumerable<UsuarioDto>>(usuarios).ToList();
-        foreach (var dto in dtos)
+        var dtos = _mapper.Map<List<UsuarioDto>>(usuarios);
+        await EnrichBatchAsync(dtos, usuarios, ct);
+
+        return new SearchResultDto<UsuarioDto>
         {
-            var usuario = usuarios.First(u => u.Id == dto.Id);
-            await EnrichAuditAsync(dto, usuario, ct);
-            await EnrichEmpleadoAsync(dto, ct);
-        }
-        return dtos;
+            Items = dtos,
+            Total = total,
+            Pagina = pagina,
+            Tamanio = tamanio
+        };
     }
 
-    public async Task<IEnumerable<UsuarioDto>> GetActivosAsync(CancellationToken ct = default)
+    public async Task<List<RolDto>> GetRolesAsync(CancellationToken ct = default)
     {
-        var usuarios = await _context.Usuarios
+        var roles = await _context.Roles
             .AsNoTracking()
-            .Include(u => u.Rol)
-            .Where(u => u.Activo)
-            .OrderBy(u => u.Username)
+            .OrderBy(r => r.Nombre)
             .ToListAsync(ct);
 
-        return _mapper.Map<IEnumerable<UsuarioDto>>(usuarios);
+        return roles.Select(r => new RolDto
+        {
+            Id = r.Id,
+            Nombre = r.Nombre,
+            Codigo = r.Codigo
+        }).ToList();
+    }
+
+    public async Task<List<EmpleadoSinUsuarioDto>> GetEmpleadosSinUsuarioAsync(CancellationToken ct = default)
+    {
+        return await _context.Empleados
+            .AsNoTracking()
+            .Where(e => e.UsuarioId == null && e.Activo)
+            .OrderBy(e => e.Apellido)
+            .ThenBy(e => e.Nombre)
+            .Select(e => new EmpleadoSinUsuarioDto
+            {
+                Id = e.Id,
+                NombreCompleto = e.Apellido + ", " + e.Nombre
+            })
+            .ToListAsync(ct);
     }
 
     public async Task<UsuarioDto?> GetByUsernameAsync(string username, CancellationToken ct = default)
@@ -73,7 +115,7 @@ public class UsuarioService : IUsuarioService
         return usuario is null ? null : _mapper.Map<UsuarioDto>(usuario);
     }
 
-    public async Task<UsuarioDto?> GetByUsernameForAuthAsync(string username, CancellationToken ct = default)
+    public async Task<UsuarioDto?> ValidateAndLoadForAuthAsync(string username, string password, CancellationToken ct = default)
     {
         var usuario = await _context.Usuarios
             .AsNoTracking()
@@ -81,7 +123,16 @@ public class UsuarioService : IUsuarioService
             .Include(u => u.Rol)
             .FirstOrDefaultAsync(u => u.Username == username, ct);
 
-        return usuario is null ? null : _mapper.Map<UsuarioDto>(usuario);
+        if (usuario is null) return null;
+        if (usuario.DeletedAt is not null) return null;
+        if (!usuario.Activo) return null;
+        if (!BCrypt.Net.BCrypt.Verify(password, usuario.PasswordHash)) return null;
+
+        usuario.UltimoLogin = DateTime.UtcNow;
+        usuario.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(ct);
+
+        return _mapper.Map<UsuarioDto>(usuario);
     }
 
     public async Task<UsuarioDto> CreateAsync(CreateUsuarioDto dto, ulong createdBy, CancellationToken ct = default)
@@ -131,8 +182,7 @@ public class UsuarioService : IUsuarioService
         await _context.SaveChangesAsync(ct);
 
         var result = _mapper.Map<UsuarioDto>(usuario);
-        await EnrichAuditAsync(result, usuario, ct);
-        await EnrichEmpleadoAsync(result, ct);
+        await EnrichDtoAsync(result, usuario, ct);
         return result;
     }
 
@@ -170,25 +220,7 @@ public class UsuarioService : IUsuarioService
         return true;
     }
 
-    public async Task<bool> ValidateLoginAsync(string username, string password, CancellationToken ct = default)
-    {
-        var usuario = await _context.Usuarios
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(u => u.Username == username, ct);
-
-        if (usuario is null) return false;
-        if (usuario.DeletedAt is not null) return false;
-        if (!usuario.Activo) return false;
-        if (!BCrypt.Net.BCrypt.Verify(password, usuario.PasswordHash)) return false;
-
-        usuario.UltimoLogin = DateTime.UtcNow;
-        usuario.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(ct);
-
-        return true;
-    }
-
-    private async Task EnrichAuditAsync(UsuarioDto dto, Usuario usuario, CancellationToken ct)
+    private async Task EnrichDtoAsync(UsuarioDto dto, Usuario usuario, CancellationToken ct)
     {
         if (usuario.CreatedBy.HasValue)
         {
@@ -207,10 +239,7 @@ public class UsuarioService : IUsuarioService
                 .FirstOrDefaultAsync(u => u.Id == usuario.UpdatedBy.Value, ct);
             dto.ActualizadoPor = actualizador?.Username;
         }
-    }
 
-    private async Task EnrichEmpleadoAsync(UsuarioDto dto, CancellationToken ct)
-    {
         var empleado = await _context.Empleados
             .AsNoTracking()
             .FirstOrDefaultAsync(e => e.UsuarioId == dto.Id, ct);
@@ -219,6 +248,52 @@ public class UsuarioService : IUsuarioService
         {
             dto.EmpleadoId = empleado.Id;
             dto.EmpleadoNombre = $"{empleado.Apellido}, {empleado.Nombre}";
+        }
+    }
+
+    private async Task EnrichBatchAsync(List<UsuarioDto> dtos, List<Usuario> usuarios, CancellationToken ct)
+    {
+        var auditUserIds = new HashSet<ulong>();
+
+        foreach (var usuario in usuarios)
+        {
+            if (usuario.CreatedBy.HasValue) auditUserIds.Add(usuario.CreatedBy.Value);
+            if (usuario.UpdatedBy.HasValue) auditUserIds.Add(usuario.UpdatedBy.Value);
+        }
+
+        var auditUsers = auditUserIds.Count > 0
+            ? await _context.Usuarios
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(u => auditUserIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.Username, ct)
+            : new Dictionary<ulong, string>();
+
+        var usuarioIds = dtos.Select(d => d.Id).ToList();
+        var empleados = usuarioIds.Count > 0
+            ? await _context.Empleados
+                .AsNoTracking()
+                .Where(e => e.UsuarioId.HasValue && usuarioIds.Contains(e.UsuarioId!.Value))
+                .ToListAsync(ct)
+            : new List<Empleado>();
+
+        var empleadosDict = empleados.ToDictionary(e => e.UsuarioId!.Value);
+
+        foreach (var dto in dtos)
+        {
+            var usuario = usuarios.First(u => u.Id == dto.Id);
+
+            if (usuario.CreatedBy.HasValue && auditUsers.TryGetValue(usuario.CreatedBy.Value, out var creador))
+                dto.CreadoPor = creador;
+
+            if (usuario.UpdatedBy.HasValue && auditUsers.TryGetValue(usuario.UpdatedBy.Value, out var actualizador))
+                dto.ActualizadoPor = actualizador;
+
+            if (empleadosDict.TryGetValue(dto.Id, out var empleado))
+            {
+                dto.EmpleadoId = empleado.Id;
+                dto.EmpleadoNombre = $"{empleado.Apellido}, {empleado.Nombre}";
+            }
         }
     }
 }

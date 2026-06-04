@@ -1,14 +1,13 @@
-@using ExtraGasMVC.Data.Entities
 @model ExtraGasMVC.DTOs.UpdateUsuarioDto
 @{
     var usuario = ViewBag.Usuario as ExtraGasMVC.DTOs.UsuarioDto;
+    var roles = ViewBag.Roles as List<ExtraGasMVC.DTOs.RolDto>;
     ViewData["Title"] = "Editar usuario";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
     {
         new() { Label = "Usuarios", Controller = "Usuarios", Action = "Index" },
         new() { Label = usuario?.Username ?? "Editar" }
     };
-    var roles = ViewBag.Roles as List<Rol>;
 }
 @section PageHeader {
     <div class="mb-3">
@@ -75,21 +74,21 @@
 
 <div class="card mt-4">
     <div class="card-header"><h3 class="card-title">Cambiar contrasena</h3></div>
-    <form asp-action="ChangePassword" asp-route-id="@Model.Id" method="post">
+    <form asp-action="ChangePassword" asp-route-id="@Model.Id" method="post" id="changePasswordForm">
         @Html.AntiForgeryToken()
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label class="form-label" for="currentPassword">Contrasena actual</label>
-                    <input type="password" id="currentPassword" name="currentPassword" class="form-control" required />
+                    <label class="form-label" for="CurrentPassword">Contrasena actual</label>
+                    <input type="password" id="CurrentPassword" name="CurrentPassword" class="form-control" required />
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label" for="newPassword">Nueva contrasena</label>
-                    <input type="password" id="newPassword" name="newPassword" class="form-control" required minlength="6" />
+                    <label class="form-label" for="NewPassword">Nueva contrasena</label>
+                    <input type="password" id="NewPassword" name="NewPassword" class="form-control" required minlength="6" />
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label" for="confirmPassword">Confirmar nueva contrasena</label>
-                    <input type="password" id="confirmPassword" name="confirmPassword" class="form-control" required minlength="6" />
+                    <label class="form-label" for="ConfirmPassword">Confirmar nueva contrasena</label>
+                    <input type="password" id="ConfirmPassword" name="ConfirmPassword" class="form-control" required minlength="6" />
                 </div>
             </div>
         </div>
@@ -104,10 +103,10 @@
 @section Scripts {
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            var changeForm = document.querySelector('form[action*="ChangePassword"]');
+            var changeForm = document.getElementById('changePasswordForm');
             changeForm.addEventListener('submit', function (e) {
-                var np = document.getElementById('newPassword').value;
-                var cp = document.getElementById('confirmPassword').value;
+                var np = document.getElementById('NewPassword').value;
+                var cp = document.getElementById('ConfirmPassword').value;
                 if (np !== cp) {
                     e.preventDefault();
                     alert('Las contrasenas no coinciden.');

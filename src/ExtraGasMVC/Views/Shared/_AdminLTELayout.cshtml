@@ -7,14 +7,7 @@
     var fullTitle = string.IsNullOrEmpty(title) ? "ExtraGas" : $"{title} · ExtraGas";
     var hasNavbarSearch = ViewData["NavbarSearch"] as bool? ?? true;
 
-    var rolCodigo = User.FindFirstValue(ClaimTypes.Role);
-    var rolNombre = rolCodigo;
-    if (!string.IsNullOrEmpty(rolCodigo))
-    {
-        var db = Context.RequestServices.GetRequiredService<ExtraGasMVC.Data.Context.ExtraGasDbContext>();
-        var rol = db.Roles.FirstOrDefault(r => r.Codigo == rolCodigo);
-        if (rol != null) rolNombre = rol.Nombre;
-    }
+    var rolNombre = User.FindFirstValue("RoleName") ?? User.FindFirstValue(ClaimTypes.Role);
 
     var navbarVm = new ExtraGasMVC.Models.ViewModels.NavbarViewModel
     {
