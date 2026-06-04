@@ -1,0 +1,58 @@
+@model IEnumerable<ExtraGasMVC.Data.Entities.Garrafa>
+@{
+    ViewData["Title"] = "Garrafas en poder del cliente";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Garrafas", Controller = "Garrafas", Action = "Index" },
+        new() { Label = "En clientes" }
+    };
+    var cliente = ViewBag.Cliente as ExtraGasMVC.Data.Entities.Cliente;
+}
+@section PageHeader {
+    <div class="mb-3">
+        <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Volver</a>
+    </div>
+}
+@if (cliente is not null)
+{
+    <div class="alert alert-info">
+        Mostrando garrafas en poder de <strong>@cliente.Apellido, @cliente.Nombre</strong>.
+    </div>
+}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Garrafas asignadas a clientes</h3>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Codigo</th>
+                    <th class="text-end">Capacidad (kg)</th>
+                    <th>Estado</th>
+                    <th>Cliente</th>
+                    <th>F. ultimo mov.</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="5" class="text-center py-4 text-secondary">No hay garrafas en poder del cliente.</td></tr>
+                }
+                @foreach (var g in Model)
+                {
+                    <tr>
+                        <td><code>@g.Codigo</code></td>
+                        <td class="text-end">@g.CapacidadKg</td>
+                        <td><span class="badge text-bg-secondary">#@g.EstadoGarrafaId</span></td>
+                        <td>
+                            @if (g.ClienteId.HasValue)
+                            { <a asp-controller="Clientes" asp-action="Details" asp-route-id="@g.ClienteId">#@g.ClienteId</a> }
+                        </td>
+                        <td>@g.FechaUltimoMovimiento.ToShortDate()</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

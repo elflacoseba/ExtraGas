@@ -1,0 +1,48 @@
+@model IEnumerable<ExtraGasMVC.Data.Entities.Views.VProductoMasVendido>
+@{
+    ViewData["Title"] = "Productos mas vendidos";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Reportes", Controller = "Reportes", Action = "Index" },
+        new() { Label = "Productos mas vendidos" }
+    };
+    var dias = (int)(ViewBag.Dias ?? 30);
+}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Productos mas vendidos (ultimos @dias dias)</h3>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Producto</th>
+                    <th>Tipo</th>
+                    <th class="text-end">Cant. vendida</th>
+                    <th class="text-end">Cant. entregada</th>
+                    <th class="text-end">Cant. devuelta</th>
+                    <th class="text-end">Monto total</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="7" class="text-center py-4 text-secondary">Sin datos para el periodo.</td></tr>
+                }
+                @foreach (var v in Model)
+                {
+                    <tr>
+                        <td>@v.Fecha.ToShortDate()</td>
+                        <td><strong>@v.ProductoNombre</strong> <small class="text-secondary">(@v.ProductoCodigo)</small></td>
+                        <td>@v.TipoProducto</td>
+                        <td class="text-end">@v.CantidadVendida</td>
+                        <td class="text-end">@v.CantidadEntregada</td>
+                        <td class="text-end">@v.CantidadDevuelta</td>
+                        <td class="text-end">@v.MontoTotal.ToArs()</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

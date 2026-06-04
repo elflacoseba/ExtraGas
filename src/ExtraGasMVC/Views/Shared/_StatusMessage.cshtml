@@ -1,0 +1,34 @@
+@{
+    var success = TempData["Success"] as string;
+    var error = TempData["Error"] as string;
+    var info = TempData["Info"] as string;
+    var warning = TempData["Warning"] as string;
+}
+@if (!string.IsNullOrEmpty(success))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>@success
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+    </div>
+}
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@error
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+    </div>
+}
+@if (!string.IsNullOrEmpty(info))
+{
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <i class="bi bi-info-circle-fill me-2"></i>@info
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+    </div>
+}
+@if (!string.IsNullOrEmpty(warning))
+{
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-circle-fill me-2"></i>@warning
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+    </div>
+}

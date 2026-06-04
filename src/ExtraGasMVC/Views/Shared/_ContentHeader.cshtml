@@ -1,0 +1,47 @@
+@{
+    var pageTitle = ViewData["Title"] as string;
+    var breadcrumbs = ViewData["Breadcrumbs"] as IList<ExtraGasMVC.Models.ViewModels.BreadcrumbItem>;
+    breadcrumbs ??= new List<ExtraGasMVC.Models.ViewModels.BreadcrumbItem>();
+    var homeCrumb = new ExtraGasMVC.Models.ViewModels.BreadcrumbItem
+    {
+        Label = "Inicio",
+        Controller = "Home",
+        Action = "Index"
+    };
+    if (breadcrumbs.Count == 0 && !string.IsNullOrEmpty(pageTitle))
+    {
+        breadcrumbs.Add(homeCrumb);
+        breadcrumbs.Add(new ExtraGasMVC.Models.ViewModels.BreadcrumbItem { Label = pageTitle });
+    }
+    else
+    {
+        breadcrumbs.Insert(0, homeCrumb);
+    }
+}
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <h3 class="mb-0">@(pageTitle ?? "Dashboard")</h3>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-end">
+                    @foreach (var crumb in breadcrumbs)
+                    {
+                        var isLast = crumb == breadcrumbs.Last();
+                        if (!isLast && !string.IsNullOrEmpty(crumb.Controller))
+                        {
+                            <li class="breadcrumb-item">
+                                <a asp-controller="@crumb.Controller" asp-action="@(crumb.Action ?? "Index")">@crumb.Label</a>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="breadcrumb-item active" aria-current="page">@crumb.Label</li>
+                        }
+                    }
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>

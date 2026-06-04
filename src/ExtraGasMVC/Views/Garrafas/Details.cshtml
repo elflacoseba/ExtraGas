@@ -1,0 +1,40 @@
+@model ExtraGasMVC.Data.Entities.Garrafa
+@{
+    ViewData["Title"] = "Detalle de la garrafa";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Garrafas", Controller = "Garrafas", Action = "Index" },
+        new() { Label = Model.Codigo }
+    };
+}
+@section PageHeader {
+    <div class="mb-3 d-flex gap-2">
+        <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Volver</a>
+        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-primary"><i class="bi bi-pencil me-1"></i> Editar</a>
+    </div>
+}
+<div class="card">
+    <div class="card-header"><h3 class="card-title">Garrafa @Model.Codigo</h3></div>
+    <div class="card-body">
+        <dl class="row">
+            <dt class="col-sm-3">Codigo</dt><dd class="col-sm-9"><code>@Model.Codigo</code></dd>
+            <dt class="col-sm-3">Capacidad</dt><dd class="col-sm-9">@Model.CapacidadKg kg</dd>
+            <dt class="col-sm-3">Estado</dt><dd class="col-sm-9"><span class="badge text-bg-secondary">#@Model.EstadoGarrafaId</span></dd>
+            <dt class="col-sm-3">Fecha de compra</dt><dd class="col-sm-9">@Model.FechaCompra.ToString("dd/MM/yyyy")</dd>
+            <dt class="col-sm-3">Ultimo movimiento</dt><dd class="col-sm-9">@Model.FechaUltimoMovimiento.ToShortDateTime()</dd>
+            <dt class="col-sm-3">Cliente actual</dt>
+            <dd class="col-sm-9">
+                @if (Model.ClienteId.HasValue)
+                { <a asp-controller="Clientes" asp-action="Details" asp-route-id="@Model.ClienteId">#@Model.ClienteId</a> }
+                else { <span class="text-secondary">-</span> }
+            </dd>
+            <dt class="col-sm-3">Proveedor</dt><dd class="col-sm-9">@(Model.ProveedorId?.ToString() ?? "-")</dd>
+            <dt class="col-sm-3">Recepcion</dt><dd class="col-sm-9">@(Model.RecepcionId?.ToString() ?? "-")</dd>
+            <dt class="col-sm-3">Activo</dt>
+            <dd class="col-sm-9">
+                @if (Model.Activo) { <span class="badge text-bg-success">Si</span> } else { <span class="badge text-bg-secondary">No</span> }
+            </dd>
+            <dt class="col-sm-3">Observaciones</dt><dd class="col-sm-9">@(Model.Observaciones ?? "-")</dd>
+        </dl>
+    </div>
+</div>

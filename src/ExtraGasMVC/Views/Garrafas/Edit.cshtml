@@ -1,0 +1,76 @@
+@model ExtraGasMVC.Data.Entities.Garrafa
+@{
+    ViewData["Title"] = "Editar garrafa";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Garrafas", Controller = "Garrafas", Action = "Index" },
+        new() { Label = "Editar" }
+    };
+    var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.Data.Entities.Cliente> ?? Array.Empty<ExtraGasMVC.Data.Entities.Cliente>();
+}
+@section PageHeader {
+    <div class="mb-3">
+        <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Volver</a>
+    </div>
+}
+<div class="card">
+    <div class="card-header"><h3 class="card-title">Editar garrafa</h3></div>
+    <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="CreatedAt" />
+        <div class="card-body">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label asp-for="Codigo" class="form-label"></label>
+                    <input asp-for="Codigo" class="form-control" required />
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="CapacidadKg" class="form-label"></label>
+                    <input asp-for="CapacidadKg" type="number" class="form-control" required />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="EstadoGarrafaId" class="form-label"></label>
+                    <input asp-for="EstadoGarrafaId" type="number" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="FechaCompra" class="form-label"></label>
+                    <input asp-for="FechaCompra" type="date" class="form-control" required />
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="ClienteId" class="form-label"></label>
+                    <select asp-for="ClienteId" class="form-select">
+                        <option value="">-- Sin cliente --</option>
+                        @foreach (var c in clientes)
+                        {
+                            <option value="@c.Id">@c.Apellido, @c.Nombre</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="ProveedorId" class="form-label"></label>
+                    <input asp-for="ProveedorId" type="number" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="RecepcionId" class="form-label"></label>
+                    <input asp-for="RecepcionId" type="number" class="form-control" />
+                </div>
+                <div class="col-md-12 d-flex align-items-end">
+                    <div class="form-check">
+                        <input asp-for="Activo" class="form-check-input" type="checkbox" />
+                        <label asp-for="Activo" class="form-check-label">Activo</label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Observaciones" class="form-label"></label>
+                    <textarea asp-for="Observaciones" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer d-flex gap-2">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i> Guardar cambios</button>
+            <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
+        </div>
+    </form>
+</div>

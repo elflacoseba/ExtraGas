@@ -1,8 +1,232 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+﻿@model DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Dashboard" }
+    };
 }
+<div class="row">
+    <div class="col-lg-3 col-6">
+        <div class="small-box text-bg-primary">
+            <div class="inner">
+                <h3>@Model.TotalClientesActivos</h3>
+                <p>Clientes activos</p>
+            </div>
+            <svg class="small-box-icon" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
+            </svg>
+            <a asp-controller="Clientes" asp-action="Index" class="small-box-footer link-light link-underline-opacity-0 link-underline-opacity-50-hover">
+                Ver clientes <i class="bi bi-link-45deg"></i>
+            </a>
+        </div>
+    </div>
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+    <div class="col-lg-3 col-6">
+        <div class="small-box text-bg-success">
+            <div class="inner">
+                <h3>@Model.TotalPedidos</h3>
+                <p>Pedidos totales</p>
+            </div>
+            <svg class="small-box-icon" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M7 4V2h10v2h4v2h-2v15a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6H3V4h4zm5 5v8h2V9h-2zm-4 0v8h2V9H8z"></path>
+            </svg>
+            <a asp-controller="Pedidos" asp-action="Index" class="small-box-footer link-light link-underline-opacity-0 link-underline-opacity-50-hover">
+                Ver pedidos <i class="bi bi-link-45deg"></i>
+            </a>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-6">
+        <div class="small-box text-bg-warning">
+            <div class="inner">
+                <h3>@Model.PedidosPendientes</h3>
+                <p>Pedidos pendientes de cobro</p>
+            </div>
+            <svg class="small-box-icon" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 17h-2v-2h2zm2.07-7.75-.9.92A3.4 3.4 0 0 0 13 14.5h-2v-.5a4.4 4.4 0 0 1 1.17-2.83l1.24-1.26A1.93 1.93 0 0 0 14 8.5a2 2 0 0 0-4 0H8a4 4 0 0 1 8 0 3.2 3.2 0 0 1-.93 2.25z"></path>
+            </svg>
+            <a asp-controller="Pedidos" asp-action="Pendientes" class="small-box-footer link-dark link-underline-opacity-0 link-underline-opacity-50-hover">
+                Gestionar <i class="bi bi-link-45deg"></i>
+            </a>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-6">
+        <div class="small-box text-bg-danger">
+            <div class="inner">
+                <h3>@Model.TotalGarrafas</h3>
+                <p>Garrafas en el sistema</p>
+            </div>
+            <svg class="small-box-icon" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M5 3h14v2H5zm0 4h14v2H5zm0 4h14v2H5zm0 4h14v2H5z"></path>
+            </svg>
+            <a asp-controller="Garrafas" asp-action="Stock" class="small-box-footer link-light link-underline-opacity-0 link-underline-opacity-50-hover">
+                Stock por estado <i class="bi bi-link-45deg"></i>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-3 col-6">
+        <div class="info-box">
+            <span class="info-box-icon text-bg-info shadow">
+                <i class="bi bi-box-seam"></i>
+            </span>
+            <div class="info-box-content">
+                <span class="info-box-text">Productos activos</span>
+                <span class="info-box-number">@Model.TotalProductosActivos</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="info-box">
+            <span class="info-box-icon text-bg-success shadow">
+                <i class="bi bi-cash-stack"></i>
+            </span>
+            <div class="info-box-content">
+                <span class="info-box-text">Cobrado (historico)</span>
+                <span class="info-box-number">@Model.TotalCobrado.ToArs()</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="info-box mb-3">
+            <span class="info-box-icon text-bg-warning shadow">
+                <i class="bi bi-exclamation-triangle"></i>
+            </span>
+            <div class="info-box-content">
+                <span class="info-box-text">Saldo pendiente</span>
+                <span class="info-box-number">@Model.TotalSaldo.ToArs()</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="info-box mb-3">
+            <span class="info-box-icon text-bg-primary shadow">
+                <i class="bi bi-percent"></i>
+            </span>
+            <div class="info-box-content">
+                <span class="info-box-text">Cobrado / Total</span>
+                <span class="info-box-number">
+                    @{
+                        var total = Model.TotalCobrado + Model.TotalSaldo;
+                        var pct = total > 0 ? (Model.TotalCobrado / total * 100).ToString("0.0") : "0.0";
+                    }
+                    @pct%
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-7">
+        <div class="card mb-4">
+            <div class="card-header border-0">
+                <div class="d-flex justify-content-between">
+                    <h3 class="card-title">Ultimos pedidos</h3>
+                    <a asp-controller="Pedidos" asp-action="Index" class="btn btn-sm btn-primary">
+                        <i class="bi bi-list-ul me-1"></i> Ver todos
+                    </a>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-striped table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Numero</th>
+                            <th>Fecha</th>
+                            <th>Cliente</th>
+                            <th class="text-end">Total</th>
+                            <th class="text-end">Saldo</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!Model.UltimosPedidos.Any())
+                        {
+                            <tr><td colspan="6" class="text-center py-4 text-secondary">Aun no hay pedidos registrados.</td></tr>
+                        }
+                        @foreach (var p in Model.UltimosPedidos)
+                        {
+                            <tr>
+                                <td><a asp-controller="Pedidos" asp-action="Details" asp-route-id="@p.Id" class="text-decoration-none">@p.Numero</a></td>
+                                <td>@p.Fecha.ToShortDate()</td>
+                                <td>@p.Cliente</td>
+                                <td class="text-end">@p.Total.ToArs()</td>
+                                <td class="text-end">
+                                    <span class="@(p.Saldo > 0 ? "text-danger fw-semibold" : "text-success")">
+                                        @p.Saldo.ToArs()
+                                    </span>
+                                </td>
+                                <td>
+                                    @{
+                                        var badge = p.EstadoCodigo switch
+                                        {
+                                            "ENTREGADO" => "text-bg-success",
+                                            "PENDIENTE" => "text-bg-warning",
+                                            "CANCELADO" => "text-bg-danger",
+                                            _ => "text-bg-secondary"
+                                        };
+                                    }
+                                    <span class="badge @badge">@p.EstadoNombre</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card mb-4">
+            <div class="card-header border-0">
+                <h3 class="card-title">Productos mas vendidos (30 dias)</h3>
+            </div>
+            <div class="card-body">
+                @if (!Model.TopProductos.Any())
+                {
+                    <p class="text-secondary text-center my-4">Sin datos para mostrar.</p>
+                }
+                else
+                {
+                    var max = (double)Model.TopProductos.Max(t => t.Cantidad);
+                    foreach (var prod in Model.TopProductos)
+                    {
+                        var widthPct = max > 0 ? (double)prod.Cantidad / max * 100.0 : 0;
+                        <div class="progress-group mb-3">
+                            <span class="float-end"><b>@prod.Cantidad</b> / @max.ToString("0")</span>
+                            <div class="progress progress-sm">
+                                <div class="progress-bar text-bg-primary" style="width: @widthPct.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                            </div>
+                            <span class="text-secondary small">@prod.Producto <em class="text-muted">(@prod.Tipo)</em></span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Acciones rapidas</h3>
+            </div>
+            <div class="card-body d-grid gap-2">
+                <a asp-controller="Pedidos" asp-action="Create" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i> Nuevo pedido
+                </a>
+                <a asp-controller="Clientes" asp-action="Create" class="btn btn-outline-primary">
+                    <i class="bi bi-person-plus me-1"></i> Nuevo cliente
+                </a>
+                <a asp-controller="Pagos" asp-action="Create" class="btn btn-outline-success">
+                    <i class="bi bi-cash-coin me-1"></i> Registrar pago
+                </a>
+                <a asp-controller="Recepciones" asp-action="Create" class="btn btn-outline-secondary">
+                    <i class="bi bi-truck me-1"></i> Recepcion de proveedor
+                </a>
+            </div>
+        </div>
+    </div>
 </div>

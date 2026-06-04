@@ -1,0 +1,41 @@
+@model IEnumerable<ExtraGasMVC.Data.Entities.Views.VPagoPorFormaPago>
+@{
+    ViewData["Title"] = "Pagos por forma";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Reportes" },
+        new() { Label = "Pagos por forma" }
+    };
+}
+<div class="card">
+    <div class="card-header"><h3 class="card-title">Pagos por forma de pago</h3></div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Codigo</th>
+                    <th>Forma de pago</th>
+                    <th class="text-end">Cantidad de pagos</th>
+                    <th class="text-end">Monto total</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="5" class="text-center py-4 text-secondary">Sin datos.</td></tr>
+                }
+                @foreach (var v in Model)
+                {
+                    <tr>
+                        <td>@v.Fecha.ToShortDate()</td>
+                        <td><code>@v.FormaPagoCodigo</code></td>
+                        <td>@v.FormaPagoNombre</td>
+                        <td class="text-end">@v.CantidadPagos</td>
+                        <td class="text-end fw-semibold">@v.MontoTotal.ToArs()</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

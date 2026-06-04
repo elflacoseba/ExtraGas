@@ -1,0 +1,73 @@
+@model ExtraGasMVC.Data.Entities.Pedido
+@{
+    ViewData["Title"] = "Detalle del pedido";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Pedidos", Controller = "Pedidos", Action = "Index" },
+        new() { Label = Model.Numero ?? "#" + Model.Id }
+    };
+}
+@section PageHeader {
+    <div class="mb-3 d-flex gap-2">
+        <a asp-action="Index" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Volver
+        </a>
+        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-primary">
+            <i class="bi bi-pencil me-1"></i> Editar
+        </a>
+        <a asp-controller="Pagos" asp-action="Create" asp-route-pedidoId="@Model.Id" class="btn btn-success">
+            <i class="bi bi-cash-coin me-1"></i> Registrar pago
+        </a>
+    </div>
+}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header"><h3 class="card-title">Datos del pedido</h3></div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Numero</dt><dd class="col-sm-8"><strong>@(Model.Numero ?? "-")</strong></dd>
+                    <dt class="col-sm-4">Fecha</dt><dd class="col-sm-8">@Model.Fecha.ToShortDateTime()</dd>
+                    <dt class="col-sm-4">Entrega</dt><dd class="col-sm-8">@Model.FechaEntrega.ToShortDate()</dd>
+                    <dt class="col-sm-4">Cliente</dt><dd class="col-sm-8">#@Model.ClienteId</dd>
+                    <dt class="col-sm-4">Empleado</dt><dd class="col-sm-8">#@Model.EmpleadoId</dd>
+                    <dt class="col-sm-4">Canal</dt><dd class="col-sm-8">#@Model.CanalVentaId</dd>
+                    <dt class="col-sm-4">Medio contacto</dt><dd class="col-sm-8">@(Model.MedioContactoId?.ToString() ?? "-")</dd>
+                    <dt class="col-sm-4">Estado</dt><dd class="col-sm-8"><span class="badge text-bg-secondary">#@Model.EstadoPedidoId</span></dd>
+                    <dt class="col-sm-4">Entregado</dt>
+                    <dd class="col-sm-8">
+                        @if (Model.Entregado)
+                        { <span class="badge text-bg-success">Si</span> }
+                        else
+                        { <span class="badge text-bg-warning">No</span> }
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header"><h3 class="card-title">Totales</h3></div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Subtotal</dt><dd class="col-sm-8 text-end">@Model.Subtotal.ToArs()</dd>
+                    <dt class="col-sm-4">Descuento</dt><dd class="col-sm-8 text-end text-danger">- @Model.Descuento.ToArs()</dd>
+                    <dt class="col-sm-4">Total</dt><dd class="col-sm-8 text-end fw-bold fs-5">@Model.Total.ToArs()</dd>
+                    <dt class="col-sm-4">Pagado</dt><dd class="col-sm-8 text-end text-success">@Model.MontoPagado.ToArs()</dd>
+                    <dt class="col-sm-4">Saldo</dt><dd class="col-sm-8 text-end @(Model.Saldo > 0 ? "text-danger fw-bold" : "text-success")">@Model.Saldo.ToArs()</dd>
+                </dl>
+            </div>
+        </div>
+        <div class="card mb-4">
+            <div class="card-header"><h3 class="card-title">Direccion de entrega</h3></div>
+            <div class="card-body">@(Model.DireccionEntrega ?? "-")</div>
+        </div>
+    </div>
+</div>
+@if (!string.IsNullOrEmpty(Model.Observaciones))
+{
+    <div class="card mb-4">
+        <div class="card-header"><h3 class="card-title">Observaciones</h3></div>
+        <div class="card-body">@Model.Observaciones</div>
+    </div>
+}

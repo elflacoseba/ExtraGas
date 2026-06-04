@@ -1,0 +1,81 @@
+@model IEnumerable<ExtraGasMVC.Data.Entities.Garrafa>
+@{
+    ViewData["Title"] = "Garrafas";
+    var codigo = ViewBag.Codigo as string;
+    var capacidad = ViewBag.Capacidad as byte?;
+}
+@section PageHeader {
+    <div class="mb-3">
+        <a asp-action="Create" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i> Nueva garrafa
+        </a>
+        <a asp-action="Stock" class="btn btn-info float-end">
+            <i class="bi bi-bar-chart me-1"></i> Stock por estado
+        </a>
+    </div>
+}
+<div class="card">
+    <div class="card-header">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label small mb-1">Codigo</label>
+                <input type="text" name="codigo" value="@codigo" class="form-control" placeholder="Codigo de garrafa" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Capacidad (kg)</label>
+                <select name="capacidad" class="form-select">
+                    <option value="">Todas</option>
+                    <option value="10" selected="@(capacidad == 10)">10 kg</option>
+                    <option value="15" selected="@(capacidad == 15)">15 kg</option>
+                    <option value="45" selected="@(capacidad == 45)">45 kg</option>
+                </select>
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill"><i class="bi bi-search me-1"></i>Buscar</button>
+                <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise"></i></a>
+            </div>
+        </form>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Codigo</th>
+                    <th class="text-end">Capacidad (kg)</th>
+                    <th>Estado</th>
+                    <th>Cliente</th>
+                    <th>Proveedor</th>
+                    <th>F. compra</th>
+                    <th>F. ultimo mov.</th>
+                    <th class="text-end" style="width: 180px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="8" class="text-center py-4 text-secondary">No hay garrafas.</td></tr>
+                }
+                @foreach (var g in Model)
+                {
+                    <tr>
+                        <td><strong><code>@g.Codigo</code></strong></td>
+                        <td class="text-end">@g.CapacidadKg</td>
+                        <td><span class="badge text-bg-secondary">#@g.EstadoGarrafaId</span></td>
+                        <td>
+                            @if (g.ClienteId.HasValue)
+                            { <a asp-controller="Clientes" asp-action="Details" asp-route-id="@g.ClienteId">#@g.ClienteId</a> }
+                            else { <span class="text-secondary">-</span> }
+                        </td>
+                        <td>@(g.ProveedorId?.ToString() ?? "-")</td>
+                        <td>@g.FechaCompra.ToString("dd/MM/yyyy")</td>
+                        <td>@g.FechaUltimoMovimiento.ToShortDate()</td>
+                        <td class="text-end">
+                            <a asp-action="Details" asp-route-id="@g.Id" class="btn btn-sm btn-info"><i class="bi bi-eye"></i></a>
+                            <a asp-action="Edit" asp-route-id="@g.Id" class="btn btn-sm btn-primary"><i class="bi bi-pencil"></i></a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

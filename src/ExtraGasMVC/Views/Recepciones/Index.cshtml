@@ -1,0 +1,67 @@
+@model IEnumerable<ExtraGasMVC.Data.Entities.RecepcionProveedor>
+@{
+    ViewData["Title"] = "Recepciones de proveedor";
+    var pagina = (int)(ViewBag.Pagina ?? 1);
+    var tamanio = (int)(ViewBag.Tamanio ?? 25);
+    var total = (int)(ViewBag.Total ?? 0);
+    var totalPaginas = tamanio > 0 ? (int)Math.Ceiling(total / (double)tamanio) : 0;
+}
+@section PageHeader {
+    <div class="mb-3">
+        <a asp-action="Create" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i> Nueva recepcion
+        </a>
+    </div>
+}
+<div class="card">
+    <div class="card-header"><h3 class="card-title">Recepciones de proveedor</h3></div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Numero</th>
+                    <th>Fecha</th>
+                    <th>Proveedor</th>
+                    <th>Factura</th>
+                    <th class="text-end">Total</th>
+                    <th class="text-end">Pagado</th>
+                    <th class="text-end">Saldo</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="7" class="text-center py-4 text-secondary">No hay recepciones.</td></tr>
+                }
+                @foreach (var r in Model)
+                {
+                    <tr>
+                        <td><strong>@(r.Numero ?? "-")</strong></td>
+                        <td>@r.Fecha.ToShortDate()</td>
+                        <td>#@r.ProveedorId</td>
+                        <td>@(r.NumeroFacturaProveedor ?? "-")</td>
+                        <td class="text-end">@r.Total.ToArs()</td>
+                        <td class="text-end">@r.MontoPagado.ToArs()</td>
+                        <td class="text-end @(r.Saldo > 0 ? "text-danger fw-semibold" : "text-success")">@r.Saldo.ToArs()</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer clearfix">
+        @if (totalPaginas > 1)
+        {
+            <nav>
+                <ul class="pagination pagination-sm m-0 float-end">
+                    @for (var i = 1; i <= totalPaginas; i++)
+                    {
+                        <li class="page-item @(i == pagina ? "active" : "")">
+                            <a class="page-link" asp-action="Index" asp-route-pagina="@i" asp-route-tamanio="@tamanio">@i</a>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        }
+        <small class="text-secondary">@total recepcion@(total == 1 ? "" : "es")</small>
+    </div>
+</div>
