@@ -1,9 +1,11 @@
 using ExtraGasMVC.Data.Context;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExtraGasMVC.Controllers;
 
+[Authorize(Policy = "OperadorOrAdmin")]
 public class RecepcionesController : Controller
 {
     private readonly ExtraGasDbContext _context;
@@ -40,6 +42,7 @@ public class RecepcionesController : Controller
     }
 }
 
+[Authorize(Policy = "OperadorOrAdmin")]
 public class PagosProveedorController : Controller
 {
     private readonly ExtraGasDbContext _context;
@@ -61,6 +64,7 @@ public class PagosProveedorController : Controller
     }
 }
 
+[Authorize(Policy = "OperadorOrAdmin")]
 public class ReportesController : Controller
 {
     private readonly ExtraGasDbContext _context;

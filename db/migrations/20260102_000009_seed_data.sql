@@ -153,7 +153,7 @@ INSERT INTO empleados (nombre, apellido, dni, fecha_ingreso, activo) VALUES
   ('Dueño', 'Administrador', NULL, CURDATE(), TRUE);
 
 INSERT INTO usuarios (username, password_hash, email, rol_id, activo) VALUES
-  ('admin', '$2a$10$placeholder.hash.cambiar.al.primer.login..........', NULL, (SELECT id FROM roles WHERE codigo='ADMIN'), TRUE);
+  ('admin', '$2a$11$LXexHD1uSwkOLaBCUvArbe5YKVYC7xujLmwQHCRHtkHz61kTY6S2K', NULL, (SELECT id FROM roles WHERE codigo='ADMIN'), TRUE);
 
 UPDATE empleados e
 JOIN usuarios u ON u.username = 'admin'

@@ -185,18 +185,22 @@
                 </li>
 
                 <li class="nav-header">SISTEMA</li>
+                @if (User.IsInRole("ADMIN"))
+                {
+                    <li class="nav-item">
+                        <a asp-controller="Usuarios" asp-action="Index" class="nav-link @(isCurrent("Usuarios") ? "active" : "")">
+                            <i class="nav-icon bi bi-people-fill"></i>
+                            <p>Usuarios</p>
+                        </a>
+                    </li>
+                }
                 <li class="nav-item">
                     <a asp-controller="Home" asp-action="Privacy" class="nav-link @(isCurrent("Home", "Privacy") ? "active" : "")">
                         <i class="nav-icon bi bi-shield-lock"></i>
                         <p>Privacidad</p>
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a asp-controller="Account" asp-action="Login" class="nav-link @(isCurrent("Account", "Login") ? "active" : "")">
-                        <i class="nav-icon bi bi-box-arrow-in-right"></i>
-                        <p>Iniciar sesion</p>
-                    </a>
-                </li>
+                
             </ul>
 
             <div class="p-3 mt-3 border-top border-secondary border-opacity-25">

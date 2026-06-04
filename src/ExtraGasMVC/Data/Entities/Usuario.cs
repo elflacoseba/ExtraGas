@@ -14,4 +14,6 @@ public class Usuario
     public ulong? CreatedBy { get; set; }
     public ulong? UpdatedBy { get; set; }
     public DateTime? DeletedAt { get; set; }
+
+    public Rol Rol { get; set; } = null!;
 }

@@ -1,9 +1,11 @@
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ExtraGasMVC.Controllers;
 
+[Authorize(Policy = "OperadorOrAdmin")]
 public class PedidosController : Controller
 {
     private readonly IPedidoService _pedidoService;

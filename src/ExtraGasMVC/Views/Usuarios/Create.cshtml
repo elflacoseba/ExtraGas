@@ -1,0 +1,114 @@
+@using ExtraGasMVC.Data.Entities
+@model ExtraGasMVC.DTOs.CreateUsuarioDto
+@{
+    ViewData["Title"] = "Nuevo usuario";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Usuarios", Controller = "Usuarios", Action = "Index" },
+        new() { Label = "Nuevo" }
+    };
+    var roles = ViewBag.Roles as List<Rol>;
+    var empleados = ViewBag.EmpleadosSinUsuario as IEnumerable<dynamic>;
+}
+@section PageHeader {
+    <div class="mb-3">
+        <a asp-action="Index" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Volver
+        </a>
+    </div>
+}
+
+<div class="card">
+    <div class="card-header"><h3 class="card-title">Datos del usuario</h3></div>
+    <form asp-action="Create" method="post">
+        @Html.AntiForgeryToken()
+        <div class="card-body">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="Username" class="form-label"></label>
+                    <input asp-for="Username" class="form-control" required autofocus />
+                    <span asp-validation-for="Username" class="text-danger small"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="Email" class="form-label"></label>
+                    <input asp-for="Email" type="email" class="form-control" />
+                    <span asp-validation-for="Email" class="text-danger small"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="RolId" class="form-label"></label>
+                    <select asp-for="RolId" class="form-select" required>
+                        <option value="">-- Seleccionar rol --</option>
+                        @if (roles != null)
+                        {
+                            @foreach (var rol in roles)
+                            {
+                                <option value="@rol.Id">@rol.Nombre</option>
+                            }
+                        }
+                    </select>
+                    <span asp-validation-for="RolId" class="text-danger small"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="Password" class="form-label"></label>
+                    <input asp-for="Password" type="password" class="form-control" required />
+                    <span asp-validation-for="Password" class="text-danger small"></span>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Confirmar contrasena</label>
+                    <input type="password" name="confirmPassword" class="form-control" required />
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <div class="form-check">
+                        <input asp-for="Activo" class="form-check-input" type="checkbox" />
+                        <label asp-for="Activo" class="form-check-label">Usuario activo</label>
+                    </div>
+                </div>
+            </div>
+
+            <h5 class="mt-4">Vinculacion con empleado <small class="text-secondary">(opcional)</small></h5>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="EmpleadoId" class="form-label">Empleado</label>
+                    <select asp-for="EmpleadoId" class="form-select">
+                        <option value="">-- Sin vincular --</option>
+                        @if (empleados != null)
+                        {
+                            @foreach (var emp in empleados)
+                            {
+                                <option value="@emp.Id">@emp.NombreCompleto</option>
+                            }
+                        }
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-save me-1"></i> Guardar
+            </button>
+            <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var password = document.querySelector('[name="Password"]');
+            var confirm = document.querySelector('[name="confirmPassword"]');
+            var form = document.querySelector('form');
+
+            form.addEventListener('submit', function (e) {
+                if (password.value !== confirm.value) {
+                    e.preventDefault();
+                    alert('Las contrasenas no coinciden.');
+                }
+                if (password.value.length < 6) {
+                    e.preventDefault();
+                    alert('La contrasena debe tener al menos 6 caracteres.');
+                }
+            });
+        });
+    </script>
+}
