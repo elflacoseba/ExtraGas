@@ -785,6 +785,8 @@ public class ProductsApiTests : IClassFixture<WebApplicationFactory<Program>>
 8. **Cache aggressively** with proper invalidation strategies
 9. **Write unit tests** for business logic, integration tests for APIs
 10. **Use record types** for DTOs and immutable data
+11. **Have services accept and return DTOs**: map to/from domain or EF entities at service boundaries and avoid exposing persistence models directly
+
 
 ### DON'T
 

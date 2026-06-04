@@ -8,34 +8,68 @@ Sistema de gestión para una empresa familiar de **venta de gas envasado (garraf
 
 ## Stack
 
-- **MySQL 9.6.0** (Homebrew, servicio `homebrew.mxcl.mysql`) — único motor en uso.
+### Base de datos
+- **MySQL 9.6.0** (Homebrew, servicio `homebrew.mxcl.mysql`).
 - **InnoDB** en todas las tablas, `utf8mb4` / `utf8mb4_unicode_ci`.
 - **Time zone**: `America/Argentina/Buenos_Aires` (-03:00).
-- **Sin ORM, sin framework backend** todavía — la BD es la primera capa entregada.
+
+### Backend — ASP.NET Core MVC
+- **.NET 10.0** (TFM: `net10.0`).
+- **ASP.NET Core MVC** (`AddControllersWithViews`), routing por defecto `{controller=Home}/{action=Index}/{id?}`.
+- **Entity Framework Core 9.0.16** con **Pomelo.EntityFrameworkCore.MySql 9.0.0** (driver MySQL nativo).
+- **Sin autenticación/autorización** configurada aún — solo `UseAuthorization()` sin middleware de identidad.
+- **AdminLTE 4** como template admin (CSS/JS en `wwwroot/lib/admin-lte/`), cargado vía npm (`package.json` con `admin-lte ^4.0.0`).
+- **User Secrets** habilitado para configuración sensible (`appsettings.Development.json`).
+
+### Capa de datos (EF Core)
+- **DbContext**: `ExtraGasDbContext` en `Data/Context/`.
+- **Entities**: clases POCO en `Data/Entities/` — una por tabla, incluyendo 10 vistas read-only en `Data/Entities/Views/`.
+- **Configurations**: `IEntityTypeConfiguration<T>` en `Data/Configurations/` — una por entidad + una subcarpeta `Views/` para las vistas. Se aplican via `ApplyConfigurationsFromAssembly()`.
+- **Un solo enum en la app**: `TipoLinea` (`ENTREGA`, `DEVOLUCION`, `VENTA`) en `Data/Entities/Enums/`.
+- **No hay migraciones de EF Core** — el esquema se gestiona con SQL migraciones manuales en `db/migrations/`.
+
+### Servicios de negocio
+- Patrón **Interface + Implementation** en `Services/Interfaces/` y `Services/Implementations/`.
+- Registrados como **Scoped** en `Program.cs`.
+- Servicios actuales: `IClienteService`, `IPedidoService`, `IProductoService`, `IProveedorService`, `IPagoService`, `IGarrafaService`.
+
+### Controllers
+- 9 controllers MVC en `Controllers/`:
+  - `HomeController` — dashboard, errores
+  - `AccountController` — login/logout (vistas básicas, sin Identity)
+  - `ClientesController`, `PedidosController`, `ProductosController`, `ProveedoresController`, `PagosController`, `RecepcionesController`, `GarrafasController`
+  - `Reportes` — vistas de reportes (pagos por forma, productos más vendidos, regularidad de clientes)
+
+### Vistas Razor
+- Layout principal: `Views/Shared/_AdminLTELayout.cshtml` (AdminLTE).
+- Layout alternativo: `Views/Shared/_AccountLayout.cshtml` (login).
+- Partials compartidos: `_Sidebar.cshtml`, `_Navbar.cshtml`, `_Footer.cshtml`, `_Styles.cshtml`, `_Scripts.cshtml`, `_ContentHeader.cshtml`, `_StatusMessage.cshtml`.
+- ViewModels en `Models/ViewModels/` para datos compuestos (dashboard, sidebar, navbar, breadcrumbs, paginación).
+
+### Formateo
+- Extensión `FormatExtensions.cs` en `Extensions/` — helpers para formato ARS (`ToArs`), fechas (`ToShortDate`, `ToShortDateTime`).
 
 ## Comandos clave
 
 ```bash
-# Iniciar el servicio MySQL (si está caído)
-brew services start mysql
+# MySQL
+brew services start mysql              # iniciar servicio
+mysqladmin -uroot ping                 # verificar estado
+mysql -uroot                           # cliente root
+mysql -uroot extragas < db/migrations/<archivo>.sql  # migración puntual
 
-# Verificar estado
-mysqladmin -uroot ping
+# BD — scripts
+./db/scripts/install.sh                # crear BD + migraciones + seed (idempotente)
+./db/scripts/reset.sh                  # drop + recreate (solo dev)
 
-# Cliente root
-mysql -uroot
-
-# Crear la BD + correr todas las migraciones + cargar seed
-./db/scripts/install.sh
-
-# Reset completo (drop + recreate) — solo desarrollo
-./db/scripts/reset.sh
-
-# Aplicar una migración puntual
-mysql -uroot extragas < db/migrations/<archivo>.sql
+# .NET
+dotnet restore                         # restore de paquetes
+dotnet build                           # compilar
+dotnet run --project src/ExtraGasMVC   # ejecutar (dev)
+dotnet ef migrations add <Nombre> --project src/ExtraGasMVC  # nueva migración EF (si se usa)
 ```
 
-Las credenciales por defecto en los scripts son `root` sin password (instalación local de Homebrew). Ajustar antes de usar en cualquier otro entorno.
+Las credenciales por defecto en los scripts de BD son `root` sin password (instalación local de Homebrew). Ajustar antes de usar en cualquier otro entorno.
 
 ## Layout del repositorio
 
@@ -43,6 +77,8 @@ Las credenciales por defecto en los scripts son `root` sin password (instalació
 /
 ├── AGENTS.md                       este archivo
 ├── README.md                       descripción funcional del sistema
+├── ExtraGasMVC.sln                 solución .NET (proyecto único)
+├── package.json                    npm — dependencia admin-lte ^4.0.0
 └── db/
     ├── migrations/                 SQL versionado, orden alfabético = orden de ejecución
     │   ├── 20260101_*_create_database.sql
@@ -62,7 +98,27 @@ Las credenciales por defecto en los scripts son `root` sin password (instalació
     └── docs/
         ├── ERD.mmd                 diagrama entidad-relación en Mermaid
         └── DECISIONES.md           decisiones de diseño y supuestos
+
+src/ExtraGasMVC/                    proyecto ASP.NET Core MVC (.NET 10.0)
+├── Program.cs                      entry point — DI, middleware, routing
+├── appsettings.json                config (connection string en User Secrets)
+├── Controllers/                    9 controllers MVC (ver abajo)
+├── Data/
+│   ├── Context/ExtraGasDbContext.cs  DbContext — 30+ DbSets, ApplyConfigurationsFromAssembly
+│   ├── Entities/                   27 entidades POCO (una por tabla) + Enums/
+│   └── Configurations/             IEntityTypeConfiguration<T> por entidad + Views/
+├── Services/
+│   ├── Interfaces/                 6 interfaces de servicio de negocio
+│   └── Implementations/            6 implementaciones (Scoped)
+├── Extensions/FormatExtensions.cs  helpers de formato ARS y fechas
+├── Models/ViewModels/              DTOs compuestos (Dashboard, Sidebar, Navbar, BreadcrumbItem, PagedResult)
+├── Views/                          Razor views (ver abajo)
+└── wwwroot/lib/admin-lte/          CSS + JS AdminLTE 4 (via npm)
 ```
+
+**Controllers** (9): `Home`, `Account`, `Clientes`, `Pedidos`, `Productos`, `Proveedores`, `Pagos`, `Recepciones`, `Garrafas`, `Reportes` (vistas de reportes).
+
+**Vistas** (carpetas): `Home/`, `Account/`, `Clientes/`, `Pedidos/`, `Productos/`, `Proveedores/`, `Pagos/`, `PagosProveedor/`, `Recepciones/`, `Reportes/`, `Shared/` (layouts y partials). **No se listan** las ~60 vistas individuales (CRUD por controller) ni las ~35 configuraciones EF — son convencionales y un agente puede encontrarlas por patrón.
 
 ## Convenciones de la BD
 
