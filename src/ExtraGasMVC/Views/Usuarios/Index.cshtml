@@ -1,0 +1,188 @@
+@model IEnumerable<ExtraGasMVC.DTOs.UsuarioDto>
+@using ExtraGasMVC.Extensions
+@{
+    ViewData["Title"] = "Usuarios";
+    var busqueda = ViewBag.Busqueda as string;
+    var rolId = ViewBag.RolId as ulong?;
+    var soloActivos = (bool)(ViewBag.SoloActivos ?? true);
+    var pagina = (int)(ViewBag.Pagina ?? 1);
+    var tamanio = (int)(ViewBag.Tamanio ?? 25);
+    var total = (int)(ViewBag.Total ?? 0);
+    var totalPaginas = tamanio > 0 ? (int)Math.Ceiling(total / (double)tamanio) : 0;
+}
+@section PageHeader {
+    <div class="row mb-3">
+        <div class="col-12">
+            <a asp-action="Create" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-1"></i> Nuevo usuario
+            </a>
+        </div>
+    </div>
+}
+
+<div class="card">
+    <div class="card-header">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label small mb-1" for="busqueda">Buscar</label>
+                <input type="text" id="busqueda" name="busqueda" value="@busqueda" class="form-control" placeholder="Username o email" />
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="soloActivos" name="soloActivos" value="true" @(soloActivos ? "checked" : "") />
+                    <label class="form-check-label" for="soloActivos">Solo activos</label>
+                </div>
+            </div>
+            <div class="col-md-3 d-grid gap-2 d-md-flex">
+                <button type="submit" class="btn btn-primary flex-fill">
+                    <i class="bi bi-search me-1"></i> Buscar
+                </button>
+                <a asp-action="Index" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Rol</th>
+                    <th>Ultimo login</th>
+                    <th class="text-center">Estado</th>
+                    <th class="text-end" style="width: 220px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="6" class="text-center py-4 text-secondary">No se encontraron usuarios.</td></tr>
+                }
+                @foreach (var u in Model)
+                {
+                    <tr>
+                        <td><strong>@u.Username</strong></td>
+                        <td>@(u.Email ?? "-")</td>
+                        <td>@(u.RolNombre ?? "-")</td>
+                        <td>@(u.UltimoLogin?.ToShortDateTime() ?? "-")</td>
+                        <td class="text-center">
+                            @if (u.Activo)
+                            {
+                                <span class="badge text-bg-success">Activo</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">Inactivo</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <a asp-action="Details" asp-route-id="@u.Id" class="btn btn-sm btn-info" title="Ver">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a asp-action="Edit" asp-route-id="@u.Id" class="btn btn-sm btn-primary" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form asp-action="Delete" asp-route-id="@u.Id" method="post" class="d-inline" onsubmit="return confirm('Esta seguro de desactivar este usuario?');">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-danger" title="Desactivar">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer clearfix">
+        <div class="float-end">
+            <small class="text-secondary me-2">@total registro@(total == 1 ? "" : "s")</small>
+        </div>
+        @if (totalPaginas > 1)
+        {
+            <nav>
+                <ul class="pagination pagination-sm m-0 float-end">
+                    @if (pagina > 1)
+                    {
+                        <li class="page-item">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-busqueda="@busqueda"
+                               asp-route-rolId="@rolId"
+                               asp-route-soloActivos="@soloActivos"
+                               asp-route-pagina="@(pagina - 1)"
+                               asp-route-tamanio="@tamanio">&laquo;</a>
+                        </li>
+                    }
+
+                    @{
+                        var start = Math.Max(1, pagina - 2);
+                        var end = Math.Min(totalPaginas, pagina + 2);
+
+                        if (start > 1)
+                        {
+                            <li class="page-item">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-busqueda="@busqueda"
+                                   asp-route-rolId="@rolId"
+                                   asp-route-soloActivos="@soloActivos"
+                                   asp-route-pagina="1"
+                                   asp-route-tamanio="@tamanio">1</a>
+                            </li>
+                            if (start > 2)
+                            {
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            }
+                        }
+
+                        for (var i = start; i <= end; i++)
+                        {
+                            <li class="page-item @(i == pagina ? "active" : "")">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-busqueda="@busqueda"
+                                   asp-route-rolId="@rolId"
+                                   asp-route-soloActivos="@soloActivos"
+                                   asp-route-pagina="@i"
+                                   asp-route-tamanio="@tamanio">@i</a>
+                            </li>
+                        }
+
+                        if (end < totalPaginas)
+                        {
+                            if (end < totalPaginas - 1)
+                            {
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            }
+                            <li class="page-item">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-busqueda="@busqueda"
+                                   asp-route-rolId="@rolId"
+                                   asp-route-soloActivos="@soloActivos"
+                                   asp-route-pagina="@totalPaginas"
+                                   asp-route-tamanio="@tamanio">@totalPaginas</a>
+                            </li>
+                        }
+                    }
+
+                    @if (pagina < totalPaginas)
+                    {
+                        <li class="page-item">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-busqueda="@busqueda"
+                               asp-route-rolId="@rolId"
+                               asp-route-soloActivos="@soloActivos"
+                               asp-route-pagina="@(pagina + 1)"
+                               asp-route-tamanio="@tamanio">&raquo;</a>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        }
+    </div>
+</div>

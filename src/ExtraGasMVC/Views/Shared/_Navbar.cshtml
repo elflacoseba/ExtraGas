@@ -69,26 +69,25 @@
             <li class="nav-item dropdown user-menu">
                 <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown">
                     <img src="~/lib/admin-lte/img/avatar2.png" class="user-image rounded-circle shadow" alt="Imagen de usuario" />
-                    <span class="d-none d-md-inline">Administrador</span>
+                    <span class="d-none d-md-inline">@Model.Username</span>
                 </a>
                 <ul class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
                     <li class="user-header text-bg-primary">
                         <img src="~/lib/admin-lte/img/avatar2.png" class="rounded-circle shadow" alt="Imagen de usuario" />
                         <p>
-                            Administrador - Encargado
-                            <small>Miembro desde Nov. 2024</small>
+                            @Model.Username
+                            <small>@Model.Role</small>
                         </p>
                     </li>
-                    <li class="user-body">
-                        <div class="row">
-                            <div class="col-4 text-center"><a href="#">Clientes</a></div>
-                            <div class="col-4 text-center"><a href="#">Pedidos</a></div>
-                            <div class="col-4 text-center"><a href="#">Stock</a></div>
-                        </div>
-                    </li>
                     <li class="user-footer">
-                        <a href="#" class="btn btn-outline-secondary">Perfil</a>
-                        <a asp-controller="Account" asp-action="Logout" class="btn btn-outline-danger float-end">Salir</a>
+                        @if (!string.IsNullOrEmpty(Model.UserId))
+                        {
+                            <a asp-controller="Usuarios" asp-action="Details" asp-route-id="@Model.UserId" class="btn btn-outline-secondary">Perfil</a>
+                        }
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline float-end">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-outline-danger">Salir</button>
+                        </form>
                     </li>
                 </ul>
             </li>

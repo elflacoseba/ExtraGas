@@ -1,11 +1,13 @@
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExtraGasMVC.Controllers;
 
+[Authorize(Policy = "OperadorOrAdmin")]
 public class PagosController : Controller
 {
     private readonly IPagoService _pagoService;

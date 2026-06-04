@@ -37,5 +37,13 @@ public class MappingProfile : Profile
         CreateMap<Garrafa, GarrafaDto>().ReverseMap();
         CreateMap<CreateGarrafaDto, Garrafa>();
         CreateMap<UpdateGarrafaDto, Garrafa>();
+
+        // Usuario mappings
+        CreateMap<Usuario, UsuarioDto>()
+            .ForMember(d => d.RolCodigo, o => o.MapFrom(s => s.Rol != null ? s.Rol.Codigo : null))
+            .ForMember(d => d.RolNombre, o => o.MapFrom(s => s.Rol != null ? s.Rol.Nombre : null));
+        CreateMap<CreateUsuarioDto, Usuario>()
+            .ForMember(d => d.PasswordHash, o => o.Ignore());
+        CreateMap<UpdateUsuarioDto, Usuario>();
     }
 }

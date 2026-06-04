@@ -56,7 +56,7 @@ public class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
             .HasColumnType("datetime");
 
         // FK a roles
-        builder.HasOne<Rol>()
+        builder.HasOne(u => u.Rol)
             .WithMany()
             .HasForeignKey(u => u.RolId)
             .OnDelete(DeleteBehavior.Restrict)

@@ -4,11 +4,13 @@ using ExtraGasMVC.Data.Entities.Views;
 using ExtraGasMVC.Models;
 using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExtraGasMVC.Controllers;
 
+[Authorize]
 public class HomeController : Controller
 {
     private readonly IClienteService _clienteService;
@@ -73,17 +75,21 @@ public class HomeController : Controller
         return View(model);
     }
 
+    [AllowAnonymous]
     public IActionResult Privacy() => View();
 
+    [AllowAnonymous]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult Error()
     {
         return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
     }
 
+    [AllowAnonymous]
     [Route("/Error/404")]
     public IActionResult NotFoundPage() => View("NotFound");
 
+    [AllowAnonymous]
     [Route("/Error/500")]
     public IActionResult ServerError() => View("ServerError");
 }

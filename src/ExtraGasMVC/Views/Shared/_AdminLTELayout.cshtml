@@ -1,10 +1,21 @@
 @using ExtraGasMVC.Extensions
+@using System.Security.Claims
 @{
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
     var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
     var title = ViewData["Title"] as string ?? "ExtraGas";
     var fullTitle = string.IsNullOrEmpty(title) ? "ExtraGas" : $"{title} · ExtraGas";
     var hasNavbarSearch = ViewData["NavbarSearch"] as bool? ?? true;
+
+    var rolNombre = User.FindFirstValue("RoleName") ?? User.FindFirstValue(ClaimTypes.Role);
+
+    var navbarVm = new ExtraGasMVC.Models.ViewModels.NavbarViewModel
+    {
+        ShowSearch = hasNavbarSearch,
+        UserId = User.FindFirstValue(ClaimTypes.NameIdentifier),
+        Username = User.Identity?.Name,
+        Role = rolNombre
+    };
 }
 <!doctype html>
 <html lang="es">
@@ -23,10 +34,7 @@
 </head>
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
     <div class="app-wrapper">
-        @await Html.PartialAsync("_Navbar", new ExtraGasMVC.Models.ViewModels.NavbarViewModel
-        {
-            ShowSearch = hasNavbarSearch
-        })
+        @await Html.PartialAsync("_Navbar", navbarVm)
         @await Html.PartialAsync("_Sidebar", new ExtraGasMVC.Models.ViewModels.SidebarViewModel
         {
             CurrentController = currentController,
