@@ -1,4 +1,6 @@
 using ExtraGasMVC.Data.Context;
+using ExtraGasMVC.Services.Implementations;
+using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,6 +18,14 @@ builder.Services.AddDbContext<ExtraGasDbContext>(opt =>
         my => my.EnableStringComparisonTranslations()
                  .CommandTimeout(30)
                  .MigrationsAssembly(typeof(Program).Assembly.GetName().Name)));
+
+// Registrar servicios de negocio
+builder.Services.AddScoped<IClienteService, ClienteService>();
+builder.Services.AddScoped<IPedidoService, PedidoService>();
+builder.Services.AddScoped<IProductoService, ProductoService>();
+builder.Services.AddScoped<IProveedorService, ProveedorService>();
+builder.Services.AddScoped<IPagoService, PagoService>();
+builder.Services.AddScoped<IGarrafaService, GarrafaService>();
 
 var app = builder.Build();
 
