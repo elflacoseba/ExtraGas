@@ -1,5 +1,7 @@
+using AutoMapper;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,64 +10,79 @@ namespace ExtraGasMVC.Services.Implementations;
 public class PagoService : IPagoService
 {
     private readonly ExtraGasDbContext _context;
+    private readonly IMapper _mapper;
 
-    public PagoService(ExtraGasDbContext context)
+    public PagoService(ExtraGasDbContext context, IMapper mapper)
     {
         _context = context;
+        _mapper = mapper;
     }
 
-    public async Task<Pago?> GetByIdAsync(ulong id, CancellationToken ct = default)
+    public async Task<PagoDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
     {
-        return await _context.Pagos
+        var pago = await _context.Pagos
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == id, ct);
+        
+        return pago is null ? null : _mapper.Map<PagoDto>(pago);
     }
 
-    public async Task<IEnumerable<Pago>> GetAllAsync(CancellationToken ct = default)
+    public async Task<IEnumerable<PagoDto>> GetAllAsync(CancellationToken ct = default)
     {
-        return await _context.Pagos
+        var pagos = await _context.Pagos
             .AsNoTracking()
             .OrderByDescending(p => p.Fecha)
             .ToListAsync(ct);
+        
+        return _mapper.Map<IEnumerable<PagoDto>>(pagos);
     }
 
-    public async Task<IEnumerable<Pago>> GetByClienteAsync(ulong clienteId, CancellationToken ct = default)
+    public async Task<IEnumerable<PagoDto>> GetByClienteAsync(ulong clienteId, CancellationToken ct = default)
     {
-        return await _context.Pagos
+        var pagos = await _context.Pagos
             .AsNoTracking()
             .Where(p => p.ClienteId == clienteId)
             .OrderByDescending(p => p.Fecha)
             .ToListAsync(ct);
+        
+        return _mapper.Map<IEnumerable<PagoDto>>(pagos);
     }
 
-    public async Task<IEnumerable<Pago>> GetByPedidoAsync(ulong pedidoId, CancellationToken ct = default)
+    public async Task<IEnumerable<PagoDto>> GetByPedidoAsync(ulong pedidoId, CancellationToken ct = default)
     {
-        return await _context.Pagos
+        var pagos = await _context.Pagos
             .AsNoTracking()
             .Where(p => p.PedidoId == pedidoId)
             .OrderByDescending(p => p.Fecha)
             .ToListAsync(ct);
+        
+        return _mapper.Map<IEnumerable<PagoDto>>(pagos);
     }
 
-    public async Task<Pago> CreateAsync(Pago pago, CancellationToken ct = default)
+    public async Task<PagoDto> CreateAsync(CreatePagoDto pagoDto, CancellationToken ct = default)
     {
+        var pago = _mapper.Map<Pago>(pagoDto);
         pago.CreatedAt = DateTime.UtcNow;
         pago.UpdatedAt = DateTime.UtcNow;
         
         _context.Pagos.Add(pago);
         await _context.SaveChangesAsync(ct);
         
-        return pago;
+        return _mapper.Map<PagoDto>(pago);
     }
 
-    public async Task<Pago> UpdateAsync(Pago pago, CancellationToken ct = default)
+    public async Task<PagoDto> UpdateAsync(UpdatePagoDto pagoDto, CancellationToken ct = default)
     {
+        var pago = await _context.Pagos.FindAsync(new object[] { pagoDto.Id }, ct);
+        if (pago == null)
+            throw new KeyNotFoundException($"Pago con Id {pagoDto.Id} no encontrado.");
+
+        _mapper.Map(pagoDto, pago);
         pago.UpdatedAt = DateTime.UtcNow;
         
-        _context.Pagos.Update(pago);
         await _context.SaveChangesAsync(ct);
         
-        return pago;
+        return _mapper.Map<PagoDto>(pago);
     }
 
     public async Task<bool> DeleteAsync(ulong id, CancellationToken ct = default)

@@ -1,4 +1,4 @@
-using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -36,11 +36,11 @@ public class GarrafasController : Controller
         return View(garrafa);
     }
 
-    public IActionResult Create() => View(new Garrafa { EstadoGarrafaId = 1, Activo = true, FechaCompra = DateOnly.FromDateTime(DateTime.UtcNow) });
+    public IActionResult Create() => View(new CreateGarrafaDto { EstadoGarrafaId = 1, Activo = true, FechaCompra = DateOnly.FromDateTime(DateTime.UtcNow) });
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(Garrafa garrafa, CancellationToken ct = default)
+    public async Task<IActionResult> Create(CreateGarrafaDto garrafa, CancellationToken ct = default)
     {
         if (!ModelState.IsValid) return View(garrafa);
         try
@@ -61,12 +61,27 @@ public class GarrafasController : Controller
         var garrafa = await _garrafaService.GetByIdAsync(id, ct);
         if (garrafa is null) return NotFound();
         ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-        return View(garrafa);
+        
+        var updateDto = new UpdateGarrafaDto
+        {
+            Id = garrafa.Id,
+            Codigo = garrafa.Codigo,
+            CapacidadKg = garrafa.CapacidadKg,
+            ProveedorId = garrafa.ProveedorId,
+            RecepcionId = garrafa.RecepcionId,
+            FechaCompra = garrafa.FechaCompra,
+            EstadoGarrafaId = garrafa.EstadoGarrafaId,
+            ClienteId = garrafa.ClienteId,
+            Activo = garrafa.Activo,
+            Observaciones = garrafa.Observaciones
+        };
+        
+        return View(updateDto);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(ulong id, Garrafa garrafa, CancellationToken ct = default)
+    public async Task<IActionResult> Edit(ulong id, UpdateGarrafaDto garrafa, CancellationToken ct = default)
     {
         if (id != garrafa.Id) return BadRequest();
         if (!ModelState.IsValid)

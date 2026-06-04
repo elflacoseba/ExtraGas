@@ -1,4 +1,4 @@
-@model ExtraGasMVC.Data.Entities.Pago
+@model ExtraGasMVC.DTOs.CreatePagoDto
 @{
     ViewData["Title"] = "Registrar pago";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -6,8 +6,8 @@
         new() { Label = "Pagos", Controller = "Pagos", Action = "Index" },
         new() { Label = "Nuevo" }
     };
-    var pedidos = ViewBag.Pedidos as IEnumerable<ExtraGasMVC.Data.Entities.Pedido> ?? Array.Empty<ExtraGasMVC.Data.Entities.Pedido>();
-    var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.Data.Entities.Cliente> ?? Array.Empty<ExtraGasMVC.Data.Entities.Cliente>();
+    var pedidos = ViewBag.Pedidos as IEnumerable<ExtraGasMVC.DTOs.PedidoDto> ?? Array.Empty<ExtraGasMVC.DTOs.PedidoDto>();
+    var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.DTOs.ClienteDto> ?? Array.Empty<ExtraGasMVC.DTOs.ClienteDto>();
     var formas = ViewBag.FormasPago as IEnumerable<ExtraGasMVC.Data.Entities.FormaPago> ?? Array.Empty<ExtraGasMVC.Data.Entities.FormaPago>();
 }
 @section PageHeader {

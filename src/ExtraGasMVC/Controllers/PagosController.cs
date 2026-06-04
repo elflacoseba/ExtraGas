@@ -1,5 +1,5 @@
 using ExtraGasMVC.Data.Context;
-using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -52,12 +52,12 @@ public class PagosController : Controller
         ViewBag.Pedidos = await _pedidoService.GetPendientesAsync(ct);
         ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
         ViewBag.FormasPago = await _context.FormasPago.AsNoTracking().ToListAsync(ct);
-        return View(new Pago { Fecha = DateTime.UtcNow, PedidoId = pedidoId ?? 0, FormaPagoId = 1 });
+        return View(new CreatePagoDto { Fecha = DateTime.UtcNow, PedidoId = pedidoId ?? 0, FormaPagoId = 1 });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(Pago pago, CancellationToken ct = default)
+    public async Task<IActionResult> Create(CreatePagoDto pago, CancellationToken ct = default)
     {
         if (!ModelState.IsValid)
         {
@@ -89,12 +89,25 @@ public class PagosController : Controller
         ViewBag.Pedidos = await _pedidoService.GetPendientesAsync(ct);
         ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
         ViewBag.FormasPago = await _context.FormasPago.AsNoTracking().ToListAsync(ct);
-        return View(pago);
+        
+        var updateDto = new UpdatePagoDto
+        {
+            Id = pago.Id,
+            Fecha = pago.Fecha,
+            ClienteId = pago.ClienteId,
+            PedidoId = pago.PedidoId,
+            FormaPagoId = pago.FormaPagoId,
+            Monto = pago.Monto,
+            Referencia = pago.Referencia,
+            Observaciones = pago.Observaciones
+        };
+        
+        return View(updateDto);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(ulong id, Pago pago, CancellationToken ct = default)
+    public async Task<IActionResult> Edit(ulong id, UpdatePagoDto pago, CancellationToken ct = default)
     {
         if (id != pago.Id) return BadRequest();
         if (!ModelState.IsValid)

@@ -1,4 +1,4 @@
-@model ExtraGasMVC.Data.Entities.Pedido
+@model ExtraGasMVC.DTOs.UpdatePedidoDto
 @{
     ViewData["Title"] = "Editar pedido";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -6,7 +6,7 @@
         new() { Label = "Pedidos", Controller = "Pedidos", Action = "Index" },
         new() { Label = "Editar" }
     };
-    var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.Data.Entities.Cliente> ?? Array.Empty<ExtraGasMVC.Data.Entities.Cliente>();
+    var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.DTOs.ClienteDto> ?? Array.Empty<ExtraGasMVC.DTOs.ClienteDto>();
 }
 @section PageHeader {
     <div class="mb-3">
@@ -20,7 +20,6 @@
     <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
         @Html.AntiForgeryToken()
         <input type="hidden" asp-for="Id" />
-        <input type="hidden" asp-for="CreatedAt" />
         <div class="card-body">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
             <div class="row g-3">

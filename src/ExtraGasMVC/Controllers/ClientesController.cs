@@ -1,4 +1,4 @@
-using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
@@ -49,11 +49,11 @@ public class ClientesController : Controller
         return View(cliente);
     }
 
-    public IActionResult Create() => View(new Cliente { FechaAlta = DateOnly.FromDateTime(DateTime.UtcNow), Activo = true });
+    public IActionResult Create() => View(new CreateClienteDto { FechaAlta = DateOnly.FromDateTime(DateTime.UtcNow), Activo = true });
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(Cliente cliente, CancellationToken ct = default)
+    public async Task<IActionResult> Create(CreateClienteDto cliente, CancellationToken ct = default)
     {
         if (!ModelState.IsValid) return View(cliente);
         try
@@ -73,12 +73,37 @@ public class ClientesController : Controller
     {
         var cliente = await _clienteService.GetByIdAsync(id, ct);
         if (cliente is null) return NotFound();
-        return View(cliente);
+        
+        var updateDto = new UpdateClienteDto
+        {
+            Id = cliente.Id,
+            Codigo = cliente.Codigo,
+            Nombre = cliente.Nombre,
+            Apellido = cliente.Apellido,
+            Dni = cliente.Dni,
+            CuitCuil = cliente.CuitCuil,
+            TelefonoPrincipal = cliente.TelefonoPrincipal,
+            TelefonoSecundario = cliente.TelefonoSecundario,
+            Email = cliente.Email,
+            Calle = cliente.Calle,
+            Numero = cliente.Numero,
+            Piso = cliente.Piso,
+            Depto = cliente.Depto,
+            Ciudad = cliente.Ciudad,
+            CodigoPostal = cliente.CodigoPostal,
+            ProvinciaId = cliente.ProvinciaId,
+            Referencias = cliente.Referencias,
+            Observaciones = cliente.Observaciones,
+            FechaAlta = cliente.FechaAlta,
+            Activo = cliente.Activo
+        };
+        
+        return View(updateDto);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(ulong id, Cliente cliente, CancellationToken ct = default)
+    public async Task<IActionResult> Edit(ulong id, UpdateClienteDto cliente, CancellationToken ct = default)
     {
         if (id != cliente.Id) return BadRequest();
         if (!ModelState.IsValid) return View(cliente);
@@ -109,7 +134,6 @@ public class ClientesController : Controller
     public async Task<IActionResult> CuentasCorrientes(CancellationToken ct = default)
     {
         var clientes = await _clienteService.GetAllAsync(ct);
-        ViewBag.Clientes = clientes;
-        return View();
+        return View(clientes);
     }
 }

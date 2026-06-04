@@ -1,4 +1,4 @@
-@model ExtraGasMVC.Data.Entities.Pedido
+@model ExtraGasMVC.DTOs.CreatePedidoDto
 @{
     ViewData["Title"] = "Nuevo pedido";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -6,7 +6,7 @@
         new() { Label = "Pedidos", Controller = "Pedidos", Action = "Index" },
         new() { Label = "Nuevo" }
     };
-    var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.Data.Entities.Cliente> ?? Array.Empty<ExtraGasMVC.Data.Entities.Cliente>();
+    var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.DTOs.ClienteDto> ?? Array.Empty<ExtraGasMVC.DTOs.ClienteDto>();
 }
 @section PageHeader {
     <div class="mb-3">

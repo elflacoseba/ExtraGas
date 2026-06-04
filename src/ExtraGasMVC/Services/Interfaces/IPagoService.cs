@@ -1,14 +1,14 @@
-using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.DTOs;
 
 namespace ExtraGasMVC.Services.Interfaces;
 
 public interface IPagoService
 {
-    Task<Pago?> GetByIdAsync(ulong id, CancellationToken ct = default);
-    Task<IEnumerable<Pago>> GetAllAsync(CancellationToken ct = default);
-    Task<IEnumerable<Pago>> GetByClienteAsync(ulong clienteId, CancellationToken ct = default);
-    Task<IEnumerable<Pago>> GetByPedidoAsync(ulong pedidoId, CancellationToken ct = default);
-    Task<Pago> CreateAsync(Pago pago, CancellationToken ct = default);
-    Task<Pago> UpdateAsync(Pago pago, CancellationToken ct = default);
+    Task<PagoDto?> GetByIdAsync(ulong id, CancellationToken ct = default);
+    Task<IEnumerable<PagoDto>> GetAllAsync(CancellationToken ct = default);
+    Task<IEnumerable<PagoDto>> GetByClienteAsync(ulong clienteId, CancellationToken ct = default);
+    Task<IEnumerable<PagoDto>> GetByPedidoAsync(ulong pedidoId, CancellationToken ct = default);
+    Task<PagoDto> CreateAsync(CreatePagoDto pago, CancellationToken ct = default);
+    Task<PagoDto> UpdateAsync(UpdatePagoDto pago, CancellationToken ct = default);
     Task<bool> DeleteAsync(ulong id, CancellationToken ct = default);
 }

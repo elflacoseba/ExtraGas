@@ -1,4 +1,4 @@
-using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
@@ -37,11 +37,11 @@ public class ProductosController : Controller
         return View(producto);
     }
 
-    public IActionResult Create() => View(new Producto { Activo = true, UnidadVenta = "UNIDAD" });
+    public IActionResult Create() => View(new CreateProductoDto { Activo = true, UnidadVenta = "UNIDAD" });
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(Producto producto, CancellationToken ct = default)
+    public async Task<IActionResult> Create(CreateProductoDto producto, CancellationToken ct = default)
     {
         if (!ModelState.IsValid) return View(producto);
         try
@@ -61,12 +61,27 @@ public class ProductosController : Controller
     {
         var producto = await _productoService.GetByIdAsync(id, ct);
         if (producto is null) return NotFound();
-        return View(producto);
+        
+        var updateDto = new UpdateProductoDto
+        {
+            Id = producto.Id,
+            Codigo = producto.Codigo,
+            Nombre = producto.Nombre,
+            Descripcion = producto.Descripcion,
+            TipoProductoId = producto.TipoProductoId,
+            CapacidadKg = producto.CapacidadKg,
+            UnidadVenta = producto.UnidadVenta,
+            PrecioActual = producto.PrecioActual,
+            ManejaGarrafaIndividual = producto.ManejaGarrafaIndividual,
+            Activo = producto.Activo
+        };
+        
+        return View(updateDto);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(ulong id, Producto producto, CancellationToken ct = default)
+    public async Task<IActionResult> Edit(ulong id, UpdateProductoDto producto, CancellationToken ct = default)
     {
         if (id != producto.Id) return BadRequest();
         if (!ModelState.IsValid) return View(producto);
@@ -93,9 +108,22 @@ public class ProductosController : Controller
             TempData["Error"] = "No se encontro el producto.";
             return RedirectToAction(nameof(Index));
         }
-        producto.Activo = false;
-        producto.DeletedAt = DateTime.UtcNow;
-        await _productoService.UpdateAsync(producto);
+        
+        var updateDto = new UpdateProductoDto
+        {
+            Id = producto.Id,
+            Codigo = producto.Codigo,
+            Nombre = producto.Nombre,
+            Descripcion = producto.Descripcion,
+            TipoProductoId = producto.TipoProductoId,
+            CapacidadKg = producto.CapacidadKg,
+            UnidadVenta = producto.UnidadVenta,
+            PrecioActual = producto.PrecioActual,
+            ManejaGarrafaIndividual = producto.ManejaGarrafaIndividual,
+            Activo = false
+        };
+        
+        await _productoService.UpdateAsync(updateDto);
         TempData["Success"] = "Producto desactivado.";
         return RedirectToAction(nameof(Index));
     }
