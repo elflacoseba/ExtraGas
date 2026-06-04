@@ -1,0 +1,102 @@
+using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.Services.Interfaces;
+using Microsoft.AspNetCore.Mvc;
+
+namespace ExtraGasMVC.Controllers;
+
+public class ProductosController : Controller
+{
+    private readonly IProductoService _productoService;
+
+    public ProductosController(IProductoService productoService)
+    {
+        _productoService = productoService;
+    }
+
+    public async Task<IActionResult> Index(string? busqueda, bool soloActivos = true, CancellationToken ct = default)
+    {
+        var productos = await _productoService.GetAllAsync(ct);
+        if (soloActivos) productos = productos.Where(p => p.Activo);
+        if (!string.IsNullOrWhiteSpace(busqueda))
+        {
+            var q = busqueda.Trim().ToLower();
+            productos = productos.Where(p =>
+                p.Nombre.ToLower().Contains(q)
+                || p.Codigo.ToLower().Contains(q)
+                || (p.Descripcion ?? string.Empty).ToLower().Contains(q));
+        }
+        ViewBag.Busqueda = busqueda;
+        ViewBag.SoloActivos = soloActivos;
+        return View(productos.OrderBy(p => p.Nombre).ToList());
+    }
+
+    public async Task<IActionResult> Details(ulong id, CancellationToken ct = default)
+    {
+        var producto = await _productoService.GetByIdAsync(id, ct);
+        if (producto is null) return NotFound();
+        return View(producto);
+    }
+
+    public IActionResult Create() => View(new Producto { Activo = true, UnidadVenta = "UNIDAD" });
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Create(Producto producto, CancellationToken ct = default)
+    {
+        if (!ModelState.IsValid) return View(producto);
+        try
+        {
+            await _productoService.CreateAsync(producto, ct);
+            TempData["Success"] = $"Producto {producto.Nombre} creado.";
+            return RedirectToAction(nameof(Index));
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, $"No se pudo crear el producto: {ex.Message}");
+            return View(producto);
+        }
+    }
+
+    public async Task<IActionResult> Edit(ulong id, CancellationToken ct = default)
+    {
+        var producto = await _productoService.GetByIdAsync(id, ct);
+        if (producto is null) return NotFound();
+        return View(producto);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Edit(ulong id, Producto producto, CancellationToken ct = default)
+    {
+        if (id != producto.Id) return BadRequest();
+        if (!ModelState.IsValid) return View(producto);
+        try
+        {
+            await _productoService.UpdateAsync(producto, ct);
+            TempData["Success"] = $"Producto {producto.Nombre} actualizado.";
+            return RedirectToAction(nameof(Index));
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, $"No se pudo actualizar el producto: {ex.Message}");
+            return View(producto);
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(ulong id, CancellationToken ct = default)
+    {
+        var producto = await _productoService.GetByIdAsync(id, ct);
+        if (producto is null)
+        {
+            TempData["Error"] = "No se encontro el producto.";
+            return RedirectToAction(nameof(Index));
+        }
+        producto.Activo = false;
+        producto.DeletedAt = DateTime.UtcNow;
+        await _productoService.UpdateAsync(producto);
+        TempData["Success"] = "Producto desactivado.";
+        return RedirectToAction(nameof(Index));
+    }
+}

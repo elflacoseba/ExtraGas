@@ -1,0 +1,209 @@
+@model ExtraGasMVC.Models.ViewModels.SidebarViewModel
+@{
+    var isCurrent = (string controller, string? action = null) =>
+    {
+        if (!string.Equals(Model.CurrentController, controller, StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (action is null) return true;
+        return string.Equals(Model.CurrentAction, action, StringComparison.OrdinalIgnoreCase);
+    };
+    var openSection = (string controller) =>
+        string.Equals(Model.CurrentController, controller, StringComparison.OrdinalIgnoreCase) ? "menu-open" : "";
+}
+<aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
+    <div class="sidebar-brand">
+        <a asp-controller="Home" asp-action="Index" class="brand-link">
+            <img src="~/lib/admin-lte/img/AdminLTELogo.png" alt="ExtraGas" class="brand-image opacity-75 shadow" />
+            <span class="brand-text fw-light">Extra<b>Gas</b></span>
+        </a>
+    </div>
+    <div class="sidebar-wrapper">
+        <nav class="mt-2">
+            <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="navigation" aria-label="Menu principal" data-accordion="false" id="navigation">
+
+                <li class="nav-item">
+                    <a asp-controller="Home" asp-action="Index" class="nav-link @(isCurrent("Home", "Index") ? "active" : "")">
+                        <i class="nav-icon bi bi-speedometer2"></i>
+                        <p>Dashboard</p>
+                    </a>
+                </li>
+
+                <li class="nav-header">OPERACIONES</li>
+                <li class="nav-item @openSection("Pedidos")">
+                    <a href="#" class="nav-link @(isCurrent("Pedidos") ? "active" : "")">
+                        <i class="nav-icon bi bi-bag-check-fill"></i>
+                        <p>
+                            Pedidos
+                            <i class="nav-arrow bi bi-chevron-right"></i>
+                        </p>
+                    </a>
+                    <ul class="nav nav-treeview">
+                        <li class="nav-item">
+                            <a asp-controller="Pedidos" asp-action="Index" class="nav-link @(isCurrent("Pedidos", "Index") ? "active" : "")">
+                                <i class="nav-icon bi bi-circle"></i>
+                                <p>Listado</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="Pedidos" asp-action="Create" class="nav-link @(isCurrent("Pedidos", "Create") ? "active" : "")">
+                                <i class="nav-icon bi bi-circle"></i>
+                                <p>Nuevo pedido</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="Pedidos" asp-action="Pendientes" class="nav-link @(isCurrent("Pedidos", "Pendientes") ? "active" : "")">
+                                <i class="nav-icon bi bi-circle"></i>
+                                <p>Pendientes de cobro</p>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
+                <li class="nav-item @openSection("Clientes")">
+                    <a href="#" class="nav-link @(isCurrent("Clientes") ? "active" : "")">
+                        <i class="nav-icon bi bi-people-fill"></i>
+                        <p>
+                            Clientes
+                            <i class="nav-arrow bi bi-chevron-right"></i>
+                        </p>
+                    </a>
+                    <ul class="nav nav-treeview">
+                        <li class="nav-item">
+                            <a asp-controller="Clientes" asp-action="Index" class="nav-link @(isCurrent("Clientes", "Index") ? "active" : "")">
+                                <i class="nav-icon bi bi-circle"></i>
+                                <p>Listado</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="Clientes" asp-action="Create" class="nav-link @(isCurrent("Clientes", "Create") ? "active" : "")">
+                                <i class="nav-icon bi bi-circle"></i>
+                                <p>Nuevo cliente</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="Clientes" asp-action="CuentasCorrientes" class="nav-link @(isCurrent("Clientes", "CuentasCorrientes") ? "active" : "")">
+                                <i class="nav-icon bi bi-circle"></i>
+                                <p>Cuentas corrientes</p>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
+                <li class="nav-item @openSection("Garrafas")">
+                    <a href="#" class="nav-link @(isCurrent("Garrafas") ? "active" : "")">
+                        <i class="nav-icon bi bi-fuel-pump-fill"></i>
+                        <p>
+                            Garrafas
+                            <i class="nav-arrow bi bi-chevron-right"></i>
+                        </p>
+                    </a>
+                    <ul class="nav nav-treeview">
+                        <li class="nav-item">
+                            <a asp-controller="Garrafas" asp-action="Index" class="nav-link @(isCurrent("Garrafas", "Index") ? "active" : "")">
+                                <i class="nav-icon bi bi-circle"></i>
+                                <p>Listado</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="Garrafas" asp-action="Stock" class="nav-link @(isCurrent("Garrafas", "Stock") ? "active" : "")">
+                                <i class="nav-icon bi bi-circle"></i>
+                                <p>Stock por estado</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="Garrafas" asp-action="EnClientes" class="nav-link @(isCurrent("Garrafas", "EnClientes") ? "active" : "")">
+                                <i class="nav-icon bi bi-circle"></i>
+                                <p>En poder del cliente</p>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
+                <li class="nav-header">CATALOGO</li>
+                <li class="nav-item">
+                    <a asp-controller="Productos" asp-action="Index" class="nav-link @(isCurrent("Productos") ? "active" : "")">
+                        <i class="nav-icon bi bi-box-seam"></i>
+                        <p>Productos</p>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a asp-controller="Proveedores" asp-action="Index" class="nav-link @(isCurrent("Proveedores") ? "active" : "")">
+                        <i class="nav-icon bi bi-truck"></i>
+                        <p>Proveedores</p>
+                    </a>
+                </li>
+
+                <li class="nav-header">PROVEEDORES</li>
+                <li class="nav-item @openSection("Recepciones")">
+                    <a href="#" class="nav-link @(isCurrent("Recepciones") ? "active" : "")">
+                        <i class="nav-icon bi bi-box-arrow-in-down"></i>
+                        <p>
+                            Recepciones
+                            <i class="nav-arrow bi bi-chevron-right"></i>
+                        </p>
+                    </a>
+                    <ul class="nav nav-treeview">
+                        <li class="nav-item">
+                            <a asp-controller="Recepciones" asp-action="Index" class="nav-link @(isCurrent("Recepciones", "Index") ? "active" : "")">
+                                <i class="nav-icon bi bi-circle"></i>
+                                <p>Listado</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="Recepciones" asp-action="Create" class="nav-link @(isCurrent("Recepciones", "Create") ? "active" : "")">
+                                <i class="nav-icon bi bi-circle"></i>
+                                <p>Nueva recepcion</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a asp-controller="PagosProveedor" asp-action="Index" class="nav-link @(isCurrent("PagosProveedor", "Index") ? "active" : "")">
+                                <i class="nav-icon bi bi-circle"></i>
+                                <p>Pagos a proveedores</p>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
+                <li class="nav-header">REPORTES</li>
+                <li class="nav-item">
+                    <a asp-controller="Reportes" asp-action="ProductosMasVendidos" class="nav-link @(isCurrent("Reportes", "ProductosMasVendidos") ? "active" : "")">
+                        <i class="nav-icon bi bi-bar-chart-fill"></i>
+                        <p>Productos mas vendidos</p>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a asp-controller="Reportes" asp-action="RegularidadClientes" class="nav-link @(isCurrent("Reportes", "RegularidadClientes") ? "active" : "")">
+                        <i class="nav-icon bi bi-calendar-check"></i>
+                        <p>Regularidad clientes</p>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a asp-controller="Reportes" asp-action="PagosPorForma" class="nav-link @(isCurrent("Reportes", "PagosPorForma") ? "active" : "")">
+                        <i class="nav-icon bi bi-cash-coin"></i>
+                        <p>Pagos por forma</p>
+                    </a>
+                </li>
+
+                <li class="nav-header">SISTEMA</li>
+                <li class="nav-item">
+                    <a asp-controller="Home" asp-action="Privacy" class="nav-link @(isCurrent("Home", "Privacy") ? "active" : "")">
+                        <i class="nav-icon bi bi-shield-lock"></i>
+                        <p>Privacidad</p>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a asp-controller="Account" asp-action="Login" class="nav-link @(isCurrent("Account", "Login") ? "active" : "")">
+                        <i class="nav-icon bi bi-box-arrow-in-right"></i>
+                        <p>Iniciar sesion</p>
+                    </a>
+                </li>
+            </ul>
+
+            <div class="p-3 mt-3 border-top border-secondary border-opacity-25">
+                <a href="https://adminlte.io" target="_blank" rel="noopener" class="btn btn-sm btn-outline-light w-100 d-flex align-items-center justify-content-center gap-2">
+                    <i class="bi bi-stars" aria-hidden="true"></i> ExtraGas v1.0
+                </a>
+            </div>
+        </nav>
+    </div>
+</aside>

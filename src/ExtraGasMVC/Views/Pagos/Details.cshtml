@@ -1,0 +1,35 @@
+@model ExtraGasMVC.Data.Entities.Pago
+@{
+    ViewData["Title"] = "Detalle del pago";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Pagos", Controller = "Pagos", Action = "Index" },
+        new() { Label = Model.NumeroRecibo ?? "#" + Model.Id }
+    };
+}
+@section PageHeader {
+    <div class="mb-3 d-flex gap-2">
+        <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Volver</a>
+        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-primary"><i class="bi bi-pencil me-1"></i> Editar</a>
+    </div>
+}
+<div class="card">
+    <div class="card-header"><h3 class="card-title">Pago @Model.NumeroRecibo</h3></div>
+    <div class="card-body">
+        <dl class="row">
+            <dt class="col-sm-3">Recibo</dt><dd class="col-sm-9">@(Model.NumeroRecibo ?? "-")</dd>
+            <dt class="col-sm-3">Fecha</dt><dd class="col-sm-9">@Model.Fecha.ToShortDateTime()</dd>
+            <dt class="col-sm-3">Cliente</dt><dd class="col-sm-9">#@Model.ClienteId</dd>
+            <dt class="col-sm-3">Pedido</dt>
+            <dd class="col-sm-9">
+                @if (Model.PedidoId.HasValue)
+                { <a asp-controller="Pedidos" asp-action="Details" asp-route-id="@Model.PedidoId">#@Model.PedidoId</a> }
+                else { <span class="text-secondary">-</span> }
+            </dd>
+            <dt class="col-sm-3">Forma de pago</dt><dd class="col-sm-9">#@Model.FormaPagoId</dd>
+            <dt class="col-sm-3">Monto</dt><dd class="col-sm-9 fs-4 fw-bold text-success">@Model.Monto.ToArs()</dd>
+            <dt class="col-sm-3">Referencia</dt><dd class="col-sm-9">@(Model.Referencia ?? "-")</dd>
+            <dt class="col-sm-3">Observaciones</dt><dd class="col-sm-9">@(Model.Observaciones ?? "-")</dd>
+        </dl>
+    </div>
+</div>

@@ -1,0 +1,56 @@
+@using ExtraGasMVC.Extensions
+@{
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
+    var title = ViewData["Title"] as string ?? "ExtraGas";
+    var fullTitle = string.IsNullOrEmpty(title) ? "ExtraGas" : $"{title} · ExtraGas";
+    var hasNavbarSearch = ViewData["NavbarSearch"] as bool? ?? true;
+}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+    <meta name="color-scheme" content="light dark" />
+    <title>@fullTitle</title>
+
+    <link rel="icon" type="image/x-icon" href="~/favicon.ico" />
+
+    <meta name="description" content="Sistema de gestion para venta de gas envasado, carbon y lena." />
+
+    @await Html.PartialAsync("_Styles")
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+    <div class="app-wrapper">
+        @await Html.PartialAsync("_Navbar", new ExtraGasMVC.Models.ViewModels.NavbarViewModel
+        {
+            ShowSearch = hasNavbarSearch
+        })
+        @await Html.PartialAsync("_Sidebar", new ExtraGasMVC.Models.ViewModels.SidebarViewModel
+        {
+            CurrentController = currentController,
+            CurrentAction = currentAction
+        })
+
+        <main class="app-main">
+            @await Html.PartialAsync("_ContentHeader")
+            <div class="app-content">
+                <div class="container-fluid">
+                    @await RenderSectionAsync("PageHeader", required: false)
+                    @await Html.PartialAsync("_StatusMessage")
+                    @RenderBody()
+                </div>
+            </div>
+        </main>
+
+        @await Html.PartialAsync("_Footer")
+
+        @await RenderSectionAsync("Modals", required: false)
+    </div>
+
+    @await Html.PartialAsync("_Scripts")
+    @await Html.PartialAsync("_ThemeScript")
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

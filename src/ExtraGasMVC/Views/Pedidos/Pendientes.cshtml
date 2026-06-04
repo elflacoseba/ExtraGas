@@ -1,0 +1,61 @@
+@model IEnumerable<ExtraGasMVC.Data.Entities.Pedido>
+@{
+    ViewData["Title"] = "Pedidos pendientes de cobro";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Pedidos", Controller = "Pedidos", Action = "Index" },
+        new() { Label = "Pendientes" }
+    };
+}
+@section PageHeader {
+    <div class="mb-3">
+        <a asp-action="Index" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Volver
+        </a>
+    </div>
+}
+<div class="card">
+    <div class="card-header bg-warning">
+        <h3 class="card-title">
+            <i class="bi bi-exclamation-triangle me-1"></i> Pedidos con saldo pendiente
+        </h3>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Numero</th>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th class="text-end">Total</th>
+                    <th class="text-end">Pagado</th>
+                    <th class="text-end">Saldo</th>
+                    <th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="7" class="text-center py-4 text-secondary">No hay pedidos pendientes de cobro. Bien!</td></tr>
+                }
+                @foreach (var p in Model)
+                {
+                    <tr>
+                        <td><strong>@(p.Numero ?? "-")</strong></td>
+                        <td>@p.Fecha.ToShortDate()</td>
+                        <td>#@p.ClienteId</td>
+                        <td class="text-end">@p.Total.ToArs()</td>
+                        <td class="text-end">@p.MontoPagado.ToArs()</td>
+                        <td class="text-end text-danger fw-semibold">@p.Saldo.ToArs()</td>
+                        <td class="text-end">
+                            <a asp-action="Details" asp-route-id="@p.Id" class="btn btn-sm btn-info"><i class="bi bi-eye"></i></a>
+                            <a asp-controller="Pagos" asp-action="Create" asp-route-pedidoId="@p.Id" class="btn btn-sm btn-success">
+                                <i class="bi bi-cash-coin"></i>
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

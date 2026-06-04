@@ -1,0 +1,120 @@
+using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.Models.ViewModels;
+using ExtraGasMVC.Services.Interfaces;
+using Microsoft.AspNetCore.Mvc;
+
+namespace ExtraGasMVC.Controllers;
+
+public class GarrafasController : Controller
+{
+    private readonly IGarrafaService _garrafaService;
+    private readonly IClienteService _clienteService;
+
+    public GarrafasController(IGarrafaService garrafaService, IClienteService clienteService)
+    {
+        _garrafaService = garrafaService;
+        _clienteService = clienteService;
+    }
+
+    public async Task<IActionResult> Index(string? codigo, byte? capacidad, CancellationToken ct = default)
+    {
+        var garrafas = await _garrafaService.GetAllAsync(ct);
+        if (!string.IsNullOrWhiteSpace(codigo))
+            garrafas = garrafas.Where(g => g.Codigo.Contains(codigo.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (capacidad.HasValue)
+            garrafas = garrafas.Where(g => g.CapacidadKg == capacidad.Value);
+
+        ViewBag.Codigo = codigo;
+        ViewBag.Capacidad = capacidad;
+        return View(garrafas.OrderBy(g => g.Codigo).ToList());
+    }
+
+    public async Task<IActionResult> Details(ulong id, CancellationToken ct = default)
+    {
+        var garrafa = await _garrafaService.GetByIdAsync(id, ct);
+        if (garrafa is null) return NotFound();
+        return View(garrafa);
+    }
+
+    public IActionResult Create() => View(new Garrafa { EstadoGarrafaId = 1, Activo = true, FechaCompra = DateOnly.FromDateTime(DateTime.UtcNow) });
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Create(Garrafa garrafa, CancellationToken ct = default)
+    {
+        if (!ModelState.IsValid) return View(garrafa);
+        try
+        {
+            await _garrafaService.CreateAsync(garrafa, ct);
+            TempData["Success"] = $"Garrafa {garrafa.Codigo} creada.";
+            return RedirectToAction(nameof(Index));
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, $"No se pudo crear la garrafa: {ex.Message}");
+            return View(garrafa);
+        }
+    }
+
+    public async Task<IActionResult> Edit(ulong id, CancellationToken ct = default)
+    {
+        var garrafa = await _garrafaService.GetByIdAsync(id, ct);
+        if (garrafa is null) return NotFound();
+        ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+        return View(garrafa);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Edit(ulong id, Garrafa garrafa, CancellationToken ct = default)
+    {
+        if (id != garrafa.Id) return BadRequest();
+        if (!ModelState.IsValid)
+        {
+            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+            return View(garrafa);
+        }
+        try
+        {
+            await _garrafaService.UpdateAsync(garrafa, ct);
+            TempData["Success"] = $"Garrafa {garrafa.Codigo} actualizada.";
+            return RedirectToAction(nameof(Index));
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, $"No se pudo actualizar la garrafa: {ex.Message}");
+            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+            return View(garrafa);
+        }
+    }
+
+    public async Task<IActionResult> Stock(CancellationToken ct = default)
+    {
+        var garrafas = await _garrafaService.GetAllAsync(ct);
+        var agrupado = garrafas
+            .GroupBy(g => new { g.CapacidadKg, g.EstadoGarrafaId })
+            .Select(g => new StockGroup
+            {
+                CapacidadKg = g.Key.CapacidadKg,
+                EstadoId = g.Key.EstadoGarrafaId,
+                Cantidad = g.Count()
+            })
+            .OrderBy(s => s.CapacidadKg)
+            .ThenBy(s => s.EstadoId)
+            .ToList();
+        return View(agrupado);
+    }
+
+    public async Task<IActionResult> EnClientes(ulong? clienteId, CancellationToken ct = default)
+    {
+        if (clienteId.HasValue)
+        {
+            var garrafas = await _garrafaService.GetByClienteAsync(clienteId.Value, ct);
+            ViewBag.Cliente = await _clienteService.GetByIdAsync(clienteId.Value, ct);
+            return View("EnClientes", garrafas);
+        }
+        var todas = await _garrafaService.GetAllAsync(ct);
+        var enClientes = todas.Where(g => g.ClienteId.HasValue);
+        return View(enClientes);
+    }
+}

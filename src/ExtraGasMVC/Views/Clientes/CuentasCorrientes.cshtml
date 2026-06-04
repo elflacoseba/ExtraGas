@@ -1,0 +1,56 @@
+@model IEnumerable<ExtraGasMVC.Data.Entities.Cliente>
+@{
+    ViewData["Title"] = "Cuentas corrientes";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Clientes", Controller = "Clientes", Action = "Index" },
+        new() { Label = "Cuentas corrientes" }
+    };
+}
+@section PageHeader {
+    <div class="mb-3">
+        <a asp-action="Index" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Volver
+        </a>
+    </div>
+}
+<div class="card">
+    <div class="card-header"><h3 class="card-title">Cuentas corrientes</h3></div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Cliente</th>
+                    <th>Telefono</th>
+                    <th class="text-end">Pedidos pendientes</th>
+                    <th class="text-end">Saldo</th>
+                    <th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="5" class="text-center py-4 text-secondary">No hay clientes cargados.</td></tr>
+                }
+                @foreach (var c in Model)
+                {
+                    <tr>
+                        <td><strong>@c.Apellido, @c.Nombre</strong></td>
+                        <td>@c.TelefonoPrincipal</td>
+                        <td class="text-end">-</td>
+                        <td class="text-end">-</td>
+                        <td class="text-end">
+                            <a asp-controller="Pedidos" asp-action="Index" asp-route-numero="@c.Codigo" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-search"></i> Ver pedidos
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+<p class="text-secondary small mt-3">
+    Los totales por cliente se computan en la vista <code>v_saldos_clientes</code> de la base de datos. Este listado se completara
+    con la integracion correspondiente.
+</p>

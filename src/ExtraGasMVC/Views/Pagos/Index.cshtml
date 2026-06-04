@@ -1,0 +1,82 @@
+@model IEnumerable<ExtraGasMVC.Data.Entities.Pago>
+@{
+    ViewData["Title"] = "Pagos";
+    var pedidoId = ViewBag.PedidoId as ulong?;
+    var pagina = (int)(ViewBag.Pagina ?? 1);
+    var tamanio = (int)(ViewBag.Tamanio ?? 25);
+    var total = (int)(ViewBag.Total ?? 0);
+    var totalPaginas = tamanio > 0 ? (int)Math.Ceiling(total / (double)tamanio) : 0;
+}
+@section PageHeader {
+    <div class="mb-3">
+        <a asp-action="Create" class="btn btn-success">
+            <i class="bi bi-cash-coin me-1"></i> Registrar pago
+        </a>
+    </div>
+}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Pagos registrados</h3>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Recibo</th>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Pedido</th>
+                    <th>Forma</th>
+                    <th class="text-end">Monto</th>
+                    <th class="text-end" style="width: 180px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="7" class="text-center py-4 text-secondary">No hay pagos.</td></tr>
+                }
+                @foreach (var p in Model)
+                {
+                    <tr>
+                        <td><strong>@(p.NumeroRecibo ?? "-")</strong></td>
+                        <td>@p.Fecha.ToShortDate()</td>
+                        <td>#@p.ClienteId</td>
+                        <td>
+                            @if (p.PedidoId.HasValue)
+                            { <a asp-controller="Pedidos" asp-action="Details" asp-route-id="@p.PedidoId">#@p.PedidoId</a> }
+                            else
+                            { <span class="text-secondary">-</span> }
+                        </td>
+                        <td>#@p.FormaPagoId</td>
+                        <td class="text-end fw-semibold">@p.Monto.ToArs()</td>
+                        <td class="text-end">
+                            <a asp-action="Details" asp-route-id="@p.Id" class="btn btn-sm btn-info"><i class="bi bi-eye"></i></a>
+                            <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-sm btn-primary"><i class="bi bi-pencil"></i></a>
+                            <form asp-action="Delete" asp-route-id="@p.Id" method="post" class="d-inline" onsubmit="return confirm('Eliminar pago?');">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer clearfix">
+        @if (totalPaginas > 1)
+        {
+            <nav>
+                <ul class="pagination pagination-sm m-0 float-end">
+                    @for (var i = 1; i <= totalPaginas; i++)
+                    {
+                        <li class="page-item @(i == pagina ? "active" : "")">
+                            <a class="page-link" asp-action="Index" asp-route-pedidoId="@pedidoId" asp-route-pagina="@i" asp-route-tamanio="@tamanio">@i</a>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        }
+        <small class="text-secondary">@total pago@(total == 1 ? "" : "s")</small>
+    </div>
+</div>
