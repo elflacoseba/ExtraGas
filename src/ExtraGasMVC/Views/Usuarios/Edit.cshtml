@@ -24,9 +24,10 @@
         <input type="hidden" asp-for="Id" />
         <div class="card-body">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <div class="small text-secondary mb-3"><span class="text-danger">*</span> Campos obligatorios</div>
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label class="form-label">Username</label>
+                    <label class="form-label">Nombre de usuario</label>
                     <input type="text" class="form-control" value="@(usuario?.Username)" readonly disabled />
                     <small class="text-secondary">El nombre de usuario no se puede modificar.</small>
                 </div>
@@ -36,7 +37,7 @@
                     <span asp-validation-for="Email" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="RolId" class="form-label"></label>
+                    <label asp-for="RolId" class="form-label">Rol</label> <span class="text-danger">*</span>
                     <select asp-for="RolId" class="form-select" required>
                         <option value="">-- Seleccionar rol --</option>
                         @if (roles != null)
@@ -77,24 +78,25 @@
     <form asp-action="ChangePassword" asp-route-id="@Model.Id" method="post" id="changePasswordForm">
         @Html.AntiForgeryToken()
         <div class="card-body">
+            <div class="small text-secondary mb-3"><span class="text-danger">*</span> Campos obligatorios</div>
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label class="form-label" for="CurrentPassword">Contrasena actual</label>
+                    <label class="form-label" for="CurrentPassword">Contraseña actual</label> <span class="text-danger">*</span>
                     <input type="password" id="CurrentPassword" name="CurrentPassword" class="form-control" required />
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label" for="NewPassword">Nueva contrasena</label>
+                    <label class="form-label" for="NewPassword">Nueva contraseña</label> <span class="text-danger">*</span>
                     <input type="password" id="NewPassword" name="NewPassword" class="form-control" required minlength="6" />
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label" for="ConfirmPassword">Confirmar nueva contrasena</label>
+                    <label class="form-label" for="ConfirmPassword">Confirmar nueva contraseña</label> <span class="text-danger">*</span>
                     <input type="password" id="ConfirmPassword" name="ConfirmPassword" class="form-control" required minlength="6" />
                 </div>
             </div>
         </div>
         <div class="card-footer">
             <button type="submit" class="btn btn-outline-primary">
-                <i class="bi bi-key me-1"></i> Cambiar contrasena
+                <i class="bi bi-key me-1"></i> Cambiar contraseña
             </button>
         </div>
     </form>
@@ -109,11 +111,11 @@
                 var cp = document.getElementById('ConfirmPassword').value;
                 if (np !== cp) {
                     e.preventDefault();
-                    alert('Las contrasenas no coinciden.');
+                    alert('Las contraseñas no coinciden.');
                 }
                 if (np.length < 6) {
                     e.preventDefault();
-                    alert('La nueva contrasena debe tener al menos 6 caracteres.');
+                    alert('La nueva contraseña debe tener al menos 6 caracteres.');
                 }
             });
         });
