@@ -19,7 +19,7 @@ public class EmpleadosController : Controller
         _mapper = mapper;
     }
 
-    public async Task<IActionResult> Index(string? busqueda, bool soloActivos = true, int pagina = 1, int tamanio = 25, CancellationToken ct = default)
+    public async Task<IActionResult> Index(string? busqueda, bool soloActivos = false, int pagina = 1, int tamanio = 25, CancellationToken ct = default)
     {
         var resultado = await _empleadoService.SearchAsync(busqueda, soloActivos, pagina, tamanio, ct);
 

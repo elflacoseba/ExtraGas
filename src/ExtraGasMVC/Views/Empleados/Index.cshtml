@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = "Empleados";
     var busqueda = ViewBag.Busqueda as string;
-    var soloActivos = (bool)(ViewBag.SoloActivos ?? true);
+    var soloActivos = (bool)(ViewBag.SoloActivos ?? false);
     var pagina = (int)(ViewBag.Pagina ?? 1);
     var tamanio = (int)(ViewBag.Tamanio ?? 25);
     var total = (int)(ViewBag.Total ?? 0);
