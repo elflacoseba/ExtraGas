@@ -31,13 +31,18 @@ Sistema de gestión para una empresa familiar de **venta de gas envasado (garraf
 ### Servicios de negocio
 - Patrón **Interface + Implementation** en `Services/Interfaces/` y `Services/Implementations/`.
 - Registrados como **Scoped** en `Program.cs`.
-- Servicios actuales: `IClienteService`, `IPedidoService`, `IProductoService`, `IProveedorService`, `IPagoService`, `IGarrafaService`.
+- Servicios actuales: `IClienteService`, `IEmpleadoService`, `IPedidoService`, `IProductoService`, `IProveedorService`, `IPagoService`, `IGarrafaService`, `IUsuarioService`.
+
+### DTOs y Mapeo
+- 8 DTOs en `DTOs/` (`ClienteDto`, `EmpleadoDto`, `GarrafaDto`, `PagoDto`, `PedidoDto`, `ProductoDto`, `ProveedorDto`, `UsuarioDto`).
+- **AutoMapper** con perfil único `Mappings/MappingProfile.cs` para conversión Entity ↔ DTO.
 
 ### Controllers
-- 9 controllers MVC en `Controllers/`:
+- 11 controllers MVC en `Controllers/`:
   - `HomeController` — dashboard, errores
   - `AccountController` — login/logout (vistas básicas, sin Identity)
   - `ClientesController`, `PedidosController`, `ProductosController`, `ProveedoresController`, `PagosController`, `RecepcionesController`, `GarrafasController`
+  - `EmpleadosController`, `UsuariosController` — ABM completo
   - `Reportes` — vistas de reportes (pagos por forma, productos más vendidos, regularidad de clientes)
 
 ### Vistas Razor
@@ -102,23 +107,25 @@ Las credenciales por defecto en los scripts de BD son `root` sin password (insta
 src/ExtraGasMVC/                    proyecto ASP.NET Core MVC (.NET 10.0)
 ├── Program.cs                      entry point — DI, middleware, routing
 ├── appsettings.json                config (connection string en User Secrets)
-├── Controllers/                    9 controllers MVC (ver abajo)
+├── Controllers/                    11 controllers MVC (ver abajo)
 ├── Data/
 │   ├── Context/ExtraGasDbContext.cs  DbContext — 30+ DbSets, ApplyConfigurationsFromAssembly
-│   ├── Entities/                   27 entidades POCO (una por tabla) + Enums/
+│   ├── Entities/                   25 entidades POCO (una por tabla) + 10 vistas + Enums/
 │   └── Configurations/             IEntityTypeConfiguration<T> por entidad + Views/
 ├── Services/
-│   ├── Interfaces/                 6 interfaces de servicio de negocio
-│   └── Implementations/            6 implementaciones (Scoped)
+│   ├── Interfaces/                 8 interfaces de servicio de negocio
+│   └── Implementations/            8 implementaciones (Scoped)
+├── DTOs/                           8 DTOs (Cliente, Empleado, Garrafa, Pago, Pedido, Producto, Proveedor, Usuario)
+├── Mappings/MappingProfile.cs      perfil AutoMapper — Entity ↔ DTO
 ├── Extensions/FormatExtensions.cs  helpers de formato ARS y fechas
 ├── Models/ViewModels/              DTOs compuestos (Dashboard, Sidebar, Navbar, BreadcrumbItem, PagedResult)
 ├── Views/                          Razor views (ver abajo)
 └── wwwroot/lib/admin-lte/          CSS + JS AdminLTE 4 (via npm)
 ```
 
-**Controllers** (9): `Home`, `Account`, `Clientes`, `Pedidos`, `Productos`, `Proveedores`, `Pagos`, `Recepciones`, `Garrafas`, `Reportes` (vistas de reportes).
+**Controllers** (11): `Home`, `Account`, `Clientes`, `Pedidos`, `Productos`, `Proveedores`, `Pagos`, `Recepciones`, `Garrafas`, `Empleados`, `Usuarios`, `Reportes` (vistas de reportes).
 
-**Vistas** (carpetas): `Home/`, `Account/`, `Clientes/`, `Pedidos/`, `Productos/`, `Proveedores/`, `Pagos/`, `PagosProveedor/`, `Recepciones/`, `Reportes/`, `Shared/` (layouts y partials). **No se listan** las ~60 vistas individuales (CRUD por controller) ni las ~35 configuraciones EF — son convencionales y un agente puede encontrarlas por patrón.
+**Vistas** (carpetas): `Home/`, `Account/`, `Clientes/`, `Pedidos/`, `Productos/`, `Proveedores/`, `Pagos/`, `PagosProveedor/`, `Recepciones/`, `Empleados/`, `Usuarios/`, `Reportes/`, `Shared/` (layouts y partials). **No se listan** las ~64 vistas individuales (CRUD por controller) ni las ~35 configuraciones EF — son convencionales y un agente puede encontrarlas por patrón.
 
 ## Convenciones de la BD
 
@@ -185,5 +192,9 @@ SELECT * FROM v_regularidad_clientes ORDER BY dias_promedio_entre_pedidos ASC;
 ## Recursos
 
 - Skill `database-designer` en `.agents/skills/database-designer/` — usar para optimizaciones, índices y migraciones futuras.
+- Skill `dotnet-backend-patterns` en `.agents/skills/dotnet-backend-patterns/` — patrones de backend .NET, repository, EF Core, Dapper.
+- Skill `dotnet-best-practices` en `.agents/skills/dotnet-best-practices/` — mejores prácticas generales de .NET.
+- Skill `pr-review-dotnet` en `.agents/skills/pr-review-dotnet/` — revisión integral de PRs para .NET/ASP.NET Core MVC/EF Core.
 - Diagrama ER: `db/docs/ERD.mmd` (Mermaid).
 - Decisiones y supuestos: `db/docs/DECISIONES.md`.
+- Skills lock: `skills-lock.json` — control de versiones de skills instaladas.

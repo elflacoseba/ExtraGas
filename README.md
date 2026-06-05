@@ -37,18 +37,30 @@ Sistema de gestión para una empresa familiar de venta de **gas envasado**, **ca
 ├── AGENTS.md                       instrucciones para agentes de IA
 ├── README.md                       este archivo
 ├── ExtraGasMVC.sln                 solución .NET
+├── package.json                    npm — dependencia admin-lte ^4.0.0
+├── skills-lock.json                control de versiones de skills instaladas
 │
 ├── src/ExtraGasMVC/                aplicación web ASP.NET Core MVC
 │   ├── Data/                       capa de acceso a datos (EF Core)
 │   │   ├── Context/                ExtraGasDbContext (punto de entrada del ORM)
 │   │   ├── Entities/               modelos POCO (25 tablas + 10 vistas + 1 enum)
 │   │   └── Configurations/         Fluent API por entidad (35 archivos separados)
-│   ├── Controllers/                controladores MVC
+│   ├── Controllers/                controladores MVC (11 controllers)
+│   ├── Services/                   lógica de negocio (8 interfaces + 8 implementaciones)
+│   ├── DTOs/                       objetos de transferencia de datos (8 DTOs)
+│   ├── Mappings/                   perfil AutoMapper (Entity ↔ DTO)
+│   ├── Extensions/                 helpers de formato (ARS, fechas)
 │   ├── Models/                     ViewModels para las vistas
 │   ├── Views/                      plantillas Razor
 │   ├── wwwroot/                    archivos estáticos (css, js, lib)
 │   ├── Program.cs                  punto de entrada y registro de servicios
 │   └── appsettings.json            configuración (connection string)
+│
+├── .agents/skills/                 skills de OpenCode
+│   ├── database-designer/          análisis de esquema, migraciones, índices
+│   ├── dotnet-backend-patterns/    patrones backend .NET, repository, EF Core
+│   ├── dotnet-best-practices/      mejores prácticas .NET
+│   └── pr-review-dotnet/           revisión de PRs para .NET
 │
 └── db/
     ├── migrations/                 SQL versionado (orden alfabético = orden de ejecución)
@@ -75,3 +87,14 @@ mysql -uroot extragas
 - [AGENTS.md](./AGENTS.md) — convenciones y gotchas para sesiones de OpenCode
 - [db/docs/ERD.mmd](./db/docs/ERD.mmd) — diagrama entidad-relación
 - [db/docs/DECISIONES.md](./db/docs/DECISIONES.md) — decisiones de diseño
+
+## Skills de OpenCode
+
+El proyecto incluye 4 skills instaladas (gestionadas en `skills-lock.json`):
+
+| Skill | Propósito |
+|-------|-----------|
+| `database-designer` | Análisis de esquema, generación de migraciones, optimización de índices |
+| `dotnet-backend-patterns` | Patrones de backend .NET, repository, EF Core, Dapper |
+| `dotnet-best-practices` | Mejores prácticas generales de .NET/C# |
+| `pr-review-dotnet` | Revisión integral de PRs para .NET, ASP.NET Core MVC, EF Core |
