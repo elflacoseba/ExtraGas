@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using AutoMapper;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -10,39 +11,25 @@ namespace ExtraGasMVC.Controllers;
 public class EmpleadosController : Controller
 {
     private readonly IEmpleadoService _empleadoService;
+    private readonly IMapper _mapper;
 
-    public EmpleadosController(IEmpleadoService empleadoService)
+    public EmpleadosController(IEmpleadoService empleadoService, IMapper mapper)
     {
         _empleadoService = empleadoService;
+        _mapper = mapper;
     }
 
     public async Task<IActionResult> Index(string? busqueda, bool soloActivos = true, int pagina = 1, int tamanio = 25, CancellationToken ct = default)
     {
-        var empleados = await _empleadoService.GetAllAsync(ct);
-        if (soloActivos) empleados = empleados.Where(e => e.Activo);
-        if (!string.IsNullOrWhiteSpace(busqueda))
-        {
-            var q = busqueda.Trim().ToLower();
-            empleados = empleados.Where(e =>
-                (e.Nombre + " " + e.Apellido).ToLower().Contains(q)
-                || (e.Dni ?? string.Empty).Contains(q)
-                || (e.Cuil ?? string.Empty).Contains(q)
-                || (e.Telefono ?? string.Empty).Contains(q));
-        }
-
-        var total = empleados.Count();
-        var items = empleados
-            .OrderBy(e => e.Apellido).ThenBy(e => e.Nombre)
-            .Skip((pagina - 1) * tamanio)
-            .Take(tamanio)
-            .ToList();
+        var resultado = await _empleadoService.SearchAsync(busqueda, soloActivos, pagina, tamanio, ct);
 
         ViewBag.Busqueda = busqueda;
         ViewBag.SoloActivos = soloActivos;
-        ViewBag.Pagina = pagina;
-        ViewBag.Tamanio = tamanio;
-        ViewBag.Total = total;
-        return View(items);
+        ViewBag.Pagina = resultado.Pagina;
+        ViewBag.Tamanio = resultado.Tamanio;
+        ViewBag.Total = resultado.Total;
+
+        return View(resultado.Items);
     }
 
     public async Task<IActionResult> Details(ulong id, CancellationToken ct = default)
@@ -64,13 +51,6 @@ public class EmpleadosController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(CreateEmpleadoDto dto, CancellationToken ct = default)
     {
-        if (!string.IsNullOrWhiteSpace(dto.Email))
-        {
-            var emailValidator = new System.ComponentModel.DataAnnotations.EmailAddressAttribute();
-            if (!emailValidator.IsValid(dto.Email))
-                ModelState.AddModelError(nameof(dto.Email), "El formato del email no es válido.");
-        }
-
         if (!ModelState.IsValid)
         {
             ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
@@ -78,13 +58,21 @@ public class EmpleadosController : Controller
         }
         try
         {
-            await _empleadoService.CreateAsync(dto, ct);
+            var currentUserId = GetCurrentUserId();
+            await _empleadoService.CreateAsync(dto, currentUserId, ct);
             TempData["Success"] = $"Empleado {dto.Nombre} {dto.Apellido} creado correctamente.";
             return RedirectToAction(nameof(Index));
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+            return View(dto);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear el empleado: {ex.Message}");
+            ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
             return View(dto);
         }
     }
@@ -96,28 +84,7 @@ public class EmpleadosController : Controller
 
         ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
 
-        var updateDto = new UpdateEmpleadoDto
-        {
-            Id = empleado.Id,
-            Nombre = empleado.Nombre,
-            Apellido = empleado.Apellido,
-            Dni = empleado.Dni,
-            Cuil = empleado.Cuil,
-            Telefono = empleado.Telefono,
-            Email = empleado.Email,
-            Calle = empleado.Calle,
-            Numero = empleado.Numero,
-            Piso = empleado.Piso,
-            Depto = empleado.Depto,
-            Ciudad = empleado.Ciudad,
-            CodigoPostal = empleado.CodigoPostal,
-            ProvinciaId = empleado.ProvinciaId,
-            FechaIngreso = empleado.FechaIngreso,
-            UsuarioId = empleado.UsuarioId,
-            Activo = empleado.Activo,
-            Observaciones = empleado.Observaciones
-        };
-
+        var updateDto = _mapper.Map<UpdateEmpleadoDto>(empleado);
         return View(updateDto);
     }
 
@@ -127,13 +94,6 @@ public class EmpleadosController : Controller
     {
         if (id != dto.Id) return BadRequest();
 
-        if (!string.IsNullOrWhiteSpace(dto.Email))
-        {
-            var emailValidator = new System.ComponentModel.DataAnnotations.EmailAddressAttribute();
-            if (!emailValidator.IsValid(dto.Email))
-                ModelState.AddModelError(nameof(dto.Email), "El formato del email no es válido.");
-        }
-
         if (!ModelState.IsValid)
         {
             ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
@@ -141,13 +101,21 @@ public class EmpleadosController : Controller
         }
         try
         {
-            await _empleadoService.UpdateAsync(dto, ct);
+            var currentUserId = GetCurrentUserId();
+            await _empleadoService.UpdateAsync(dto, currentUserId, ct);
             TempData["Success"] = $"Empleado {dto.Nombre} {dto.Apellido} actualizado.";
             return RedirectToAction(nameof(Index));
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+            return View(dto);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar el empleado: {ex.Message}");
+            ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
             return View(dto);
         }
     }
@@ -161,5 +129,11 @@ public class EmpleadosController : Controller
             ? "Empleado eliminado correctamente."
             : "No se encontro el empleado.";
         return RedirectToAction(nameof(Index));
+    }
+
+    private ulong GetCurrentUserId()
+    {
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier);
+        return claim is not null && ulong.TryParse(claim.Value, out var id) ? id : 0;
     }
 }

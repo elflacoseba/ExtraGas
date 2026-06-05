@@ -46,9 +46,13 @@ public class MappingProfile : Profile
             .ForMember(d => d.PasswordHash, o => o.Ignore());
         CreateMap<UpdateUsuarioDto, Usuario>();
 
+        // Provincia mappings
+        CreateMap<Provincia, ProvinciaDto>();
+
         // Empleado mappings
         CreateMap<Empleado, EmpleadoDto>().ReverseMap();
         CreateMap<CreateEmpleadoDto, Empleado>();
         CreateMap<UpdateEmpleadoDto, Empleado>();
+        CreateMap<EmpleadoDto, UpdateEmpleadoDto>();
     }
 }

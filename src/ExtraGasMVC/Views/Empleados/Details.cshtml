@@ -1,6 +1,6 @@
 @model ExtraGasMVC.DTOs.EmpleadoDto
 @{
-    var provincias = (IEnumerable<ExtraGasMVC.Data.Entities.Provincia>)ViewBag.Provincias;
+    var provincias = (IEnumerable<ExtraGasMVC.DTOs.ProvinciaDto>)ViewBag.Provincias;
     var provincia = Model.ProvinciaId.HasValue
         ? provincias.FirstOrDefault(p => p.Id == Model.ProvinciaId.Value)
         : null;
@@ -63,7 +63,12 @@
             <div class="card-header"><h3 class="card-title">Dirección</h3></div>
             <div class="card-body">
                 <dl class="row mb-0">
-                    <dt class="col-sm-4">Calle</dt><dd class="col-sm-8">@(Model.Calle ?? "-") @Model.Numero @(Model.Piso) @(Model.Depto)</dd>
+                    @{
+                        var direccionPartes = new[] { Model.Calle, Model.Numero, Model.Piso, Model.Depto }
+                            .Where(s => !string.IsNullOrWhiteSpace(s));
+                        var direccion = direccionPartes.Any() ? string.Join(" ", direccionPartes) : "-";
+                    }
+                    <dt class="col-sm-4">Dirección</dt><dd class="col-sm-8">@direccion</dd>
                     <dt class="col-sm-4">Ciudad</dt><dd class="col-sm-8">@(Model.Ciudad ?? "-")</dd>
                     <dt class="col-sm-4">CP</dt><dd class="col-sm-8">@(Model.CodigoPostal ?? "-")</dd>
                     <dt class="col-sm-4">Provincia</dt><dd class="col-sm-8">@(provincia?.Nombre ?? "-")</dd>

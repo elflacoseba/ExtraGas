@@ -96,7 +96,7 @@
                     <label class="form-label">Provincia</label>
                     <select asp-for="ProvinciaId" class="form-select">
                         <option value="">-- Seleccione provincia --</option>
-                        @foreach (var p in (IEnumerable<ExtraGasMVC.Data.Entities.Provincia>)ViewBag.Provincias)
+                        @foreach (var p in (IEnumerable<ExtraGasMVC.DTOs.ProvinciaDto>)ViewBag.Provincias)
                         {
                             <option value="@p.Id">@p.Nombre</option>
                         }
