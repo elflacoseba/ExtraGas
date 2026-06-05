@@ -1,0 +1,113 @@
+@model ExtraGasMVC.DTOs.CreateEmpleadoDto
+@{
+    ViewData["Title"] = "Nuevo empleado";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Empleados", Controller = "Empleados", Action = "Index" },
+        new() { Label = "Nuevo" }
+    };
+}
+@section PageHeader {
+    <div class="mb-3">
+        <a asp-action="Index" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Volver
+        </a>
+    </div>
+}
+
+<div class="card">
+    <div class="card-header"><h3 class="card-title">Datos del empleado</h3></div>
+    <form asp-action="Create" method="post">
+        @Html.AntiForgeryToken()
+        <div class="card-body">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label asp-for="Nombre" class="form-label"></label>
+                    <input asp-for="Nombre" class="form-control" required />
+                    <span asp-validation-for="Nombre" class="text-danger small"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="Apellido" class="form-label"></label>
+                    <input asp-for="Apellido" class="form-control" required />
+                    <span asp-validation-for="Apellido" class="text-danger small"></span>
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="FechaIngreso" class="form-label"></label>
+                    <input asp-for="FechaIngreso" type="date" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="Dni" class="form-label"></label>
+                    <input asp-for="Dni" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="Cuil" class="form-label"></label>
+                    <input asp-for="Cuil" class="form-control" />
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="form-check">
+                        <input asp-for="Activo" class="form-check-input" type="checkbox" />
+                        <label asp-for="Activo" class="form-check-label">Empleado activo</label>
+                    </div>
+                </div>
+            </div>
+
+            <h5 class="mt-4">Contacto</h5>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="Telefono" class="form-label"></label>
+                    <input asp-for="Telefono" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="Email" class="form-label"></label>
+                    <input asp-for="Email" type="email" class="form-control" />
+                </div>
+            </div>
+
+            <h5 class="mt-4">Direccion</h5>
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label asp-for="Calle" class="form-label"></label>
+                    <input asp-for="Calle" class="form-control" />
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="Numero" class="form-label"></label>
+                    <input asp-for="Numero" class="form-control" />
+                </div>
+                <div class="col-md-1">
+                    <label asp-for="Piso" class="form-label"></label>
+                    <input asp-for="Piso" class="form-control" />
+                </div>
+                <div class="col-md-1">
+                    <label asp-for="Depto" class="form-label"></label>
+                    <input asp-for="Depto" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="CodigoPostal" class="form-label"></label>
+                    <input asp-for="CodigoPostal" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="Ciudad" class="form-label"></label>
+                    <input asp-for="Ciudad" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="ProvinciaId" class="form-label"></label>
+                    <input asp-for="ProvinciaId" type="number" class="form-control" />
+                </div>
+            </div>
+
+            <h5 class="mt-4">Observaciones</h5>
+            <div class="row g-3">
+                <div class="col-12">
+                    <textarea asp-for="Observaciones" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-save me-1"></i> Guardar
+            </button>
+            <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
+        </div>
+    </form>
+</div>

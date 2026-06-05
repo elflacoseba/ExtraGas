@@ -45,5 +45,10 @@ public class MappingProfile : Profile
         CreateMap<CreateUsuarioDto, Usuario>()
             .ForMember(d => d.PasswordHash, o => o.Ignore());
         CreateMap<UpdateUsuarioDto, Usuario>();
+
+        // Empleado mappings
+        CreateMap<Empleado, EmpleadoDto>().ReverseMap();
+        CreateMap<CreateEmpleadoDto, Empleado>();
+        CreateMap<UpdateEmpleadoDto, Empleado>();
     }
 }

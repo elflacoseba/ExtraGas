@@ -1,0 +1,124 @@
+@model IEnumerable<ExtraGasMVC.DTOs.EmpleadoDto>
+@{
+    ViewData["Title"] = "Empleados";
+    var busqueda = ViewBag.Busqueda as string;
+    var soloActivos = (bool)(ViewBag.SoloActivos ?? true);
+    var pagina = (int)(ViewBag.Pagina ?? 1);
+    var tamanio = (int)(ViewBag.Tamanio ?? 25);
+    var total = (int)(ViewBag.Total ?? 0);
+    var totalPaginas = tamanio > 0 ? (int)Math.Ceiling(total / (double)tamanio) : 0;
+}
+@section PageHeader {
+    <div class="row mb-3">
+        <div class="col-12">
+            <a asp-action="Create" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-1"></i> Nuevo empleado
+            </a>
+        </div>
+    </div>
+}
+
+<div class="card">
+    <div class="card-header">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label small mb-1" for="busqueda">Buscar</label>
+                <input type="text" id="busqueda" name="busqueda" value="@busqueda" class="form-control" placeholder="Nombre, apellido, DNI, CUIL o telefono" />
+            </div>
+            <div class="col-md-3">
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="soloActivos" name="soloActivos" value="true" @(soloActivos ? "checked" : "") />
+                    <label class="form-check-label" for="soloActivos">Solo activos</label>
+                </div>
+            </div>
+            <div class="col-md-3 d-grid gap-2 d-md-flex">
+                <button type="submit" class="btn btn-primary flex-fill">
+                    <i class="bi bi-search me-1"></i> Buscar
+                </button>
+                <a asp-action="Index" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Nombre completo</th>
+                    <th>DNI</th>
+                    <th>CUIL</th>
+                    <th>Telefono</th>
+                    <th>Ciudad</th>
+                    <th>Fecha ingreso</th>
+                    <th class="text-center">Estado</th>
+                    <th class="text-end" style="width: 220px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="8" class="text-center py-4 text-secondary">No se encontraron empleados.</td></tr>
+                }
+                @foreach (var e in Model)
+                {
+                    <tr>
+                        <td><strong>@e.Apellido, @e.Nombre</strong></td>
+                        <td>@(e.Dni ?? "-")</td>
+                        <td>@(e.Cuil ?? "-")</td>
+                        <td>@(e.Telefono ?? "-")</td>
+                        <td>@(e.Ciudad ?? "-")</td>
+                        <td>@(e.FechaIngreso?.ToString("dd/MM/yyyy") ?? "-")</td>
+                        <td class="text-center">
+                            @if (e.Activo)
+                            {
+                                <span class="badge text-bg-success">Activo</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">Inactivo</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <a asp-action="Details" asp-route-id="@e.Id" class="btn btn-sm btn-info" title="Ver">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a asp-action="Edit" asp-route-id="@e.Id" class="btn btn-sm btn-primary" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form asp-action="Delete" asp-route-id="@e.Id" method="post" class="d-inline" onsubmit="return confirm('Esta seguro de eliminar este empleado?');">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-danger" title="Eliminar">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer clearfix">
+        <div class="float-end">
+            <small class="text-secondary me-2">@total registro@(total == 1 ? "" : "s")</small>
+        </div>
+        @if (totalPaginas > 1)
+        {
+            <nav>
+                <ul class="pagination pagination-sm m-0 float-end">
+                    @for (var i = 1; i <= totalPaginas; i++)
+                    {
+                        <li class="page-item @(i == pagina ? "active" : "")">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-busqueda="@busqueda"
+                               asp-route-soloActivos="@soloActivos"
+                               asp-route-pagina="@i"
+                               asp-route-tamanio="@tamanio">@i</a>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        }
+    </div>
+</div>
