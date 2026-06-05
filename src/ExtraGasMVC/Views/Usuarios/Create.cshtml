@@ -23,9 +23,10 @@
         @Html.AntiForgeryToken()
         <div class="card-body">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <div class="small text-secondary mb-3"><span class="text-danger">*</span> Campos obligatorios</div>
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label asp-for="Username" class="form-label"></label>
+                    <label asp-for="Username" class="form-label">Nombre de usuario</label> <span class="text-danger">*</span>
                     <input asp-for="Username" class="form-control" required autofocus />
                     <span asp-validation-for="Username" class="text-danger small"></span>
                 </div>
@@ -35,7 +36,7 @@
                     <span asp-validation-for="Email" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="RolId" class="form-label"></label>
+                    <label class="form-label">Rol</label> <span class="text-danger">*</span>
                     <select asp-for="RolId" class="form-select" required>
                         <option value="">-- Seleccionar rol --</option>
                         @if (roles != null)
@@ -49,12 +50,12 @@
                     <span asp-validation-for="RolId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="Password" class="form-label"></label>
+                    <label asp-for="Password" class="form-label">Contraseña</label> <span class="text-danger">*</span>
                     <input asp-for="Password" type="password" class="form-control" required />
                     <span asp-validation-for="Password" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Confirmar contrasena</label>
+                    <label class="form-label">Confirmar contraseña</label> <span class="text-danger">*</span>
                     <input type="password" name="confirmPassword" class="form-control" required />
                 </div>
                 <div class="col-md-4 d-flex align-items-end">

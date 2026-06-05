@@ -174,11 +174,6 @@ public class UsuarioService : IUsuarioService
         usuario.UpdatedAt = DateTime.UtcNow;
         usuario.UpdatedBy = updatedBy;
 
-        if (!dto.Activo && usuario.DeletedAt is null)
-            usuario.DeletedAt = DateTime.UtcNow;
-        else if (dto.Activo && usuario.DeletedAt is not null)
-            usuario.DeletedAt = null;
-
         await _context.SaveChangesAsync(ct);
 
         var result = _mapper.Map<UsuarioDto>(usuario);

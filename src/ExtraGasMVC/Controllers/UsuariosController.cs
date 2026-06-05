@@ -16,7 +16,7 @@ public class UsuariosController : Controller
         _usuarioService = usuarioService;
     }
 
-    public async Task<IActionResult> Index(string? busqueda, ulong? rolId, bool soloActivos = true,
+    public async Task<IActionResult> Index(string? busqueda, ulong? rolId, bool soloActivos = false,
         int pagina = 1, int tamanio = 25, CancellationToken ct = default)
     {
         var resultado = await _usuarioService.SearchAsync(busqueda, rolId, soloActivos, pagina, tamanio, ct);
