@@ -49,16 +49,33 @@ public class EmpleadosController : Controller
     {
         var empleado = await _empleadoService.GetByIdAsync(id, ct);
         if (empleado is null) return NotFound();
+
+        ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
         return View(empleado);
     }
 
-    public IActionResult Create() => View(new CreateEmpleadoDto { FechaIngreso = DateOnly.FromDateTime(DateTime.UtcNow), Activo = true });
+    public async Task<IActionResult> Create(CancellationToken ct = default)
+    {
+        ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+        return View(new CreateEmpleadoDto { FechaIngreso = DateOnly.FromDateTime(DateTime.UtcNow), Activo = true });
+    }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(CreateEmpleadoDto dto, CancellationToken ct = default)
     {
-        if (!ModelState.IsValid) return View(dto);
+        if (!string.IsNullOrWhiteSpace(dto.Email))
+        {
+            var emailValidator = new System.ComponentModel.DataAnnotations.EmailAddressAttribute();
+            if (!emailValidator.IsValid(dto.Email))
+                ModelState.AddModelError(nameof(dto.Email), "El formato del email no es válido.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+            return View(dto);
+        }
         try
         {
             await _empleadoService.CreateAsync(dto, ct);
@@ -76,6 +93,8 @@ public class EmpleadosController : Controller
     {
         var empleado = await _empleadoService.GetByIdAsync(id, ct);
         if (empleado is null) return NotFound();
+
+        ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
 
         var updateDto = new UpdateEmpleadoDto
         {
@@ -107,7 +126,19 @@ public class EmpleadosController : Controller
     public async Task<IActionResult> Edit(ulong id, UpdateEmpleadoDto dto, CancellationToken ct = default)
     {
         if (id != dto.Id) return BadRequest();
-        if (!ModelState.IsValid) return View(dto);
+
+        if (!string.IsNullOrWhiteSpace(dto.Email))
+        {
+            var emailValidator = new System.ComponentModel.DataAnnotations.EmailAddressAttribute();
+            if (!emailValidator.IsValid(dto.Email))
+                ModelState.AddModelError(nameof(dto.Email), "El formato del email no es válido.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+            return View(dto);
+        }
         try
         {
             await _empleadoService.UpdateAsync(dto, ct);

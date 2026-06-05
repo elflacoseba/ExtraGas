@@ -23,7 +23,7 @@
         <form method="get" class="row g-2 align-items-end">
             <div class="col-md-6">
                 <label class="form-label small mb-1" for="busqueda">Buscar</label>
-                <input type="text" id="busqueda" name="busqueda" value="@busqueda" class="form-control" placeholder="Nombre, apellido, DNI, CUIL o telefono" />
+                <input type="text" id="busqueda" name="busqueda" value="@busqueda" class="form-control" placeholder="Nombre, apellido, DNI, CUIL o teléfono" />
             </div>
             <div class="col-md-3">
                 <div class="form-check mt-3">
@@ -48,9 +48,9 @@
                     <th>Nombre completo</th>
                     <th>DNI</th>
                     <th>CUIL</th>
-                    <th>Telefono</th>
+                    <th>Teléfono</th>
                     <th>Ciudad</th>
-                    <th>Fecha ingreso</th>
+                    <th>Fecha de ingreso</th>
                     <th class="text-center">Estado</th>
                     <th class="text-end" style="width: 220px;">Acciones</th>
                 </tr>
@@ -86,7 +86,7 @@
                             <a asp-action="Edit" asp-route-id="@e.Id" class="btn btn-sm btn-primary" title="Editar">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            <form asp-action="Delete" asp-route-id="@e.Id" method="post" class="d-inline" onsubmit="return confirm('Esta seguro de eliminar este empleado?');">
+                            <form asp-action="Delete" asp-route-id="@e.Id" method="post" class="d-inline" onsubmit="return confirm('¿Está seguro de eliminar este empleado?');">
                                 @Html.AntiForgeryToken()
                                 <button type="submit" class="btn btn-sm btn-danger" title="Eliminar">
                                     <i class="bi bi-trash"></i>

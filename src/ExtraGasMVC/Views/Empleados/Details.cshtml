@@ -1,5 +1,9 @@
 @model ExtraGasMVC.DTOs.EmpleadoDto
 @{
+    var provincias = (IEnumerable<ExtraGasMVC.Data.Entities.Provincia>)ViewBag.Provincias;
+    var provincia = Model.ProvinciaId.HasValue
+        ? provincias.FirstOrDefault(p => p.Id == Model.ProvinciaId.Value)
+        : null;
     ViewData["Title"] = "Detalle del empleado";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
     {
@@ -50,19 +54,19 @@
             <div class="card-header"><h3 class="card-title">Contacto</h3></div>
             <div class="card-body">
                 <dl class="row mb-0">
-                    <dt class="col-sm-4">Telefono</dt><dd class="col-sm-8">@(Model.Telefono ?? "-")</dd>
+                    <dt class="col-sm-4">Teléfono</dt><dd class="col-sm-8">@(Model.Telefono ?? "-")</dd>
                     <dt class="col-sm-4">Email</dt><dd class="col-sm-8">@(Model.Email ?? "-")</dd>
                 </dl>
             </div>
         </div>
         <div class="card mb-4">
-            <div class="card-header"><h3 class="card-title">Direccion</h3></div>
+            <div class="card-header"><h3 class="card-title">Dirección</h3></div>
             <div class="card-body">
                 <dl class="row mb-0">
                     <dt class="col-sm-4">Calle</dt><dd class="col-sm-8">@(Model.Calle ?? "-") @Model.Numero @(Model.Piso) @(Model.Depto)</dd>
                     <dt class="col-sm-4">Ciudad</dt><dd class="col-sm-8">@(Model.Ciudad ?? "-")</dd>
                     <dt class="col-sm-4">CP</dt><dd class="col-sm-8">@(Model.CodigoPostal ?? "-")</dd>
-                    <dt class="col-sm-4">Provincia</dt><dd class="col-sm-8">@(Model.ProvinciaId?.ToString() ?? "-")</dd>
+                    <dt class="col-sm-4">Provincia</dt><dd class="col-sm-8">@(provincia?.Nombre ?? "-")</dd>
                 </dl>
             </div>
         </div>

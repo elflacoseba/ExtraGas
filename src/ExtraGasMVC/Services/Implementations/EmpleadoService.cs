@@ -75,4 +75,12 @@ public class EmpleadoService : IEmpleadoService
 
         return true;
     }
+
+    public async Task<List<Provincia>> GetProvinciasAsync(CancellationToken ct = default)
+    {
+        return await _context.Provincias
+            .AsNoTracking()
+            .OrderBy(p => p.Nombre)
+            .ToListAsync(ct);
+    }
 }

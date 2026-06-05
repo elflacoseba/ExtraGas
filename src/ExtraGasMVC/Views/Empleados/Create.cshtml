@@ -21,27 +21,28 @@
         @Html.AntiForgeryToken()
         <div class="card-body">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <div class="small text-secondary mb-3"><span class="text-danger">*</span> Campos obligatorios</div>
             <div class="row g-3">
                 <div class="col-md-5">
-                    <label asp-for="Nombre" class="form-label"></label>
+                    <label asp-for="Nombre" class="form-label"></label> <span class="text-danger">*</span>
                     <input asp-for="Nombre" class="form-control" required />
                     <span asp-validation-for="Nombre" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="Apellido" class="form-label"></label>
+                    <label asp-for="Apellido" class="form-label"></label> <span class="text-danger">*</span>
                     <input asp-for="Apellido" class="form-control" required />
                     <span asp-validation-for="Apellido" class="text-danger small"></span>
                 </div>
                 <div class="col-md-3">
-                    <label asp-for="FechaIngreso" class="form-label"></label>
+                    <label class="form-label">Fecha de ingreso</label>
                     <input asp-for="FechaIngreso" type="date" class="form-control" />
                 </div>
                 <div class="col-md-3">
-                    <label asp-for="Dni" class="form-label"></label>
+                    <label class="form-label">DNI</label>
                     <input asp-for="Dni" class="form-control" />
                 </div>
                 <div class="col-md-3">
-                    <label asp-for="Cuil" class="form-label"></label>
+                    <label class="form-label">CUIL</label>
                     <input asp-for="Cuil" class="form-control" />
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
@@ -55,7 +56,7 @@
             <h5 class="mt-4">Contacto</h5>
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label asp-for="Telefono" class="form-label"></label>
+                    <label class="form-label">Teléfono</label>
                     <input asp-for="Telefono" class="form-control" />
                 </div>
                 <div class="col-md-4">
@@ -64,14 +65,14 @@
                 </div>
             </div>
 
-            <h5 class="mt-4">Direccion</h5>
+            <h5 class="mt-4">Dirección</h5>
             <div class="row g-3">
                 <div class="col-md-5">
                     <label asp-for="Calle" class="form-label"></label>
                     <input asp-for="Calle" class="form-control" />
                 </div>
                 <div class="col-md-2">
-                    <label asp-for="Numero" class="form-label"></label>
+                    <label class="form-label">Número</label>
                     <input asp-for="Numero" class="form-control" />
                 </div>
                 <div class="col-md-1">
@@ -83,7 +84,7 @@
                     <input asp-for="Depto" class="form-control" />
                 </div>
                 <div class="col-md-3">
-                    <label asp-for="CodigoPostal" class="form-label"></label>
+                    <label class="form-label">Código postal</label>
                     <input asp-for="CodigoPostal" class="form-control" />
                 </div>
                 <div class="col-md-4">
@@ -91,8 +92,14 @@
                     <input asp-for="Ciudad" class="form-control" />
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="ProvinciaId" class="form-label"></label>
-                    <input asp-for="ProvinciaId" type="number" class="form-control" />
+                    <label class="form-label">Provincia</label>
+                    <select asp-for="ProvinciaId" class="form-select">
+                        <option value="">-- Seleccione provincia --</option>
+                        @foreach (var p in (IEnumerable<ExtraGasMVC.Data.Entities.Provincia>)ViewBag.Provincias)
+                        {
+                            <option value="@p.Id">@p.Nombre</option>
+                        }
+                    </select>
                 </div>
             </div>
 
