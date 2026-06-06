@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -7,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ExtraGasMVC.Controllers;
 
 [Authorize(Policy = "OperadorOrAdmin")]
-public class ProductosController : Controller
+public class ProductosController : BaseController
 {
     private readonly IProductoService _productoService;
 
@@ -42,7 +41,7 @@ public class ProductosController : Controller
 
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
-        ViewBag.TiposProducto = await _productoService.GetTiposProductoAsync(ct);
+        await PopulateTiposProductoAsync(ct);
         return View(new CreateProductoDto { Activo = true, UnidadVenta = "UNIDAD" });
     }
 
@@ -52,7 +51,7 @@ public class ProductosController : Controller
     {
         if (!ModelState.IsValid)
         {
-            ViewBag.TiposProducto = await _productoService.GetTiposProductoAsync(ct);
+            await PopulateTiposProductoAsync(ct);
             return View(producto);
         }
         try
@@ -64,7 +63,7 @@ public class ProductosController : Controller
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear el producto: {ex.Message}");
-            ViewBag.TiposProducto = await _productoService.GetTiposProductoAsync(ct);
+            await PopulateTiposProductoAsync(ct);
             return View(producto);
         }
     }
@@ -88,7 +87,7 @@ public class ProductosController : Controller
             Activo = producto.Activo
         };
 
-        ViewBag.TiposProducto = await _productoService.GetTiposProductoAsync(ct);
+        await PopulateTiposProductoAsync(ct);
         return View(updateDto);
     }
 
@@ -99,7 +98,7 @@ public class ProductosController : Controller
         if (id != producto.Id) return BadRequest();
         if (!ModelState.IsValid)
         {
-            ViewBag.TiposProducto = await _productoService.GetTiposProductoAsync(ct);
+            await PopulateTiposProductoAsync(ct);
             return View(producto);
         }
         try
@@ -111,7 +110,7 @@ public class ProductosController : Controller
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar el producto: {ex.Message}");
-            ViewBag.TiposProducto = await _productoService.GetTiposProductoAsync(ct);
+            await PopulateTiposProductoAsync(ct);
             return View(producto);
         }
     }
@@ -146,9 +145,8 @@ public class ProductosController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    private ulong? GetCurrentUserId()
+    private async Task PopulateTiposProductoAsync(CancellationToken ct)
     {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier);
-        return claim is not null && ulong.TryParse(claim.Value, out var id) ? id : null;
+        ViewBag.TiposProducto = await _productoService.GetTiposProductoAsync(ct);
     }
 }

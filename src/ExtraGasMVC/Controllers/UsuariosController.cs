@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -7,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ExtraGasMVC.Controllers;
 
 [Authorize(Policy = "AdminOnly")]
-public class UsuariosController : Controller
+public class UsuariosController : BaseController
 {
     private readonly IUsuarioService _usuarioService;
 
@@ -159,12 +158,6 @@ public class UsuariosController : Controller
             : "La contrasena actual es incorrecta.";
 
         return RedirectToAction(nameof(Edit), new { id });
-    }
-
-    private ulong GetCurrentUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier);
-        return claim is not null && ulong.TryParse(claim.Value, out var id) ? id : 0;
     }
 
     private async Task LoadViewBagsAsync(CancellationToken ct = default)

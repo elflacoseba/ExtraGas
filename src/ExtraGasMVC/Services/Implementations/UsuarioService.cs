@@ -135,7 +135,7 @@ public class UsuarioService : IUsuarioService
         return _mapper.Map<UsuarioDto>(usuario);
     }
 
-    public async Task<UsuarioDto> CreateAsync(CreateUsuarioDto dto, ulong createdBy, CancellationToken ct = default)
+    public async Task<UsuarioDto> CreateAsync(CreateUsuarioDto dto, ulong? createdBy, CancellationToken ct = default)
     {
         var usuario = _mapper.Map<Usuario>(dto);
         usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
@@ -161,7 +161,7 @@ public class UsuarioService : IUsuarioService
         return _mapper.Map<UsuarioDto>(usuario);
     }
 
-    public async Task<UsuarioDto> UpdateAsync(UpdateUsuarioDto dto, ulong updatedBy, CancellationToken ct = default)
+    public async Task<UsuarioDto> UpdateAsync(UpdateUsuarioDto dto, ulong? updatedBy, CancellationToken ct = default)
     {
         var usuario = await _context.Usuarios
             .Include(u => u.Rol)
