@@ -2,6 +2,36 @@
 
 Sistema de gestión para una empresa familiar de venta de **gas envasado**, **carbón** y **leña** para hogares.
 
+## Descripción del Proyecto
+
+El presente proyecto tiene como objetivo informatizar la gestión de pedidos de una empresa privada dedicada a la comercialización de gas envasado, carbón y leña para uso domiciliario.
+
+La empresa comercializa gas envasado en garrafas de 10 kg, 15 kg y 45 kg; carbón en bolsas de 3 kg, 5 kg, 10 kg y 25 kg; y leña en bolsas de 25 kg.
+
+Actualmente, las actividades operativas y administrativas se gestionan de manera manual. Se trata de una empresa familiar que cuenta con dos empleados encargados de la atención y registro de los pedidos realizados por los clientes.
+
+Los pedidos pueden efectuarse por vía telefónica, mediante mensajes de WhatsApp o de forma presencial en el establecimiento.
+
+Uno de los principales requerimientos del negocio es disponer de un control preciso del stock de garrafas, diferenciando entre garrafas llenas, vacías y aquellas que se encuentran aptas para continuar en circulación. Asimismo, resulta necesario conocer qué garrafas se encuentran en poder de los clientes y analizar la frecuencia con la que realizan sus pedidos.
+
+El sistema deberá permitir la gestión integral de clientes, almacenando información relevante como nombre, domicilio, teléfono de contacto y otros datos necesarios para la operación comercial. Además, deberá facilitar el seguimiento de los pagos realizados y registrar las formas de pago habitualmente utilizadas por cada cliente.
+
+Los pagos se realizan principalmente en efectivo o mediante transferencia bancaria, por lo que el sistema deberá contemplar ambas modalidades.
+
+También será necesario incorporar la gestión de proveedores, incluyendo sus datos generales, la recepción de mercadería y el registro de los pagos efectuados.
+
+Como parte de las funcionalidades de análisis y control, el sistema deberá generar informes que permitan conocer:
+
+* El historial de pedidos de los clientes.
+* Los productos con mayor volumen de ventas.
+* La frecuencia y regularidad de los pedidos.
+* El estado y evolución de los pagos realizados.
+* El movimiento y disponibilidad de stock.
+
+La facturación no forma parte del alcance del proyecto, ya que es gestionada directamente a través de la plataforma de ARCA. Por lo tanto, el sistema no contemplará funcionalidades relacionadas con la emisión de comprobantes fiscales.
+
+Los pedidos, recibos de pago e informes generados por el sistema podrán emitirse en formato PDF para su consulta, almacenamiento o impresión.
+
 ## Productos
 
 | Producto | Capacidades |
