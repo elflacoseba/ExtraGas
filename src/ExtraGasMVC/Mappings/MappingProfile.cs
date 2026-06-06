@@ -19,9 +19,14 @@ public class MappingProfile : Profile
         CreateMap<UpdatePedidoDto, Pedido>();
 
         // Producto mappings
-        CreateMap<Producto, ProductoDto>().ReverseMap();
+        CreateMap<Producto, ProductoDto>()
+            .ForMember(d => d.TipoProductoNombre, o => o.MapFrom(s => s.TipoProducto != null ? s.TipoProducto.Nombre : null))
+            .ReverseMap();
         CreateMap<CreateProductoDto, Producto>();
         CreateMap<UpdateProductoDto, Producto>();
+
+        // TipoProducto mappings
+        CreateMap<TipoProducto, TipoProductoDto>().ReverseMap();
 
         // Proveedor mappings
         CreateMap<Proveedor, ProveedorDto>().ReverseMap();

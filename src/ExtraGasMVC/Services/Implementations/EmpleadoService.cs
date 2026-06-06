@@ -67,7 +67,7 @@ public class EmpleadoService : IEmpleadoService
         };
     }
 
-    public async Task<EmpleadoDto> CreateAsync(CreateEmpleadoDto dto, ulong createdBy, CancellationToken ct = default)
+    public async Task<EmpleadoDto> CreateAsync(CreateEmpleadoDto dto, ulong? createdBy, CancellationToken ct = default)
     {
         if (!await IsDniUniqueAsync(dto.Dni, ct))
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
@@ -84,7 +84,7 @@ public class EmpleadoService : IEmpleadoService
         return _mapper.Map<EmpleadoDto>(empleado);
     }
 
-    public async Task<EmpleadoDto> UpdateAsync(UpdateEmpleadoDto dto, ulong updatedBy, CancellationToken ct = default)
+    public async Task<EmpleadoDto> UpdateAsync(UpdateEmpleadoDto dto, ulong? updatedBy, CancellationToken ct = default)
     {
         var empleado = await _context.Empleados.FindAsync(new object[] { dto.Id }, ct);
         if (empleado == null)

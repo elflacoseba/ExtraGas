@@ -17,4 +17,6 @@ public class Producto
     public ulong? CreatedBy { get; set; }
     public ulong? UpdatedBy { get; set; }
     public DateTime? DeletedAt { get; set; }
+
+    public virtual TipoProducto? TipoProducto { get; set; }
 }

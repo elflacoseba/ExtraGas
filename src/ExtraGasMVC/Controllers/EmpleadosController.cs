@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using AutoMapper;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
@@ -8,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ExtraGasMVC.Controllers;
 
 [Authorize(Policy = "OperadorOrAdmin")]
-public class EmpleadosController : Controller
+public class EmpleadosController : BaseController
 {
     private readonly IEmpleadoService _empleadoService;
     private readonly IMapper _mapper;
@@ -129,11 +128,5 @@ public class EmpleadosController : Controller
             ? "Empleado eliminado correctamente."
             : "No se encontro el empleado.";
         return RedirectToAction(nameof(Index));
-    }
-
-    private ulong GetCurrentUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier);
-        return claim is not null && ulong.TryParse(claim.Value, out var id) ? id : 0;
     }
 }

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ExtraGasMVC.Controllers;
 
 [Authorize(Policy = "OperadorOrAdmin")]
-public class ProductosController : Controller
+public class ProductosController : BaseController
 {
     private readonly IProductoService _productoService;
 
@@ -39,22 +39,31 @@ public class ProductosController : Controller
         return View(producto);
     }
 
-    public IActionResult Create() => View(new CreateProductoDto { Activo = true, UnidadVenta = "UNIDAD" });
+    public async Task<IActionResult> Create(CancellationToken ct = default)
+    {
+        await PopulateTiposProductoAsync(ct);
+        return View(new CreateProductoDto { Activo = true, UnidadVenta = "UNIDAD" });
+    }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(CreateProductoDto producto, CancellationToken ct = default)
     {
-        if (!ModelState.IsValid) return View(producto);
+        if (!ModelState.IsValid)
+        {
+            await PopulateTiposProductoAsync(ct);
+            return View(producto);
+        }
         try
         {
-            await _productoService.CreateAsync(producto, ct);
+            await _productoService.CreateAsync(producto, GetCurrentUserId(), ct);
             TempData["Success"] = $"Producto {producto.Nombre} creado.";
             return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear el producto: {ex.Message}");
+            await PopulateTiposProductoAsync(ct);
             return View(producto);
         }
     }
@@ -63,7 +72,7 @@ public class ProductosController : Controller
     {
         var producto = await _productoService.GetByIdAsync(id, ct);
         if (producto is null) return NotFound();
-        
+
         var updateDto = new UpdateProductoDto
         {
             Id = producto.Id,
@@ -77,7 +86,8 @@ public class ProductosController : Controller
             ManejaGarrafaIndividual = producto.ManejaGarrafaIndividual,
             Activo = producto.Activo
         };
-        
+
+        await PopulateTiposProductoAsync(ct);
         return View(updateDto);
     }
 
@@ -86,16 +96,21 @@ public class ProductosController : Controller
     public async Task<IActionResult> Edit(ulong id, UpdateProductoDto producto, CancellationToken ct = default)
     {
         if (id != producto.Id) return BadRequest();
-        if (!ModelState.IsValid) return View(producto);
+        if (!ModelState.IsValid)
+        {
+            await PopulateTiposProductoAsync(ct);
+            return View(producto);
+        }
         try
         {
-            await _productoService.UpdateAsync(producto, ct);
+            await _productoService.UpdateAsync(producto, GetCurrentUserId(), ct);
             TempData["Success"] = $"Producto {producto.Nombre} actualizado.";
             return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar el producto: {ex.Message}");
+            await PopulateTiposProductoAsync(ct);
             return View(producto);
         }
     }
@@ -107,7 +122,7 @@ public class ProductosController : Controller
         var producto = await _productoService.GetByIdAsync(id, ct);
         if (producto is null)
         {
-            TempData["Error"] = "No se encontro el producto.";
+            TempData["Error"] = "No se encontró el producto.";
             return RedirectToAction(nameof(Index));
         }
         
@@ -125,8 +140,13 @@ public class ProductosController : Controller
             Activo = false
         };
         
-        await _productoService.UpdateAsync(updateDto);
+        await _productoService.UpdateAsync(updateDto, GetCurrentUserId(), ct);
         TempData["Success"] = "Producto desactivado.";
         return RedirectToAction(nameof(Index));
+    }
+
+    private async Task PopulateTiposProductoAsync(CancellationToken ct)
+    {
+        ViewBag.TiposProducto = await _productoService.GetTiposProductoAsync(ct);
     }
 }

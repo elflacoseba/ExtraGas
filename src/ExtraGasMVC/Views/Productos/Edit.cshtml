@@ -19,38 +19,49 @@
         <input type="hidden" asp-for="Id" />
         <div class="card-body">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <div class="small text-secondary mb-3"><span class="text-danger">*</span> Campos obligatorios</div>
             <div class="row g-3">
                 <div class="col-md-3">
-                    <label asp-for="Codigo" class="form-label"></label>
-                    <input asp-for="Codigo" class="form-control" required />
+                    <label asp-for="Codigo" class="form-label"></label> <span class="text-danger">*</span>
+                    <input asp-for="Codigo" class="form-control" />
+                    <span asp-validation-for="Codigo" class="text-danger small"></span>
                 </div>
-                <div class="col-md-6">
-                    <label asp-for="Nombre" class="form-label"></label>
-                    <input asp-for="Nombre" class="form-control" required />
+                <div class="col-md-5">
+                    <label asp-for="Nombre" class="form-label"></label> <span class="text-danger">*</span>
+                    <input asp-for="Nombre" class="form-control" />
+                    <span asp-validation-for="Nombre" class="text-danger small"></span>
                 </div>
-                <div class="col-md-3">
-                    <label asp-for="TipoProductoId" class="form-label"></label>
-                    <input asp-for="TipoProductoId" type="number" class="form-control" />
+                <div class="col-md-4">
+                    <label class="form-label">Tipo de producto</label> <span class="text-danger">*</span>
+                    <select asp-for="TipoProductoId" class="form-select">
+                        <option value="">-- Seleccione tipo --</option>
+                        @foreach (var tp in (IEnumerable<ExtraGasMVC.DTOs.TipoProductoDto>)ViewBag.TiposProducto)
+                        {
+                            <option value="@tp.Id" selected="@(Model.TipoProductoId == tp.Id)">@tp.Nombre</option>
+                        }
+                    </select>
+                    <span asp-validation-for="TipoProductoId" class="text-danger small"></span>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label asp-for="CapacidadKg" class="form-label"></label>
                     <input asp-for="CapacidadKg" type="number" step="0.01" class="form-control" />
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label asp-for="UnidadVenta" class="form-label"></label>
                     <input asp-for="UnidadVenta" class="form-control" />
                 </div>
-                <div class="col-md-3">
-                    <label asp-for="PrecioActual" class="form-label"></label>
-                    <input asp-for="PrecioActual" type="number" step="0.01" class="form-control" required />
+                <div class="col-md-2">
+                    <label asp-for="PrecioActual" class="form-label"></label> <span class="text-danger">*</span>
+                    <input asp-for="PrecioActual" type="number" step="0.01" class="form-control" />
+                    <span asp-validation-for="PrecioActual" class="text-danger small"></span>
                 </div>
-                <div class="col-md-3 d-flex align-items-end">
+                <div class="col-md-2 d-flex align-items-end">
                     <div class="form-check">
                         <input asp-for="ManejaGarrafaIndividual" class="form-check-input" type="checkbox" />
                         <label asp-for="ManejaGarrafaIndividual" class="form-check-label">Maneja garrafa individual</label>
                     </div>
                 </div>
-                <div class="col-md-3 d-flex align-items-end">
+                <div class="col-md-2 d-flex align-items-end">
                     <div class="form-check">
                         <input asp-for="Activo" class="form-check-input" type="checkbox" />
                         <label asp-for="Activo" class="form-check-label">Producto activo</label>
