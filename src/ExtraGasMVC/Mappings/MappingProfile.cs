@@ -12,6 +12,7 @@ public class MappingProfile : Profile
         CreateMap<Cliente, ClienteDto>().ReverseMap();
         CreateMap<CreateClienteDto, Cliente>();
         CreateMap<UpdateClienteDto, Cliente>();
+        CreateMap<ClienteDto, UpdateClienteDto>();
 
         // Pedido mappings
         CreateMap<Pedido, PedidoDto>().ReverseMap();

@@ -1,72 +1,77 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace ExtraGasMVC.DTOs;
 
-public class ClienteDto
+public class ClienteDtoBase
 {
-    public ulong Id { get; set; }
-    public string? Codigo { get; set; }
+    [Required(ErrorMessage = "El nombre es obligatorio.")]
+    [StringLength(100, ErrorMessage = "El nombre no puede superar {1} caracteres.")]
     public string Nombre { get; set; } = null!;
+
+    [Required(ErrorMessage = "El apellido es obligatorio.")]
+    [StringLength(100, ErrorMessage = "El apellido no puede superar {1} caracteres.")]
     public string Apellido { get; set; } = null!;
+
+    [StringLength(20, ErrorMessage = "El código no puede superar {1} caracteres.")]
+    public string? Codigo { get; set; }
+
+    [StringLength(15, ErrorMessage = "El DNI no puede superar {1} caracteres.")]
+    [RegularExpression("^[0-9]+$", ErrorMessage = "El DNI debe ser numérico.")]
     public string? Dni { get; set; }
+
+    [StringLength(15, ErrorMessage = "El CUIT/CUIL no puede superar {1} caracteres.")]
+    [RegularExpression("^[0-9]{11}$|^[0-9]{2}-[0-9]{8}-[0-9]{1}$", ErrorMessage = "El CUIT/CUIL debe tener 11 dígitos (con o sin guiones).")]
     public string? CuitCuil { get; set; }
+
+    [Required(ErrorMessage = "El teléfono principal es obligatorio.")]
+    [StringLength(25, ErrorMessage = "El teléfono no puede superar {1} caracteres.")]
     public string TelefonoPrincipal { get; set; } = null!;
+
+    [StringLength(25, ErrorMessage = "El teléfono no puede superar {1} caracteres.")]
     public string? TelefonoSecundario { get; set; }
+
+    [EmailAddress(ErrorMessage = "El formato del email no es válido.")]
+    [StringLength(150, ErrorMessage = "El email no puede superar {1} caracteres.")]
     public string? Email { get; set; }
+
+    [StringLength(150, ErrorMessage = "La calle no puede superar {1} caracteres.")]
     public string? Calle { get; set; }
+
+    [StringLength(10, ErrorMessage = "El número no puede superar {1} caracteres.")]
     public string? Numero { get; set; }
+
+    [StringLength(10, ErrorMessage = "El piso no puede superar {1} caracteres.")]
     public string? Piso { get; set; }
+
+    [StringLength(10, ErrorMessage = "El departamento no puede superar {1} caracteres.")]
     public string? Depto { get; set; }
+
+    [StringLength(100, ErrorMessage = "La ciudad no puede superar {1} caracteres.")]
     public string? Ciudad { get; set; }
+
+    [StringLength(10, ErrorMessage = "El código postal no puede superar {1} caracteres.")]
     public string? CodigoPostal { get; set; }
+
     public ulong? ProvinciaId { get; set; }
-    public string? Referencias { get; set; }
-    public string? Observaciones { get; set; }
+
+    [Required(ErrorMessage = "La fecha de alta es obligatoria.")]
     public DateOnly FechaAlta { get; set; }
+
     public bool Activo { get; set; }
+
+    public string? Referencias { get; set; }
+
+    public string? Observaciones { get; set; }
 }
 
-public class CreateClienteDto
-{
-    public string? Codigo { get; set; }
-    public string Nombre { get; set; } = null!;
-    public string Apellido { get; set; } = null!;
-    public string? Dni { get; set; }
-    public string? CuitCuil { get; set; }
-    public string TelefonoPrincipal { get; set; } = null!;
-    public string? TelefonoSecundario { get; set; }
-    public string? Email { get; set; }
-    public string? Calle { get; set; }
-    public string? Numero { get; set; }
-    public string? Piso { get; set; }
-    public string? Depto { get; set; }
-    public string? Ciudad { get; set; }
-    public string? CodigoPostal { get; set; }
-    public ulong? ProvinciaId { get; set; }
-    public string? Referencias { get; set; }
-    public string? Observaciones { get; set; }
-    public DateOnly FechaAlta { get; set; }
-    public bool Activo { get; set; }
-}
-
-public class UpdateClienteDto
+public class ClienteDto : ClienteDtoBase
 {
     public ulong Id { get; set; }
-    public string? Codigo { get; set; }
-    public string Nombre { get; set; } = null!;
-    public string Apellido { get; set; } = null!;
-    public string? Dni { get; set; }
-    public string? CuitCuil { get; set; }
-    public string TelefonoPrincipal { get; set; } = null!;
-    public string? TelefonoSecundario { get; set; }
-    public string? Email { get; set; }
-    public string? Calle { get; set; }
-    public string? Numero { get; set; }
-    public string? Piso { get; set; }
-    public string? Depto { get; set; }
-    public string? Ciudad { get; set; }
-    public string? CodigoPostal { get; set; }
-    public ulong? ProvinciaId { get; set; }
-    public string? Referencias { get; set; }
-    public string? Observaciones { get; set; }
-    public DateOnly FechaAlta { get; set; }
-    public bool Activo { get; set; }
+}
+
+public class CreateClienteDto : ClienteDtoBase { }
+
+public class UpdateClienteDto : ClienteDtoBase
+{
+    public ulong Id { get; set; }
 }
