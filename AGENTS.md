@@ -194,6 +194,7 @@ SELECT * FROM v_regularidad_clientes ORDER BY dias_promedio_entre_pedidos ASC;
 - Skill `database-designer` en `.agents/skills/database-designer/` — usar para optimizaciones, índices y migraciones futuras.
 - Skill `dotnet-backend-patterns` en `.agents/skills/dotnet-backend-patterns/` — patrones de backend .NET, repository, EF Core, Dapper.
 - Skill `dotnet-best-practices` en `.agents/skills/dotnet-best-practices/` — mejores prácticas generales de .NET.
+- Skill `github-issues` en `.agents/skills/github-issues/` — creación, actualización y gestión de GitHub issues.
 - Skill `pr-review-dotnet` en `.agents/skills/pr-review-dotnet/` — revisión integral de PRs para .NET/ASP.NET Core MVC/EF Core.
 - Diagrama ER: `db/docs/ERD.mmd` (Mermaid).
 - Decisiones y supuestos: `db/docs/DECISIONES.md`.
