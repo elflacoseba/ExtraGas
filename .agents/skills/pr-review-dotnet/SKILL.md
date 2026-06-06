@@ -590,3 +590,59 @@ Every finding must explain:
 - How to fix it
 
 Focus on actionable feedback that helps the development team improve the codebase.
+
+---
+
+# Publish Results to GitHub
+
+After completing the analysis, publish the review results to the Pull Request on GitHub.
+
+## Step 1 - Post the Review
+
+Use the `github_pull_request_review_write` tool with the following parameters:
+
+- `method`: "create"
+- `owner`: Repository owner
+- `repo`: Repository name
+- `pullNumber`: PR number
+- `body`: The full review text formatted according to the Output Format section
+- `event`: Choose one of:
+  - `"APPROVE"` — if the verdict is ✅ Approve
+  - `"COMMENT"` — if the verdict is ⚠️ Approve With Comments
+  - `"REQUEST_CHANGES"` — if the verdict is ❌ Request Changes
+
+## Step 2 - Post Individual Line Comments (Optional)
+
+For findings that reference specific lines, also post individual review comments using `github_add_comment_to_pending_review` or `github_add_reply_to_pull_request_comment` with:
+
+- `path`: File path relative to the repo root
+- `line`: Line number of the finding
+- `body`: The specific finding description
+- `side`: "RIGHT" (the new code)
+
+Post these comments **before** submitting the review (Step 3).
+
+## Step 3 - Submit the Review
+
+Once all individual comments are posted, submit the pending review using `github_pull_request_review_write`:
+
+- `method`: "submit_pending"
+- `owner`: Repository owner
+- `repo`: Repository name
+- `pullNumber`: PR number
+- `event`: The appropriate event from Step 1
+- `body`: The full review summary
+
+## Step 4 - Inform the User
+
+After publishing, inform the user:
+
+- That the review has been published on the PR
+- The URL of the PR (construct as `https://github.com/{owner}/{repo}/pull/{pullNumber}`)
+- The verdict given (Approve / Approve With Comments / Request Changes)
+
+## Rules
+
+- Always publish the review. Do not skip this step.
+- If the GitHub API call fails, output the review to the terminal and explain the failure.
+- Do not post duplicate reviews if the skill is run multiple times on the same PR.
