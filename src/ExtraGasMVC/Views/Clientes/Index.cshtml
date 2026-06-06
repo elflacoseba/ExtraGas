@@ -26,10 +26,11 @@
         <form method="get" class="row g-2 align-items-end">
             <div class="col-md-6">
                 <label class="form-label small mb-1" for="busqueda">Buscar</label>
-                <input type="text" id="busqueda" name="busqueda" value="@busqueda" class="form-control" placeholder="Nombre, apellido, DNI, CUIT o telefono" />
+                <input type="text" id="busqueda" name="busqueda" value="@busqueda" class="form-control" placeholder="Nombre, apellido, DNI, CUIT o teléfono" />
             </div>
             <div class="col-md-3">
                 <div class="form-check mt-3">
+                    <input type="hidden" name="soloActivos" value="false" />
                     <input class="form-check-input" type="checkbox" id="soloActivos" name="soloActivos" value="true" @(soloActivos ? "checked" : "") />
                     <label class="form-check-label" for="soloActivos">Solo activos</label>
                 </div>
@@ -48,10 +49,10 @@
         <table class="table table-hover table-striped align-middle mb-0">
             <thead>
                 <tr>
-                    <th>Codigo</th>
+                    <th>Código</th>
                     <th>Nombre completo</th>
                     <th>DNI / CUIT</th>
-                    <th>Telefono</th>
+                    <th>Teléfono</th>
                     <th>Ciudad</th>
                     <th class="text-center">Estado</th>
                     <th class="text-end" style="width: 220px;">Acciones</th>
@@ -87,12 +88,24 @@
                             <a asp-action="Edit" asp-route-id="@c.Id" class="btn btn-sm btn-primary" title="Editar">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            <form asp-action="Delete" asp-route-id="@c.Id" method="post" class="d-inline" onsubmit="return confirm('Esta seguro de eliminar este cliente?');">
-                                @Html.AntiForgeryToken()
-                                <button type="submit" class="btn btn-sm btn-danger" title="Eliminar">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </form>
+                            @if (c.Activo)
+                            {
+                                <form asp-action="Delete" asp-route-id="@c.Id" method="post" class="d-inline" onsubmit="return confirm('¿Está seguro de eliminar este cliente?');">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Eliminar">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form asp-action="Restore" asp-route-id="@c.Id" method="post" class="d-inline" onsubmit="return confirm('¿Está seguro de reactivar este cliente?');">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-success" title="Reactivar">
+                                        <i class="bi bi-arrow-counterclockwise"></i>
+                                    </button>
+                                </form>
+                            }
                         </td>
                     </tr>
                 }

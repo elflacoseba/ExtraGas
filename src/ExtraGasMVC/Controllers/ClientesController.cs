@@ -1,3 +1,4 @@
+using AutoMapper;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -6,67 +7,70 @@ using Microsoft.AspNetCore.Mvc;
 namespace ExtraGasMVC.Controllers;
 
 [Authorize(Policy = "OperadorOrAdmin")]
-public class ClientesController : Controller
+public class ClientesController : BaseController
 {
     private readonly IClienteService _clienteService;
+    private readonly IMapper _mapper;
 
-    public ClientesController(IClienteService clienteService)
+    public ClientesController(IClienteService clienteService, IMapper mapper)
     {
         _clienteService = clienteService;
+        _mapper = mapper;
     }
 
     public async Task<IActionResult> Index(string? busqueda, bool soloActivos = true, int pagina = 1, int tamanio = 25, CancellationToken ct = default)
     {
-        var clientes = await _clienteService.GetAllAsync(ct);
-        if (soloActivos) clientes = clientes.Where(c => c.Activo);
-        if (!string.IsNullOrWhiteSpace(busqueda))
-        {
-            var q = busqueda.Trim().ToLower();
-            clientes = clientes.Where(c =>
-                (c.Nombre + " " + c.Apellido).ToLower().Contains(q)
-                || (c.Dni ?? string.Empty).Contains(q)
-                || (c.CuitCuil ?? string.Empty).Contains(q)
-                || c.TelefonoPrincipal.Contains(q));
-        }
-
-        var total = clientes.Count();
-        var items = clientes
-            .OrderBy(c => c.Apellido).ThenBy(c => c.Nombre)
-            .Skip((pagina - 1) * tamanio)
-            .Take(tamanio)
-            .ToList();
+        var resultado = await _clienteService.SearchAsync(busqueda, soloActivos, pagina, tamanio, ct);
 
         ViewBag.Busqueda = busqueda;
         ViewBag.SoloActivos = soloActivos;
-        ViewBag.Pagina = pagina;
-        ViewBag.Tamanio = tamanio;
-        ViewBag.Total = total;
-        return View(items);
+        ViewBag.Pagina = resultado.Pagina;
+        ViewBag.Tamanio = resultado.Tamanio;
+        ViewBag.Total = resultado.Total;
+        return View(resultado.Items);
     }
 
     public async Task<IActionResult> Details(ulong id, CancellationToken ct = default)
     {
         var cliente = await _clienteService.GetByIdAsync(id, ct);
         if (cliente is null) return NotFound();
+
+        ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
         return View(cliente);
     }
 
-    public IActionResult Create() => View(new CreateClienteDto { FechaAlta = DateOnly.FromDateTime(DateTime.UtcNow), Activo = true });
+    public async Task<IActionResult> Create(CancellationToken ct = default)
+    {
+        ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+        return View(new CreateClienteDto { FechaAlta = DateOnly.FromDateTime(DateTime.UtcNow), Activo = true });
+    }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(CreateClienteDto cliente, CancellationToken ct = default)
     {
-        if (!ModelState.IsValid) return View(cliente);
+        if (!ModelState.IsValid)
+        {
+            ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+            return View(cliente);
+        }
         try
         {
-            await _clienteService.CreateAsync(cliente, ct);
+            var currentUserId = GetCurrentUserId();
+            await _clienteService.CreateAsync(cliente, currentUserId, ct);
             TempData["Success"] = $"Cliente {cliente.Nombre} {cliente.Apellido} creado correctamente.";
             return RedirectToAction(nameof(Index));
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError("Dni", ex.Message);
+            ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+            return View(cliente);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear el cliente: {ex.Message}");
+            ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
             return View(cliente);
         }
     }
@@ -75,31 +79,10 @@ public class ClientesController : Controller
     {
         var cliente = await _clienteService.GetByIdAsync(id, ct);
         if (cliente is null) return NotFound();
-        
-        var updateDto = new UpdateClienteDto
-        {
-            Id = cliente.Id,
-            Codigo = cliente.Codigo,
-            Nombre = cliente.Nombre,
-            Apellido = cliente.Apellido,
-            Dni = cliente.Dni,
-            CuitCuil = cliente.CuitCuil,
-            TelefonoPrincipal = cliente.TelefonoPrincipal,
-            TelefonoSecundario = cliente.TelefonoSecundario,
-            Email = cliente.Email,
-            Calle = cliente.Calle,
-            Numero = cliente.Numero,
-            Piso = cliente.Piso,
-            Depto = cliente.Depto,
-            Ciudad = cliente.Ciudad,
-            CodigoPostal = cliente.CodigoPostal,
-            ProvinciaId = cliente.ProvinciaId,
-            Referencias = cliente.Referencias,
-            Observaciones = cliente.Observaciones,
-            FechaAlta = cliente.FechaAlta,
-            Activo = cliente.Activo
-        };
-        
+
+        ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+
+        var updateDto = _mapper.Map<UpdateClienteDto>(cliente);
         return View(updateDto);
     }
 
@@ -108,16 +91,28 @@ public class ClientesController : Controller
     public async Task<IActionResult> Edit(ulong id, UpdateClienteDto cliente, CancellationToken ct = default)
     {
         if (id != cliente.Id) return BadRequest();
-        if (!ModelState.IsValid) return View(cliente);
+        if (!ModelState.IsValid)
+        {
+            ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+            return View(cliente);
+        }
         try
         {
-            await _clienteService.UpdateAsync(cliente, ct);
+            var currentUserId = GetCurrentUserId();
+            await _clienteService.UpdateAsync(cliente, currentUserId, ct);
             TempData["Success"] = $"Cliente {cliente.Nombre} {cliente.Apellido} actualizado.";
             return RedirectToAction(nameof(Index));
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError("Dni", ex.Message);
+            ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+            return View(cliente);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar el cliente: {ex.Message}");
+            ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
             return View(cliente);
         }
     }
@@ -126,10 +121,23 @@ public class ClientesController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(ulong id, CancellationToken ct = default)
     {
-        var ok = await _clienteService.DeleteAsync(id, ct);
+        var currentUserId = GetCurrentUserId();
+        var ok = await _clienteService.DeleteAsync(id, currentUserId, ct);
         TempData[ok ? "Success" : "Error"] = ok
             ? "Cliente eliminado correctamente."
-            : "No se encontro el cliente.";
+            : "No se encontró el cliente.";
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Restore(ulong id, CancellationToken ct = default)
+    {
+        var currentUserId = GetCurrentUserId();
+        var ok = await _clienteService.RestoreAsync(id, currentUserId, ct);
+        TempData[ok ? "Success" : "Error"] = ok
+            ? "Cliente reactivado correctamente."
+            : "No se encontró el cliente.";
         return RedirectToAction(nameof(Index));
     }
 
