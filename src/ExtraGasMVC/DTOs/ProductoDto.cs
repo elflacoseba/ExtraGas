@@ -19,6 +19,7 @@ public class ProductoDto
 
 public class CreateProductoDto
 {
+    [Display(Name = "Código")]
     [Required(ErrorMessage = "El código es obligatorio.")]
     [StringLength(30, ErrorMessage = "El código no puede superar {1} caracteres.")]
     public string Codigo { get; set; } = null!;
@@ -27,6 +28,7 @@ public class CreateProductoDto
     [StringLength(150, ErrorMessage = "El nombre no puede superar {1} caracteres.")]
     public string Nombre { get; set; } = null!;
 
+    [Display(Name = "Descripción")]
     [StringLength(255, ErrorMessage = "La descripción no puede superar {1} caracteres.")]
     public string? Descripcion { get; set; }
 
@@ -34,12 +36,15 @@ public class CreateProductoDto
     [Range(1, ulong.MaxValue, ErrorMessage = "Seleccione un tipo de producto válido.")]
     public ulong TipoProductoId { get; set; }
 
+    [Display(Name = "Capacidad (kg)")]
     [Range(0.01, 9999999999.99, ErrorMessage = "La capacidad debe ser un valor positivo.")]
     public decimal? CapacidadKg { get; set; }
 
+    [Display(Name = "Unidad de venta")]
     [StringLength(20, ErrorMessage = "La unidad de venta no puede superar {1} caracteres.")]
     public string UnidadVenta { get; set; } = "UNIDAD";
 
+    [Display(Name = "Precio actual")]
     [Range(0, 9999999999.99, ErrorMessage = "El precio debe estar entre {1} y {2}.")]
     public decimal PrecioActual { get; set; }
 
@@ -51,6 +56,7 @@ public class UpdateProductoDto
 {
     public ulong Id { get; set; }
 
+    [Display(Name = "Código")]
     [Required(ErrorMessage = "El código es obligatorio.")]
     [StringLength(30, ErrorMessage = "El código no puede superar {1} caracteres.")]
     public string Codigo { get; set; } = null!;
@@ -59,6 +65,7 @@ public class UpdateProductoDto
     [StringLength(150, ErrorMessage = "El nombre no puede superar {1} caracteres.")]
     public string Nombre { get; set; } = null!;
 
+    [Display(Name = "Descripción")]
     [StringLength(255, ErrorMessage = "La descripción no puede superar {1} caracteres.")]
     public string? Descripcion { get; set; }
 
@@ -66,12 +73,15 @@ public class UpdateProductoDto
     [Range(1, ulong.MaxValue, ErrorMessage = "Seleccione un tipo de producto válido.")]
     public ulong TipoProductoId { get; set; }
 
+    [Display(Name = "Capacidad (kg)")]
     [Range(0.01, 9999999999.99, ErrorMessage = "La capacidad debe ser un valor positivo.")]
     public decimal? CapacidadKg { get; set; }
 
+    [Display(Name = "Unidad de venta")]
     [StringLength(20, ErrorMessage = "La unidad de venta no puede superar {1} caracteres.")]
     public string UnidadVenta { get; set; } = "UNIDAD";
 
+    [Display(Name = "Precio actual")]
     [Range(0, 9999999999.99, ErrorMessage = "El precio debe estar entre {1} y {2}.")]
     public decimal PrecioActual { get; set; }
 
