@@ -22,8 +22,9 @@ public class ProductoService : IProductoService
     {
         var producto = await _context.Productos
             .AsNoTracking()
+            .Include(p => p.TipoProducto)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
-        
+
         return producto is null ? null : _mapper.Map<ProductoDto>(producto);
     }
 
@@ -31,8 +32,9 @@ public class ProductoService : IProductoService
     {
         var producto = await _context.Productos
             .AsNoTracking()
+            .Include(p => p.TipoProducto)
             .FirstOrDefaultAsync(p => p.Codigo == codigo, ct);
-        
+
         return producto is null ? null : _mapper.Map<ProductoDto>(producto);
     }
 
@@ -40,9 +42,10 @@ public class ProductoService : IProductoService
     {
         var productos = await _context.Productos
             .AsNoTracking()
+            .Include(p => p.TipoProducto)
             .OrderBy(p => p.Codigo)
             .ToListAsync(ct);
-        
+
         return _mapper.Map<IEnumerable<ProductoDto>>(productos);
     }
 
@@ -50,10 +53,11 @@ public class ProductoService : IProductoService
     {
         var productos = await _context.Productos
             .AsNoTracking()
+            .Include(p => p.TipoProducto)
             .Where(p => p.Activo)
             .OrderBy(p => p.Codigo)
             .ToListAsync(ct);
-        
+
         return _mapper.Map<IEnumerable<ProductoDto>>(productos);
     }
 
@@ -61,18 +65,31 @@ public class ProductoService : IProductoService
     {
         var productos = await _context.Productos
             .AsNoTracking()
+            .Include(p => p.TipoProducto)
             .Where(p => p.TipoProductoId == tipoProductoId)
             .OrderBy(p => p.Codigo)
             .ToListAsync(ct);
-        
+
         return _mapper.Map<IEnumerable<ProductoDto>>(productos);
     }
 
-    public async Task<ProductoDto> CreateAsync(CreateProductoDto productoDto, CancellationToken ct = default)
+    public async Task<IEnumerable<TipoProductoDto>> GetTiposProductoAsync(CancellationToken ct = default)
+    {
+        var tipos = await _context.TiposProducto
+            .AsNoTracking()
+            .OrderBy(t => t.Nombre)
+            .ToListAsync(ct);
+        
+        return _mapper.Map<IEnumerable<TipoProductoDto>>(tipos);
+    }
+
+    public async Task<ProductoDto> CreateAsync(CreateProductoDto productoDto, ulong? usuarioId, CancellationToken ct = default)
     {
         var producto = _mapper.Map<Producto>(productoDto);
         producto.CreatedAt = DateTime.UtcNow;
         producto.UpdatedAt = DateTime.UtcNow;
+        producto.CreatedBy = usuarioId;
+        producto.UpdatedBy = usuarioId;
         
         _context.Productos.Add(producto);
         await _context.SaveChangesAsync(ct);
@@ -80,7 +97,7 @@ public class ProductoService : IProductoService
         return _mapper.Map<ProductoDto>(producto);
     }
 
-    public async Task<ProductoDto> UpdateAsync(UpdateProductoDto productoDto, CancellationToken ct = default)
+    public async Task<ProductoDto> UpdateAsync(UpdateProductoDto productoDto, ulong? usuarioId, CancellationToken ct = default)
     {
         var producto = await _context.Productos.FindAsync(new object[] { productoDto.Id }, ct);
         if (producto == null)
@@ -88,6 +105,7 @@ public class ProductoService : IProductoService
 
         _mapper.Map(productoDto, producto);
         producto.UpdatedAt = DateTime.UtcNow;
+        producto.UpdatedBy = usuarioId;
         
         await _context.SaveChangesAsync(ct);
         

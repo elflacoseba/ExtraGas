@@ -17,16 +17,16 @@
     <div class="card-header"><h3 class="card-title">@Model.Nombre</h3></div>
     <div class="card-body">
         <dl class="row">
-            <dt class="col-sm-3">Codigo</dt><dd class="col-sm-9"><code>@Model.Codigo</code></dd>
+            <dt class="col-sm-3">Código</dt><dd class="col-sm-9"><code>@Model.Codigo</code></dd>
             <dt class="col-sm-3">Nombre</dt><dd class="col-sm-9">@Model.Nombre</dd>
-            <dt class="col-sm-3">Descripcion</dt><dd class="col-sm-9">@(Model.Descripcion ?? "-")</dd>
-            <dt class="col-sm-3">Tipo de producto</dt><dd class="col-sm-9">#@Model.TipoProductoId</dd>
+            <dt class="col-sm-3">Descripción</dt><dd class="col-sm-9">@(Model.Descripcion ?? "-")</dd>
+            <dt class="col-sm-3">Tipo de producto</dt><dd class="col-sm-9">@Model.TipoProductoNombre</dd>
             <dt class="col-sm-3">Capacidad (kg)</dt><dd class="col-sm-9">@(Model.CapacidadKg?.ToString("0.##") ?? "-")</dd>
             <dt class="col-sm-3">Unidad de venta</dt><dd class="col-sm-9">@Model.UnidadVenta</dd>
             <dt class="col-sm-3">Precio actual</dt><dd class="col-sm-9">@Model.PrecioActual.ToArs()</dd>
             <dt class="col-sm-3">Maneja garrafa individual</dt>
             <dd class="col-sm-9">
-                @if (Model.ManejaGarrafaIndividual) { <span class="badge text-bg-info">Si</span> } else { <span class="badge text-bg-light">No</span> }
+                @if (Model.ManejaGarrafaIndividual) { <span class="badge text-bg-info">Sí</span> } else { <span class="badge text-bg-light">No</span> }
             </dd>
             <dt class="col-sm-3">Estado</dt>
             <dd class="col-sm-9">

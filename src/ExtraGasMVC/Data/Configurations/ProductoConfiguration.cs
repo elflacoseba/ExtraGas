@@ -72,7 +72,7 @@ public class ProductoConfiguration : IEntityTypeConfiguration<Producto>
             .HasColumnName("deleted_at")
             .HasColumnType("datetime");
 
-        builder.HasOne<TipoProducto>()
+        builder.HasOne(p => p.TipoProducto)
             .WithMany()
             .HasForeignKey(p => p.TipoProductoId)
             .OnDelete(DeleteBehavior.Restrict)

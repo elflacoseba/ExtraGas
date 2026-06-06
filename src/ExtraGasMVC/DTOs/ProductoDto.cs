@@ -7,6 +7,7 @@ public class ProductoDto
     public string Nombre { get; set; } = null!;
     public string? Descripcion { get; set; }
     public ulong TipoProductoId { get; set; }
+    public string? TipoProductoNombre { get; set; }
     public decimal? CapacidadKg { get; set; }
     public string UnidadVenta { get; set; } = "UNIDAD";
     public decimal PrecioActual { get; set; }
