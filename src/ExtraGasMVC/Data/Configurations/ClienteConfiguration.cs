@@ -108,7 +108,7 @@ public class ClienteConfiguration : IEntityTypeConfiguration<Cliente>
 
         builder.HasIndex(c => new { c.Apellido, c.Nombre }).HasDatabaseName("idx_clientes_apellido");
         builder.HasIndex(c => c.TelefonoPrincipal).HasDatabaseName("idx_clientes_telefono");
-        builder.HasIndex(c => c.Dni).HasDatabaseName("idx_clientes_dni");
+        builder.HasIndex(c => c.Dni).IsUnique().HasDatabaseName("idx_clientes_dni");
         builder.HasIndex(c => c.Codigo).HasDatabaseName("idx_clientes_codigo");
         builder.HasIndex(c => c.DeletedAt).HasDatabaseName("idx_clientes_deleted_at");
 

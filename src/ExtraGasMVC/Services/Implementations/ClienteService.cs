@@ -4,18 +4,22 @@ using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ExtraGasMVC.Services.Implementations;
 
 public class ClienteService : IClienteService
 {
+    private const string ProvinciasCacheKey = "provincias_all";
     private readonly ExtraGasDbContext _context;
     private readonly IMapper _mapper;
+    private readonly IMemoryCache _cache;
 
-    public ClienteService(ExtraGasDbContext context, IMapper mapper)
+    public ClienteService(ExtraGasDbContext context, IMapper mapper, IMemoryCache cache)
     {
         _context = context;
         _mapper = mapper;
+        _cache = cache;
     }
 
     public async Task<ClienteDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
@@ -72,10 +76,10 @@ public class ClienteService : IClienteService
 
         if (!string.IsNullOrWhiteSpace(busqueda))
         {
-            var q = busqueda.Trim().ToLower();
+            var q = busqueda.Trim();
             query = query.Where(c =>
-                c.Nombre.ToLower().Contains(q)
-                || c.Apellido.ToLower().Contains(q)
+                c.Nombre.Contains(q)
+                || c.Apellido.Contains(q)
                 || (c.Dni != null && c.Dni.Contains(q))
                 || (c.CuitCuil != null && c.CuitCuil.Contains(q))
                 || c.TelefonoPrincipal.Contains(q));
@@ -105,6 +109,7 @@ public class ClienteService : IClienteService
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
         var cliente = _mapper.Map<Cliente>(clienteDto);
+        cliente.Activo = true;
         cliente.CreatedAt = DateTime.UtcNow;
         cliente.UpdatedAt = DateTime.UtcNow;
         cliente.CreatedBy = createdBy;
@@ -134,7 +139,7 @@ public class ClienteService : IClienteService
         return _mapper.Map<ClienteDto>(cliente);
     }
 
-    public async Task<bool> DeleteAsync(ulong id, CancellationToken ct = default)
+    public async Task<bool> DeleteAsync(ulong id, ulong? updatedBy, CancellationToken ct = default)
     {
         var cliente = await _context.Clientes.FindAsync(new object[] { id }, ct);
         if (cliente == null)
@@ -143,6 +148,7 @@ public class ClienteService : IClienteService
         cliente.DeletedAt = DateTime.UtcNow;
         cliente.Activo = false;
         cliente.UpdatedAt = DateTime.UtcNow;
+        cliente.UpdatedBy = updatedBy;
         await _context.SaveChangesAsync(ct);
 
         return true;
@@ -168,12 +174,18 @@ public class ClienteService : IClienteService
 
     public async Task<List<ProvinciaDto>> GetProvinciasAsync(CancellationToken ct = default)
     {
-        var provincias = await _context.Provincias
-            .AsNoTracking()
-            .OrderBy(p => p.Nombre)
-            .ToListAsync(ct);
+        return await _cache.GetOrCreateAsync(ProvinciasCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
+            entry.SlidingExpiration = TimeSpan.FromMinutes(15);
 
-        return _mapper.Map<List<ProvinciaDto>>(provincias);
+            var provincias = await _context.Provincias
+                .AsNoTracking()
+                .OrderBy(p => p.Nombre)
+                .ToListAsync(ct);
+
+            return _mapper.Map<List<ProvinciaDto>>(provincias);
+        }) ?? [];
     }
 
     private async Task<bool> IsDniUniqueAsync(string? dni, CancellationToken ct)

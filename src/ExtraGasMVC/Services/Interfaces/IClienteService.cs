@@ -13,7 +13,7 @@ public interface IClienteService
         int pagina, int tamanio, CancellationToken ct = default);
     Task<ClienteDto> CreateAsync(CreateClienteDto cliente, ulong? createdBy, CancellationToken ct = default);
     Task<ClienteDto> UpdateAsync(UpdateClienteDto cliente, ulong? updatedBy, CancellationToken ct = default);
-    Task<bool> DeleteAsync(ulong id, CancellationToken ct = default);
+    Task<bool> DeleteAsync(ulong id, ulong? updatedBy, CancellationToken ct = default);
     Task<bool> RestoreAsync(ulong id, ulong? updatedBy, CancellationToken ct = default);
     Task<List<ProvinciaDto>> GetProvinciasAsync(CancellationToken ct = default);
 }

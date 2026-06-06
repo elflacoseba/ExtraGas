@@ -121,7 +121,8 @@ public class ClientesController : BaseController
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(ulong id, CancellationToken ct = default)
     {
-        var ok = await _clienteService.DeleteAsync(id, ct);
+        var currentUserId = GetCurrentUserId();
+        var ok = await _clienteService.DeleteAsync(id, currentUserId, ct);
         TempData[ok ? "Success" : "Error"] = ok
             ? "Cliente eliminado correctamente."
             : "No se encontró el cliente.";
