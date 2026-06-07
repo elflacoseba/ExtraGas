@@ -146,7 +146,7 @@ public class PedidoService : IPedidoService
         var items = await _context.PedidoItems
             .AsNoTracking()
             .Include(i => i.Producto)
-            .Where(i => i.PedidoId == pedidoId && i.DeletedAt == null)
+            .Where(i => i.PedidoId == pedidoId)
             .OrderBy(i => i.Id)
             .ToListAsync(ct);
 
@@ -339,8 +339,7 @@ public class PedidoService : IPedidoService
             .AsNoTracking()
             .AnyAsync(i => i.PedidoId == itemDto.PedidoId
                         && i.ProductoId == itemDto.ProductoId
-                        && i.TipoLinea == tipoLinea
-                        && i.DeletedAt == null, ct);
+                        && i.TipoLinea == tipoLinea, ct);
 
         if (yaExiste)
             throw new InvalidOperationException(
@@ -416,9 +415,8 @@ public class PedidoService : IPedidoService
 
         var pedidoId = item.PedidoId;
 
-        // Soft-delete per project convention (AGENTS.md decision #6)
-        item.DeletedAt = DateTime.UtcNow;
-        item.UpdatedAt = DateTime.UtcNow;
+        // Hard-delete: pedido_items se borran físicamente al eliminar del detalle
+        _context.PedidoItems.Remove(item);
 
         using var transaction = await _context.Database.BeginTransactionAsync(ct);
         try
@@ -549,7 +547,7 @@ public class PedidoService : IPedidoService
     {
         var items = await _context.PedidoItems
             .AsNoTracking()
-            .Where(i => i.PedidoId == pedidoId && i.DeletedAt == null)
+            .Where(i => i.PedidoId == pedidoId)
             .ToListAsync(ct);
 
         var subtotal = CalculateSubtotal(items);
@@ -570,7 +568,7 @@ public class PedidoService : IPedidoService
     private async Task RecalculateTotalsInternalAsync(ulong pedidoId, CancellationToken ct = default)
     {
         var items = await _context.PedidoItems
-            .Where(i => i.PedidoId == pedidoId && i.DeletedAt == null)
+            .Where(i => i.PedidoId == pedidoId)
             .ToListAsync(ct);
 
         var subtotal = CalculateSubtotal(items);

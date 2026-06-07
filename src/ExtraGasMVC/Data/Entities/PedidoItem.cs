@@ -14,7 +14,6 @@ public class PedidoItem
     public string? Observaciones { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
-    public DateTime? DeletedAt { get; set; }
 
     public virtual Pedido? Pedido { get; set; }
     public virtual Producto? Producto { get; set; }

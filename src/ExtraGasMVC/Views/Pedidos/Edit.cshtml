@@ -307,14 +307,13 @@
                             @if (!soloObservaciones)
                             {
                                 <td class="text-end">
-                                    <form asp-action="RemoveItem" method="post" class="d-inline js-remove-item" data-producto="@(item.ProductoNombre ?? "-")">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="itemId" value="@item.Id" />
-                                        <input type="hidden" name="pedidoId" value="@Model.Id" />
-                                        <button type="button" class="btn btn-sm btn-danger js-remove-item-btn" title="Eliminar item">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
+                                    <button type="button" class="btn btn-sm btn-danger js-remove-item-btn"
+                                            data-item-id="@item.Id"
+                                            data-pedido-id="@Model.Id"
+                                            data-producto="@(item.ProductoNombre ?? "-")"
+                                            title="Eliminar item">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
                                 </td>
                             }
                         </tr>
@@ -337,7 +336,6 @@
 }
 
 @section Scripts {
-    <partial name="_ValidationScriptsPartial" />
     <script>
         (function () {
             var form = document.getElementById('js-add-item-form');
@@ -379,8 +377,9 @@
 
         document.querySelectorAll('.js-remove-item-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                var form = btn.closest('form');
-                var producto = form.getAttribute('data-producto') || 'este item';
+                var itemId = btn.getAttribute('data-item-id');
+                var pedidoId = btn.getAttribute('data-pedido-id');
+                var producto = btn.getAttribute('data-producto') || 'este item';
                 Swal.fire({
                     title: '¿Eliminar item?',
                     html: 'Se eliminará <strong>' + producto + '</strong> del pedido. Esta acción no se puede deshacer.',
@@ -393,6 +392,32 @@
                     reverseButtons: true
                 }).then(function (result) {
                     if (result.isConfirmed) {
+                        var form = document.createElement('form');
+                        form.method = 'post';
+                        form.action = '@Url.Action("RemoveItem")';
+
+                        var tokenSrc = document.querySelector('input[name="__RequestVerificationToken"]');
+                        if (tokenSrc) {
+                            var token = document.createElement('input');
+                            token.type = 'hidden';
+                            token.name = '__RequestVerificationToken';
+                            token.value = tokenSrc.value;
+                            form.appendChild(token);
+                        }
+
+                        var itemInput = document.createElement('input');
+                        itemInput.type = 'hidden';
+                        itemInput.name = 'itemId';
+                        itemInput.value = itemId;
+                        form.appendChild(itemInput);
+
+                        var pedidoInput = document.createElement('input');
+                        pedidoInput.type = 'hidden';
+                        pedidoInput.name = 'pedidoId';
+                        pedidoInput.value = pedidoId;
+                        form.appendChild(pedidoInput);
+
+                        document.body.appendChild(form);
                         form.submit();
                     }
                 });
@@ -632,7 +657,7 @@
         (function () {
             var descuento = document.getElementById('js-descuento');
             var totalDisplay = document.getElementById('js-total');
-            var subtotalValue = @(ViewBag.Subtotal ?? 0m);
+            var subtotalValue = @((ViewBag.Subtotal ?? 0m).ToString(System.Globalization.CultureInfo.InvariantCulture));
             if (!descuento || !totalDisplay) return;
 
             function recalcularTotal() {

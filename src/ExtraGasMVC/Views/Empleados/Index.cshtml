@@ -87,9 +87,9 @@
                             <a asp-action="Edit" asp-route-id="@e.Id" class="btn btn-sm btn-primary" title="Editar">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            <form asp-action="Delete" asp-route-id="@e.Id" method="post" class="d-inline" onsubmit="return confirm('¿Está seguro de eliminar este empleado?');">
+                            <form asp-action="Delete" asp-route-id="@e.Id" method="post" class="d-inline js-confirm-form" data-name="este empleado">
                                 @Html.AntiForgeryToken()
-                                <button type="submit" class="btn btn-sm btn-danger" title="Eliminar">
+                                <button type="button" class="btn btn-sm btn-danger" title="Eliminar" onclick="confirmarAccion(this)">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </form>

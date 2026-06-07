@@ -58,10 +58,6 @@ public class PedidoItemConfiguration : IEntityTypeConfiguration<PedidoItem>
             .ValueGeneratedOnAddOrUpdate()
             .HasDefaultValueSql("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
 
-        builder.Property(pi => pi.DeletedAt)
-            .HasColumnName("deleted_at")
-            .HasColumnType("datetime");
-
         builder.HasOne(pi => pi.Pedido)
             .WithMany(p => p.Items)
             .HasForeignKey(pi => pi.PedidoId)
@@ -82,9 +78,5 @@ public class PedidoItemConfiguration : IEntityTypeConfiguration<PedidoItem>
         builder.HasIndex(pi => pi.PedidoId).HasDatabaseName("idx_pedido_items_pedido");
         builder.HasIndex(pi => pi.ProductoId).HasDatabaseName("idx_pedido_items_producto");
         builder.HasIndex(pi => pi.TipoLinea).HasDatabaseName("idx_pedido_items_tipo");
-        builder.HasIndex(pi => pi.DeletedAt).HasDatabaseName("idx_pedido_items_deleted_at");
-
-        // Soft-delete query filter: active items only
-        builder.HasQueryFilter(pi => pi.DeletedAt == null);
     }
 }

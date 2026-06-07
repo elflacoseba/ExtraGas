@@ -90,18 +90,18 @@
                             </a>
                             @if (c.Activo)
                             {
-                                <form asp-action="Delete" asp-route-id="@c.Id" method="post" class="d-inline" onsubmit="return confirm('¿Está seguro de eliminar este cliente?');">
+                                <form asp-action="Delete" asp-route-id="@c.Id" method="post" class="d-inline js-confirm-form" data-name="este cliente">
                                     @Html.AntiForgeryToken()
-                                    <button type="submit" class="btn btn-sm btn-danger" title="Eliminar">
+                                    <button type="button" class="btn btn-sm btn-danger" title="Eliminar" onclick="confirmarAccion(this)">
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </form>
                             }
                             else
                             {
-                                <form asp-action="Restore" asp-route-id="@c.Id" method="post" class="d-inline" onsubmit="return confirm('¿Está seguro de reactivar este cliente?');">
+                                <form asp-action="Restore" asp-route-id="@c.Id" method="post" class="d-inline js-confirm-form" data-name="este cliente" data-action="reactivar">
                                     @Html.AntiForgeryToken()
-                                    <button type="submit" class="btn btn-sm btn-success" title="Reactivar">
+                                    <button type="button" class="btn btn-sm btn-success" title="Reactivar" onclick="confirmarAccion(this)">
                                         <i class="bi bi-arrow-counterclockwise"></i>
                                     </button>
                                 </form>
