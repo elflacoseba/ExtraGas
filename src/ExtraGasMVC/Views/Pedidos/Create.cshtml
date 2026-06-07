@@ -7,6 +7,10 @@
         new() { Label = "Nuevo" }
     };
     var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.DTOs.ClienteDto> ?? Array.Empty<ExtraGasMVC.DTOs.ClienteDto>();
+    var empleados = ViewBag.Empleados as IEnumerable<ExtraGasMVC.DTOs.EmpleadoDto> ?? Array.Empty<ExtraGasMVC.DTOs.EmpleadoDto>();
+    var estados = ViewBag.Estados as IEnumerable<ExtraGasMVC.DTOs.EstadoPedidoDto> ?? Array.Empty<ExtraGasMVC.DTOs.EstadoPedidoDto>();
+    var canales = ViewBag.Canales as IEnumerable<ExtraGasMVC.DTOs.CanalVentaDto> ?? Array.Empty<ExtraGasMVC.DTOs.CanalVentaDto>();
+    var medios = ViewBag.MediosContacto as IEnumerable<ExtraGasMVC.DTOs.MedioContactoPedidoDto> ?? Array.Empty<ExtraGasMVC.DTOs.MedioContactoPedidoDto>();
 }
 @section PageHeader {
     <div class="mb-3">
@@ -16,26 +20,35 @@
     </div>
 }
 <div class="card">
-    <div class="card-header"><h3 class="card-title">Nuevo pedido</h3></div>
+    <div class="card-header"><h3 class="card-title">Datos del pedido</h3></div>
     <form asp-action="Create" method="post">
         @Html.AntiForgeryToken()
         <div class="card-body">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <div class="small text-secondary mb-3"><span class="text-danger">*</span> Campos obligatorios</div>
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label asp-for="Fecha" class="form-label"></label>
+                    <label asp-for="Fecha" class="form-label"></label> <span class="text-danger">*</span>
                     <input asp-for="Fecha" type="datetime-local" class="form-control" required />
+                    <span asp-validation-for="Fecha" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="FechaEntrega" class="form-label"></label>
                     <input asp-for="FechaEntrega" type="date" class="form-control" />
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="CanalVentaId" class="form-label"></label>
-                    <input asp-for="CanalVentaId" type="number" class="form-control" value="@Model.CanalVentaId" />
+                    <label asp-for="CanalVentaId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="CanalVentaId" class="form-select" required>
+                        <option value="">-- Seleccione canal --</option>
+                        @foreach (var c in canales)
+                        {
+                            <option value="@c.Id">@c.Nombre</option>
+                        }
+                    </select>
+                    <span asp-validation-for="CanalVentaId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-6">
-                    <label asp-for="ClienteId" class="form-label"></label>
+                    <label asp-for="ClienteId" class="form-label"></label> <span class="text-danger">*</span>
                     <select asp-for="ClienteId" class="form-select" required>
                         <option value="">-- Seleccione cliente --</option>
                         @foreach (var c in clientes)
@@ -43,46 +56,51 @@
                             <option value="@c.Id">@c.Apellido, @c.Nombre @(string.IsNullOrEmpty(c.Dni) ? "" : $"({c.Dni})")</option>
                         }
                     </select>
+                    <span asp-validation-for="ClienteId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-3">
-                    <label asp-for="EmpleadoId" class="form-label"></label>
-                    <input asp-for="EmpleadoId" type="number" class="form-control" value="@Model.EmpleadoId" />
+                    <label asp-for="EmpleadoId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="EmpleadoId" class="form-select" required>
+                        <option value="">-- Seleccione empleado --</option>
+                        @foreach (var e in empleados)
+                        {
+                            <option value="@e.Id">@e.Apellido, @e.Nombre</option>
+                        }
+                    </select>
+                    <span asp-validation-for="EmpleadoId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-3">
-                    <label asp-for="EstadoPedidoId" class="form-label"></label>
-                    <input asp-for="EstadoPedidoId" type="number" class="form-control" value="@Model.EstadoPedidoId" />
+                    <label asp-for="EstadoPedidoId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="EstadoPedidoId" class="form-select" required>
+                        @foreach (var e in estados)
+                        {
+                            <option value="@e.Id" selected="@(Model.EstadoPedidoId == e.Id)">@e.Nombre</option>
+                        }
+                    </select>
+                    <span asp-validation-for="EstadoPedidoId" class="text-danger small"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="MedioContactoId" class="form-label"></label>
+                    <select asp-for="MedioContactoId" class="form-select">
+                        <option value="">-- Seleccione medio --</option>
+                        @foreach (var m in medios)
+                        {
+                            <option value="@m.Id">@m.Nombre</option>
+                        }
+                    </select>
                 </div>
             </div>
-            <h5 class="mt-4">Totales</h5>
-            <div class="row g-3">
-                <div class="col-md-3">
-                    <label asp-for="Subtotal" class="form-label"></label>
-                    <input asp-for="Subtotal" type="number" step="0.01" class="form-control" />
-                </div>
-                <div class="col-md-3">
-                    <label asp-for="Descuento" class="form-label"></label>
-                    <input asp-for="Descuento" type="number" step="0.01" class="form-control" />
-                </div>
-                <div class="col-md-3">
-                    <label asp-for="Total" class="form-label"></label>
-                    <input asp-for="Total" type="number" step="0.01" class="form-control" />
-                </div>
-                <div class="col-md-3 d-flex align-items-end">
-                    <div class="form-check">
-                        <input asp-for="Entregado" class="form-check-input" type="checkbox" />
-                        <label asp-for="Entregado" class="form-check-label">Entregado</label>
-                    </div>
-                </div>
-            </div>
-            <h5 class="mt-4">Entrega y notas</h5>
+            <h5 class="mt-4">Entrega y observaciones</h5>
             <div class="row g-3">
                 <div class="col-12">
                     <label asp-for="DireccionEntrega" class="form-label"></label>
-                    <input asp-for="DireccionEntrega" class="form-control" />
+                    <input asp-for="DireccionEntrega" class="form-control" placeholder="Calle, número, piso, depto., ciudad" />
+                    <span asp-validation-for="DireccionEntrega" class="text-danger small"></span>
                 </div>
                 <div class="col-12">
                     <label asp-for="Observaciones" class="form-label"></label>
                     <textarea asp-for="Observaciones" class="form-control" rows="3"></textarea>
+                    <span asp-validation-for="Observaciones" class="text-danger small"></span>
                 </div>
             </div>
         </div>
@@ -94,3 +112,7 @@
         </div>
     </form>
 </div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -3,32 +3,32 @@
     var error = TempData["Error"] as string;
     var info = TempData["Info"] as string;
     var warning = TempData["Warning"] as string;
+
+    var messages = new List<(string Type, string Text)>();
+    if (!string.IsNullOrEmpty(success)) messages.Add(("success", success));
+    if (!string.IsNullOrEmpty(error)) messages.Add(("error", error));
+    if (!string.IsNullOrEmpty(info)) messages.Add(("info", info));
+    if (!string.IsNullOrEmpty(warning)) messages.Add(("warning", warning));
 }
-@if (!string.IsNullOrEmpty(success))
+@if (messages.Any())
 {
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle-fill me-2"></i>@success
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-    </div>
-}
-@if (!string.IsNullOrEmpty(error))
-{
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="bi bi-exclamation-triangle-fill me-2"></i>@error
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-    </div>
-}
-@if (!string.IsNullOrEmpty(info))
-{
-    <div class="alert alert-info alert-dismissible fade show" role="alert">
-        <i class="bi bi-info-circle-fill me-2"></i>@info
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-    </div>
-}
-@if (!string.IsNullOrEmpty(warning))
-{
-    <div class="alert alert-warning alert-dismissible fade show" role="alert">
-        <i class="bi bi-exclamation-circle-fill me-2"></i>@warning
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 4000,
+                timerProgressBar: true,
+                didOpen: (toast) => {
+                    toast.addEventListener('mouseenter', Swal.stopTimer);
+                    toast.addEventListener('mouseleave', Swal.resumeTimer);
+                }
+            });
+            @foreach (var m in messages)
+            {
+                <text>Toast.fire({ icon: '@m.Type', title: @Html.Raw(Json.Serialize(m.Text)) });</text>
+            }
+        });
+    </script>
 }

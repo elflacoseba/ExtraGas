@@ -98,31 +98,31 @@ public class PedidoConfiguration : IEntityTypeConfiguration<Pedido>
             .HasColumnType("datetime");
 
         // FKs
-        builder.HasOne<Cliente>()
+        builder.HasOne(p => p.Cliente)
             .WithMany()
             .HasForeignKey(p => p.ClienteId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_pedidos_cliente");
 
-        builder.HasOne<Empleado>()
+        builder.HasOne(p => p.Empleado)
             .WithMany()
             .HasForeignKey(p => p.EmpleadoId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_pedidos_empleado");
 
-        builder.HasOne<EstadoPedido>()
+        builder.HasOne(p => p.EstadoPedido)
             .WithMany()
             .HasForeignKey(p => p.EstadoPedidoId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_pedidos_estado");
 
-        builder.HasOne<CanalVenta>()
+        builder.HasOne(p => p.CanalVenta)
             .WithMany()
             .HasForeignKey(p => p.CanalVentaId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_pedidos_canal");
 
-        builder.HasOne<MedioContactoPedido>()
+        builder.HasOne(p => p.MedioContactoPedido)
             .WithMany()
             .HasForeignKey(p => p.MedioContactoId)
             .OnDelete(DeleteBehavior.Restrict)

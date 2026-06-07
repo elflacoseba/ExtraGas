@@ -59,13 +59,13 @@ public class PedidoItemConfiguration : IEntityTypeConfiguration<PedidoItem>
             .ValueGeneratedOnAddOrUpdate()
             .HasDefaultValueSql("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
 
-        builder.HasOne<Pedido>()
-            .WithMany()
+        builder.HasOne(pi => pi.Pedido)
+            .WithMany(p => p.Items)
             .HasForeignKey(pi => pi.PedidoId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_pedido_items_pedido");
 
-        builder.HasOne<Producto>()
+        builder.HasOne(pi => pi.Producto)
             .WithMany()
             .HasForeignKey(pi => pi.ProductoId)
             .OnDelete(DeleteBehavior.Restrict)

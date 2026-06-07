@@ -7,6 +7,12 @@
         new() { Label = "Editar" }
     };
     var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.DTOs.ClienteDto> ?? Array.Empty<ExtraGasMVC.DTOs.ClienteDto>();
+    var empleados = ViewBag.Empleados as IEnumerable<ExtraGasMVC.DTOs.EmpleadoDto> ?? Array.Empty<ExtraGasMVC.DTOs.EmpleadoDto>();
+    var estados = ViewBag.Estados as IEnumerable<ExtraGasMVC.DTOs.EstadoPedidoDto> ?? Array.Empty<ExtraGasMVC.DTOs.EstadoPedidoDto>();
+    var canales = ViewBag.Canales as IEnumerable<ExtraGasMVC.DTOs.CanalVentaDto> ?? Array.Empty<ExtraGasMVC.DTOs.CanalVentaDto>();
+    var medios = ViewBag.MediosContacto as IEnumerable<ExtraGasMVC.DTOs.MedioContactoPedidoDto> ?? Array.Empty<ExtraGasMVC.DTOs.MedioContactoPedidoDto>();
+    var productos = ViewBag.Productos as IEnumerable<ExtraGasMVC.DTOs.ProductoDto> ?? Array.Empty<ExtraGasMVC.DTOs.ProductoDto>();
+    var items = ViewBag.Items as IEnumerable<ExtraGasMVC.DTOs.PedidoItemDto> ?? Array.Empty<ExtraGasMVC.DTOs.PedidoItemDto>();
 }
 @section PageHeader {
     <div class="mb-3">
@@ -16,57 +22,100 @@
     </div>
 }
 <div class="card">
-    <div class="card-header"><h3 class="card-title">Editar pedido</h3></div>
+    <div class="card-header"><h3 class="card-title">Datos del pedido</h3></div>
     <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
         @Html.AntiForgeryToken()
         <input type="hidden" asp-for="Id" />
         <div class="card-body">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <div class="small text-secondary mb-3"><span class="text-danger">*</span> Campos obligatorios</div>
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label asp-for="Fecha" class="form-label"></label>
+                    <label asp-for="Fecha" class="form-label"></label> <span class="text-danger">*</span>
                     <input asp-for="Fecha" type="datetime-local" class="form-control" required />
+                    <span asp-validation-for="Fecha" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="FechaEntrega" class="form-label"></label>
                     <input asp-for="FechaEntrega" type="date" class="form-control" />
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="CanalVentaId" class="form-label"></label>
-                    <input asp-for="CanalVentaId" type="number" class="form-control" />
+                    <label asp-for="CanalVentaId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="CanalVentaId" class="form-select" required>
+                        <option value="">-- Seleccione canal --</option>
+                        @foreach (var c in canales)
+                        {
+                            <option value="@c.Id" selected="@(Model.CanalVentaId == c.Id)">@c.Nombre</option>
+                        }
+                    </select>
+                    <span asp-validation-for="CanalVentaId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-6">
-                    <label asp-for="ClienteId" class="form-label"></label>
+                    <label asp-for="ClienteId" class="form-label"></label> <span class="text-danger">*</span>
                     <select asp-for="ClienteId" class="form-select" required>
                         <option value="">-- Seleccione cliente --</option>
                         @foreach (var c in clientes)
                         {
-                            <option value="@c.Id">@c.Apellido, @c.Nombre @(string.IsNullOrEmpty(c.Dni) ? "" : $"({c.Dni})")</option>
+                            <option value="@c.Id" selected="@(Model.ClienteId == c.Id)">@c.Apellido, @c.Nombre @(string.IsNullOrEmpty(c.Dni) ? "" : $"({c.Dni})")</option>
                         }
                     </select>
+                    <span asp-validation-for="ClienteId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-3">
-                    <label asp-for="EmpleadoId" class="form-label"></label>
-                    <input asp-for="EmpleadoId" type="number" class="form-control" />
+                    <label asp-for="EmpleadoId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="EmpleadoId" class="form-select" required>
+                        <option value="">-- Seleccione empleado --</option>
+                        @foreach (var e in empleados)
+                        {
+                            <option value="@e.Id" selected="@(Model.EmpleadoId == e.Id)">@e.Apellido, @e.Nombre</option>
+                        }
+                    </select>
+                    <span asp-validation-for="EmpleadoId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-3">
-                    <label asp-for="EstadoPedidoId" class="form-label"></label>
-                    <input asp-for="EstadoPedidoId" type="number" class="form-control" />
+                    <label asp-for="EstadoPedidoId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="EstadoPedidoId" class="form-select" required>
+                        @foreach (var e in estados)
+                        {
+                            <option value="@e.Id" selected="@(Model.EstadoPedidoId == e.Id)">@e.Nombre</option>
+                        }
+                    </select>
+                    <span asp-validation-for="EstadoPedidoId" class="text-danger small"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="MedioContactoId" class="form-label"></label>
+                    <select asp-for="MedioContactoId" class="form-select">
+                        <option value="">-- Seleccione medio --</option>
+                        @foreach (var m in medios)
+                        {
+                            <option value="@m.Id" selected="@(Model.MedioContactoId == m.Id)">@m.Nombre</option>
+                        }
+                    </select>
                 </div>
             </div>
             <h5 class="mt-4">Totales</h5>
             <div class="row g-3">
                 <div class="col-md-3">
                     <label asp-for="Subtotal" class="form-label"></label>
-                    <input asp-for="Subtotal" type="number" step="0.01" class="form-control" />
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
+                        <input asp-for="Subtotal" type="number" step="0.01" class="form-control" readonly />
+                    </div>
                 </div>
                 <div class="col-md-3">
                     <label asp-for="Descuento" class="form-label"></label>
-                    <input asp-for="Descuento" type="number" step="0.01" class="form-control" />
+                    <div class="input-group">
+                        <input asp-for="Descuento" id="js-descuento" type="number" step="0.01" min="0" max="100" class="form-control" />
+                        <span class="input-group-text"><i class="bi bi-percent"></i></span>
+                    </div>
+                    <span asp-validation-for="Descuento" class="text-danger small"></span>
                 </div>
                 <div class="col-md-3">
                     <label asp-for="Total" class="form-label"></label>
-                    <input asp-for="Total" type="number" step="0.01" class="form-control" />
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
+                        <input asp-for="Total" id="js-total" type="number" step="0.01" class="form-control" readonly />
+                    </div>
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
                     <div class="form-check">
@@ -75,15 +124,17 @@
                     </div>
                 </div>
             </div>
-            <h5 class="mt-4">Entrega y notas</h5>
+            <h5 class="mt-4">Entrega y observaciones</h5>
             <div class="row g-3">
                 <div class="col-12">
                     <label asp-for="DireccionEntrega" class="form-label"></label>
-                    <input asp-for="DireccionEntrega" class="form-control" />
+                    <input asp-for="DireccionEntrega" class="form-control" placeholder="Calle, número, piso, depto., ciudad" />
+                    <span asp-validation-for="DireccionEntrega" class="text-danger small"></span>
                 </div>
                 <div class="col-12">
                     <label asp-for="Observaciones" class="form-label"></label>
                     <textarea asp-for="Observaciones" class="form-control" rows="3"></textarea>
+                    <span asp-validation-for="Observaciones" class="text-danger small"></span>
                 </div>
             </div>
         </div>
@@ -95,3 +146,220 @@
         </div>
     </form>
 </div>
+
+<div class="card mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0">Items del pedido</h3>
+        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="collapse" data-bs-target="#addItemForm">
+            <i class="bi bi-plus-circle me-1"></i> Agregar item
+        </button>
+    </div>
+    <div class="collapse" id="addItemForm">
+        <div class="card-body border-bottom bg-light">
+            <form asp-action="AddItem" method="post" id="js-add-item-form">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="PedidoId" value="@Model.Id" />
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-5">
+                        <label class="form-label">Producto <span class="text-danger">*</span></label>
+                        <select name="ProductoId" class="form-select" required>
+                            <option value="">-- Seleccione producto --</option>
+                            @foreach (var p in productos)
+                            {
+                                <option value="@p.Id">@p.Nombre (@p.Codigo) - @p.PrecioActual.ToArs()</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Tipo <span class="text-danger">*</span></label>
+                        <select name="TipoLinea" class="form-select" required>
+                            <option value="VENTA">Venta</option>
+                            <option value="ENTREGA">Entrega</option>
+                            <option value="DEVOLUCION">Devolución</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Cantidad <span class="text-danger">*</span></label>
+                        <input name="Cantidad" type="number" step="0.01" min="0.01" class="form-control" value="1" required />
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-plus-circle me-1"></i> Agregar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="card-body table-responsive p-0" id="itemsTable" style="scroll-margin-top: 70px;">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Tipo</th>
+                    <th class="text-end">Cantidad</th>
+                    <th class="text-end">Precio unitario</th>
+                    <th class="text-end">Subtotal</th>
+                    <th class="text-end" style="width: 80px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!items.Any())
+                {
+                    <tr><td colspan="6" class="text-center py-3 text-secondary">No hay items cargados.</td></tr>
+                }
+                @foreach (var item in items)
+                {
+                    <tr>
+                        <td>
+                            <strong>@(item.ProductoNombre ?? "-")</strong>
+                            @if (!string.IsNullOrEmpty(item.ProductoCodigo))
+                            {
+                                <br /><small class="text-secondary">@item.ProductoCodigo</small>
+                            }
+                        </td>
+                        <td>
+                            @switch (item.TipoLinea)
+                            {
+                                case "ENTREGA":
+                                    <span class="badge text-bg-primary">Entrega</span>
+                                    break;
+                                case "DEVOLUCION":
+                                    <span class="badge text-bg-warning">Devolución</span>
+                                    break;
+                                case "VENTA":
+                                    <span class="badge text-bg-info">Venta</span>
+                                    break;
+                            }
+                        </td>
+                        <td class="text-end">@item.Cantidad</td>
+                        <td class="text-end">@item.PrecioUnitario.ToArs()</td>
+                        <td class="text-end fw-semibold @(item.TipoLinea == "DEVOLUCION" ? "text-danger" : "")">
+                            @(item.TipoLinea == "DEVOLUCION" ? "- " : "")@item.Subtotal.ToArs()
+                        </td>
+                        <td class="text-end">
+                            <form asp-action="RemoveItem" method="post" class="d-inline js-remove-item" data-producto="@(item.ProductoNombre ?? "-")">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="itemId" value="@item.Id" />
+                                <input type="hidden" name="pedidoId" value="@Model.Id" />
+                                <button type="button" class="btn btn-sm btn-danger js-remove-item-btn" title="Eliminar item">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@{
+    var itemsExistentes = items
+        .Select(i => new
+        {
+            productoId = i.ProductoId,
+            productoNombre = i.ProductoNombre ?? string.Empty,
+            tipoLinea = i.TipoLinea
+        })
+        .ToArray();
+    var itemsJson = System.Text.Json.JsonSerializer.Serialize(itemsExistentes);
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            var form = document.getElementById('js-add-item-form');
+            if (!form) return;
+
+            var existentes = @Html.Raw(itemsJson);
+            var tipoLabels = {
+                'VENTA': 'Venta',
+                'ENTREGA': 'Entrega',
+                'DEVOLUCION': 'Devolución'
+            };
+
+            form.addEventListener('submit', function (e) {
+                var productoId = form.querySelector('[name="ProductoId"]').value;
+                var tipoLinea = form.querySelector('[name="TipoLinea"]').value;
+                if (!productoId || !tipoLinea) return;
+
+                var select = form.querySelector('[name="ProductoId"]');
+                var productoNombre = select.options[select.selectedIndex].text.split(' - ')[0];
+
+                var duplicado = existentes.find(function (it) {
+                    return String(it.productoId) === String(productoId) && it.tipoLinea === tipoLinea;
+                });
+
+                if (duplicado) {
+                    e.preventDefault();
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Producto ya agregado',
+                        html: 'El producto <strong>' + productoNombre + '</strong> ya está cargado en este pedido como <strong>' + tipoLabels[tipoLinea] + '</strong>.<br><br>Si necesita modificar la cantidad, primero elimine el item existente y vuelva a cargarlo.',
+                        confirmButtonText: 'Entendido',
+                        confirmButtonColor: '#0d6efd',
+                        allowOutsideClick: true,
+                        allowEscapeKey: true
+                    });
+                }
+            });
+        })();
+
+        document.querySelectorAll('.js-remove-item-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var form = btn.closest('form');
+                var producto = form.getAttribute('data-producto') || 'este item';
+                Swal.fire({
+                    title: '¿Eliminar item?',
+                    html: 'Se eliminará <strong>' + producto + '</strong> del pedido. Esta acción no se puede deshacer.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar',
+                    reverseButtons: true
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        form.submit();
+                    }
+                });
+            });
+        });
+
+        (function () {
+            var target = document.getElementById('itemsTable');
+            if (!target) return;
+            var offset = 70;
+            var rect = target.getBoundingClientRect();
+            if (rect.top < offset || rect.top > window.innerHeight) {
+                var top = window.pageYOffset + rect.top - offset;
+                window.scrollTo({ top: top, behavior: 'smooth' });
+            }
+        })();
+
+        (function () {
+            var descuento = document.getElementById('js-descuento');
+            var total = document.getElementById('js-total');
+            var subtotal = document.querySelector('input[name="Subtotal"]');
+            if (!descuento || !total || !subtotal) return;
+
+            function recalcularTotal() {
+                var s = parseFloat(subtotal.value) || 0;
+                var d = parseFloat(descuento.value) || 0;
+                if (d < 0) d = 0;
+                if (d > 100) d = 100;
+                total.value = (s - (s * d / 100)).toFixed(2);
+            }
+
+            descuento.addEventListener('blur', recalcularTotal);
+            descuento.addEventListener('input', function () {
+                var v = parseFloat(descuento.value);
+                if (!isNaN(v) && v > 100) descuento.value = 100;
+                if (!isNaN(v) && v < 0) descuento.value = 0;
+            });
+        })();
+    </script>
+}
