@@ -2,12 +2,14 @@
 @{
     ViewData["Title"] = "Pedidos";
     var numero = ViewBag.Numero as string;
+    var estadoId = ViewBag.EstadoId as ulong?;
     var desde = ViewBag.Desde as DateTime?;
     var hasta = ViewBag.Hasta as DateTime?;
     var pagina = (int)(ViewBag.Pagina ?? 1);
     var tamanio = (int)(ViewBag.Tamanio ?? 25);
     var total = (int)(ViewBag.Total ?? 0);
     var totalPaginas = tamanio > 0 ? (int)Math.Ceiling(total / (double)tamanio) : 0;
+    var estados = (IEnumerable<ExtraGasMVC.DTOs.EstadoPedidoDto>)(ViewBag.Estados ?? Array.Empty<ExtraGasMVC.DTOs.EstadoPedidoDto>());
 }
 @section PageHeader {
     <div class="row mb-3">
@@ -24,20 +26,33 @@
 <div class="card">
     <div class="card-header">
         <form method="get" class="row g-2 align-items-end">
-            <div class="col-md-4">
-                <label class="form-label small mb-1">Numero</label>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Número</label>
                 <input type="text" name="numero" value="@numero" class="form-control" placeholder="PED-2026-00001" />
             </div>
             <div class="col-md-3">
+                <label class="form-label small mb-1">Estado</label>
+                <select name="estadoId" class="form-select">
+                    <option value="">Todos</option>
+                    @foreach (var e in estados)
+                    {
+                        <option value="@e.Id" selected="@(estadoId == e.Id)">@e.Nombre</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
                 <label class="form-label small mb-1">Desde</label>
                 <input type="date" name="desde" value="@(desde?.ToString("yyyy-MM-dd"))" class="form-control" />
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small mb-1">Hasta</label>
                 <input type="date" name="hasta" value="@(hasta?.ToString("yyyy-MM-dd"))" class="form-control" />
             </div>
-            <div class="col-md-2 d-grid">
-                <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>Filtrar</button>
+            <div class="col-md-2 d-flex gap-1">
+                <button type="submit" class="btn btn-primary flex-fill"><i class="bi bi-search me-1"></i>Filtrar</button>
+                <a asp-action="Index" class="btn btn-outline-secondary" title="Limpiar filtros">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                </a>
             </div>
         </form>
     </div>
@@ -45,7 +60,7 @@
         <table class="table table-hover table-striped align-middle mb-0">
             <thead>
                 <tr>
-                    <th>Numero</th>
+                    <th>Número</th>
                     <th>Fecha</th>
                     <th>Cliente</th>
                     <th class="text-end">Total</th>
@@ -65,20 +80,26 @@
                     <tr>
                         <td><a asp-action="Details" asp-route-id="@p.Id" class="text-decoration-none"><strong>@(p.Numero ?? "-")</strong></a></td>
                         <td>@p.Fecha.ToShortDate()</td>
-                        <td>#@p.ClienteId</td>
+                        <td>@(p.ClienteNombre ?? "-")</td>
                         <td class="text-end">@p.Total.ToArs()</td>
                         <td class="text-end">@p.MontoPagado.ToArs()</td>
                         <td class="text-end @(p.Saldo > 0 ? "text-danger fw-semibold" : "text-success")">@p.Saldo.ToArs()</td>
                         <td>
-                            <span class="badge text-bg-secondary">#@p.EstadoPedidoId</span>
+                            <span class="badge" style="background-color: @(p.EstadoColor ?? "#6c757d")">@(p.EstadoNombre ?? "-")</span>
                         </td>
                         <td class="text-end">
-                            <a asp-action="Details" asp-route-id="@p.Id" class="btn btn-sm btn-info"><i class="bi bi-eye"></i></a>
-                            <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-sm btn-primary"><i class="bi bi-pencil"></i></a>
-                            <form asp-action="Delete" asp-route-id="@p.Id" method="post" class="d-inline" onsubmit="return confirm('Eliminar pedido?');">
-                                @Html.AntiForgeryToken()
-                                <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i></button>
-                            </form>
+                            <a asp-action="Details" asp-route-id="@p.Id" class="btn btn-sm btn-info" title="Ver detalle">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            @if (p.EstadoCodigo != "ENTREGADO" && p.EstadoCodigo != "CANCELADO")
+                            {
+                                <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-sm btn-primary" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            }
+                            <a asp-action="Delete" asp-route-id="@p.Id" class="btn btn-sm btn-danger" title="Eliminar">
+                                <i class="bi bi-trash"></i>
+                            </a>
                         </td>
                     </tr>
                 }
@@ -96,6 +117,7 @@
                             <a class="page-link"
                                asp-action="Index"
                                asp-route-numero="@numero"
+                               asp-route-estadoId="@estadoId"
                                asp-route-desde="@(desde?.ToString("yyyy-MM-dd"))"
                                asp-route-hasta="@(hasta?.ToString("yyyy-MM-dd"))"
                                asp-route-pagina="@i"

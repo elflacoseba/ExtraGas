@@ -6,7 +6,6 @@ public class VPedidoResumen
     public string? Numero { get; set; }
     public DateTime Fecha { get; set; }
     public DateTime? FechaEntrega { get; set; }
-    public bool Entregado { get; set; }
     public ulong ClienteId { get; set; }
     public string Cliente { get; set; } = null!;
     public string ClienteTelefono { get; set; } = null!;

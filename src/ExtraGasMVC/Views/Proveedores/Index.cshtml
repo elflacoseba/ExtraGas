@@ -64,9 +64,9 @@
                         <td class="text-end">
                             <a asp-action="Details" asp-route-id="@p.Id" class="btn btn-sm btn-info"><i class="bi bi-eye"></i></a>
                             <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-sm btn-primary"><i class="bi bi-pencil"></i></a>
-                            <form asp-action="Delete" asp-route-id="@p.Id" method="post" class="d-inline" onsubmit="return confirm('Eliminar proveedor?');">
+                            <form asp-action="Delete" asp-route-id="@p.Id" method="post" class="d-inline js-confirm-form" data-name="este proveedor">
                                 @Html.AntiForgeryToken()
-                                <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i></button>
+                                <button type="button" class="btn btn-sm btn-danger" onclick="confirmarAccion(this)"><i class="bi bi-trash"></i></button>
                             </form>
                         </td>
                     </tr>

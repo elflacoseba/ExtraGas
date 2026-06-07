@@ -37,3 +37,4 @@ App_Data/TEMP/
 #Otros archivos y carpetas a ignorar
 node_modules/
 .DS_Store
+.atl/

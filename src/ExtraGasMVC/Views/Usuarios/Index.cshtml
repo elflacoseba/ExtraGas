@@ -85,9 +85,9 @@
                             <a asp-action="Edit" asp-route-id="@u.Id" class="btn btn-sm btn-primary" title="Editar">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            <form asp-action="Delete" asp-route-id="@u.Id" method="post" class="d-inline" onsubmit="return confirm('Esta seguro de desactivar este usuario?');">
+                            <form asp-action="Delete" asp-route-id="@u.Id" method="post" class="d-inline js-confirm-form" data-name="este usuario" data-action="desactivar">
                                 @Html.AntiForgeryToken()
-                                <button type="submit" class="btn btn-sm btn-danger" title="Desactivar">
+                                <button type="button" class="btn btn-sm btn-danger" title="Desactivar" onclick="confirmarAccion(this)">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </form>

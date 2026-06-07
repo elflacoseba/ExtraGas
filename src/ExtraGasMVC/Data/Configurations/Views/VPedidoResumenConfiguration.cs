@@ -15,7 +15,6 @@ public class VPedidoResumenConfiguration : IEntityTypeConfiguration<VPedidoResum
         builder.Property(v => v.Numero).HasColumnName("numero").HasMaxLength(20);
         builder.Property(v => v.Fecha).HasColumnName("fecha").HasColumnType("datetime");
         builder.Property(v => v.FechaEntrega).HasColumnName("fecha_entrega").HasColumnType("datetime");
-        builder.Property(v => v.Entregado).HasColumnName("entregado").HasColumnType("tinyint(1)");
         builder.Property(v => v.ClienteId).HasColumnName("cliente_id");
         builder.Property(v => v.Cliente).HasColumnName("cliente").HasMaxLength(201);
         builder.Property(v => v.ClienteTelefono).HasColumnName("cliente_telefono").HasMaxLength(25);
