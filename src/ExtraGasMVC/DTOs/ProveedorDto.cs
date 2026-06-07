@@ -46,9 +46,11 @@ public class CreateProveedorDto
     public string Cuit { get; set; } = null!;
 
     [Display(Name = "Teléfono principal")]
+    [Phone(ErrorMessage = "El formato del teléfono no es válido.")]
     public string? TelefonoPrincipal { get; set; }
 
     [Display(Name = "Teléfono secundario")]
+    [Phone(ErrorMessage = "El formato del teléfono no es válido.")]
     public string? TelefonoSecundario { get; set; }
 
     [Display(Name = "Email")]
@@ -83,6 +85,7 @@ public class CreateProveedorDto
     public string? ContactoNombre { get; set; }
 
     [Display(Name = "Teléfono de contacto")]
+    [Phone(ErrorMessage = "El formato del teléfono de contacto no es válido.")]
     public string? ContactoTelefono { get; set; }
 
     [Display(Name = "Email de contacto")]
@@ -117,9 +120,11 @@ public class UpdateProveedorDto
     public string Cuit { get; set; } = null!;
 
     [Display(Name = "Teléfono principal")]
+    [Phone(ErrorMessage = "El formato del teléfono no es válido.")]
     public string? TelefonoPrincipal { get; set; }
 
     [Display(Name = "Teléfono secundario")]
+    [Phone(ErrorMessage = "El formato del teléfono no es válido.")]
     public string? TelefonoSecundario { get; set; }
 
     [Display(Name = "Email")]
@@ -154,6 +159,7 @@ public class UpdateProveedorDto
     public string? ContactoNombre { get; set; }
 
     [Display(Name = "Teléfono de contacto")]
+    [Phone(ErrorMessage = "El formato del teléfono de contacto no es válido.")]
     public string? ContactoTelefono { get; set; }
 
     [Display(Name = "Email de contacto")]

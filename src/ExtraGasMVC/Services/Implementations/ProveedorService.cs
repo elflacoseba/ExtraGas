@@ -4,18 +4,22 @@ using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ExtraGasMVC.Services.Implementations;
 
 public class ProveedorService : IProveedorService
 {
+    private const string ProvinciasCacheKey = "provincias_all";
     private readonly ExtraGasDbContext _context;
     private readonly IMapper _mapper;
+    private readonly IMemoryCache _cache;
 
-    public ProveedorService(ExtraGasDbContext context, IMapper mapper)
+    public ProveedorService(ExtraGasDbContext context, IMapper mapper, IMemoryCache cache)
     {
         _context = context;
         _mapper = mapper;
+        _cache = cache;
     }
 
     public async Task<ProveedorDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
@@ -68,11 +72,11 @@ public class ProveedorService : IProveedorService
 
         if (!string.IsNullOrWhiteSpace(busqueda))
         {
-            var q = busqueda.Trim();
+            var q = busqueda.Trim().ToLower();
             query = query.Where(p =>
-                p.RazonSocial.Contains(q)
-                || p.Cuit.Contains(q)
-                || (p.NombreFantasia != null && p.NombreFantasia.Contains(q)));
+                p.RazonSocial.ToLower().Contains(q)
+                || p.Cuit.ToLower().Contains(q)
+                || (p.NombreFantasia != null && p.NombreFantasia.ToLower().Contains(q)));
         }
 
         var total = await query.CountAsync(ct);
@@ -143,12 +147,18 @@ public class ProveedorService : IProveedorService
 
     public async Task<IEnumerable<ProvinciaDto>> GetProvinciasAsync(CancellationToken ct = default)
     {
-        var provincias = await _context.Provincias
-            .AsNoTracking()
-            .OrderBy(p => p.Nombre)
-            .ToListAsync(ct);
-        
-        return _mapper.Map<IEnumerable<ProvinciaDto>>(provincias);
+        return await _cache.GetOrCreateAsync(ProvinciasCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
+            entry.SlidingExpiration = TimeSpan.FromMinutes(15);
+
+            var provincias = await _context.Provincias
+                .AsNoTracking()
+                .OrderBy(p => p.Nombre)
+                .ToListAsync(ct);
+
+            return _mapper.Map<List<ProvinciaDto>>(provincias);
+        }) ?? [];
     }
 
     private async Task<bool> IsCuitUniqueAsync(string cuit, CancellationToken ct)
