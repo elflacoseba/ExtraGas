@@ -3,6 +3,10 @@
     ViewData["Title"] = "Proveedores";
     var busqueda = ViewBag.Busqueda as string;
     var soloActivos = (bool)(ViewBag.SoloActivos ?? true);
+    var pagina = (int)(ViewBag.Pagina ?? 1);
+    var tamanio = (int)(ViewBag.Tamanio ?? 25);
+    var total = (int)(ViewBag.Total ?? 0);
+    var totalPaginas = tamanio > 0 ? (int)Math.Ceiling(total / (double)tamanio) : 0;
 }
 @section PageHeader {
     <div class="mb-3">
@@ -16,10 +20,11 @@
         <form method="get" class="row g-2 align-items-end">
             <div class="col-md-6">
                 <label class="form-label small mb-1">Buscar</label>
-                <input type="text" name="busqueda" value="@busqueda" class="form-control" placeholder="Razon social, CUIT o nombre fantasia" />
+                <input type="text" name="busqueda" value="@busqueda" class="form-control" placeholder="Razón social, CUIT o nombre fantasía" />
             </div>
             <div class="col-md-2">
                 <div class="form-check mt-3">
+                    <input type="hidden" name="soloActivos" value="false" />
                     <input class="form-check-input" type="checkbox" id="soloActivos" name="soloActivos" value="true" @(soloActivos ? "checked" : "") />
                     <label class="form-check-label" for="soloActivos">Solo activos</label>
                 </div>
@@ -34,11 +39,11 @@
         <table class="table table-hover table-striped align-middle mb-0">
             <thead>
                 <tr>
-                    <th>Codigo</th>
-                    <th>Razon social</th>
-                    <th>Nombre fantasia</th>
+                    <th>Código</th>
+                    <th>Razón social</th>
+                    <th>Nombre fantasía</th>
                     <th>CUIT</th>
-                    <th>Telefono</th>
+                    <th>Teléfono</th>
                     <th>Ciudad</th>
                     <th class="text-center">Estado</th>
                     <th class="text-end" style="width: 200px;">Acciones</th>
@@ -62,16 +67,39 @@
                             @if (p.Activo) { <span class="badge text-bg-success">Activo</span> } else { <span class="badge text-bg-secondary">Inactivo</span> }
                         </td>
                         <td class="text-end">
-                            <a asp-action="Details" asp-route-id="@p.Id" class="btn btn-sm btn-info"><i class="bi bi-eye"></i></a>
-                            <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-sm btn-primary"><i class="bi bi-pencil"></i></a>
+                            <a asp-action="Details" asp-route-id="@p.Id" class="btn btn-sm btn-info" title="Ver"><i class="bi bi-eye"></i></a>
+                            <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-sm btn-primary" title="Editar"><i class="bi bi-pencil"></i></a>
                             <form asp-action="Delete" asp-route-id="@p.Id" method="post" class="d-inline js-confirm-form" data-name="este proveedor">
                                 @Html.AntiForgeryToken()
-                                <button type="button" class="btn btn-sm btn-danger" onclick="confirmarAccion(this)"><i class="bi bi-trash"></i></button>
+                                <button type="button" class="btn btn-sm btn-danger" title="Eliminar" onclick="confirmarAccion(this)"><i class="bi bi-trash"></i></button>
                             </form>
                         </td>
                     </tr>
                 }
             </tbody>
         </table>
+    </div>
+    <div class="card-footer clearfix">
+        <div class="float-end">
+            <small class="text-secondary me-2">@total registro@(total == 1 ? "" : "s")</small>
+        </div>
+        @if (totalPaginas > 1)
+        {
+            <nav>
+                <ul class="pagination pagination-sm m-0 float-end">
+                    @for (var i = 1; i <= totalPaginas; i++)
+                    {
+                        <li class="page-item @(i == pagina ? "active" : "")">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-busqueda="@busqueda"
+                               asp-route-soloActivos="@soloActivos"
+                               asp-route-pagina="@i"
+                               asp-route-tamanio="@tamanio">@i</a>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        }
     </div>
 </div>

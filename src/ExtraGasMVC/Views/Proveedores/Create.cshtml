@@ -17,28 +17,33 @@
     <form asp-action="Create" method="post">
         @Html.AntiForgeryToken()
         <div class="card-body">
+            <div class="mb-3"><span class="text-danger">*</span> Campos obligatorios</div>
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
             <div class="row g-3">
                 <div class="col-md-3">
                     <label asp-for="Codigo" class="form-label"></label>
                     <input asp-for="Codigo" class="form-control" />
+                    <span asp-validation-for="Codigo" class="text-danger"></span>
                 </div>
                 <div class="col-md-6">
-                    <label asp-for="RazonSocial" class="form-label"></label>
-                    <input asp-for="RazonSocial" class="form-control" required />
+                    <label asp-for="RazonSocial" class="form-label"></label> <span class="text-danger">*</span>
+                    <input asp-for="RazonSocial" class="form-control" />
+                    <span asp-validation-for="RazonSocial" class="text-danger"></span>
                 </div>
                 <div class="col-md-3">
-                    <label asp-for="Cuit" class="form-label"></label>
-                    <input asp-for="Cuit" class="form-control" required />
+                    <label asp-for="Cuit" class="form-label"></label> <span class="text-danger">*</span>
+                    <input asp-for="Cuit" class="form-control" />
+                    <span asp-validation-for="Cuit" class="text-danger"></span>
                 </div>
                 <div class="col-md-6">
                     <label asp-for="NombreFantasia" class="form-label"></label>
                     <input asp-for="NombreFantasia" class="form-control" />
+                    <span asp-validation-for="NombreFantasia" class="text-danger"></span>
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
                     <div class="form-check">
                         <input asp-for="Activo" class="form-check-input" type="checkbox" />
-                        <label asp-for="Activo" class="form-check-label">Activo</label>
+                        <label asp-for="Activo" class="form-check-label"></label>
                     </div>
                 </div>
             </div>
@@ -47,65 +52,86 @@
                 <div class="col-md-4">
                     <label asp-for="TelefonoPrincipal" class="form-label"></label>
                     <input asp-for="TelefonoPrincipal" class="form-control" />
+                    <span asp-validation-for="TelefonoPrincipal" class="text-danger"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="TelefonoSecundario" class="form-label"></label>
                     <input asp-for="TelefonoSecundario" class="form-control" />
+                    <span asp-validation-for="TelefonoSecundario" class="text-danger"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="Email" class="form-label"></label>
-                    <input asp-for="Email" type="email" class="form-control" />
+                    <input asp-for="Email" class="form-control" />
+                    <span asp-validation-for="Email" class="text-danger"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="ContactoNombre" class="form-label"></label>
                     <input asp-for="ContactoNombre" class="form-control" />
+                    <span asp-validation-for="ContactoNombre" class="text-danger"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="ContactoTelefono" class="form-label"></label>
                     <input asp-for="ContactoTelefono" class="form-control" />
+                    <span asp-validation-for="ContactoTelefono" class="text-danger"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="ContactoEmail" class="form-label"></label>
-                    <input asp-for="ContactoEmail" type="email" class="form-control" />
+                    <input asp-for="ContactoEmail" class="form-control" />
+                    <span asp-validation-for="ContactoEmail" class="text-danger"></span>
                 </div>
             </div>
-            <h5 class="mt-4">Direccion</h5>
+            <h5 class="mt-4">Dirección</h5>
             <div class="row g-3">
                 <div class="col-md-5">
                     <label asp-for="Calle" class="form-label"></label>
                     <input asp-for="Calle" class="form-control" />
+                    <span asp-validation-for="Calle" class="text-danger"></span>
                 </div>
                 <div class="col-md-2">
                     <label asp-for="Numero" class="form-label"></label>
                     <input asp-for="Numero" class="form-control" />
+                    <span asp-validation-for="Numero" class="text-danger"></span>
                 </div>
                 <div class="col-md-1">
                     <label asp-for="Piso" class="form-label"></label>
                     <input asp-for="Piso" class="form-control" />
+                    <span asp-validation-for="Piso" class="text-danger"></span>
                 </div>
                 <div class="col-md-1">
                     <label asp-for="Depto" class="form-label"></label>
                     <input asp-for="Depto" class="form-control" />
+                    <span asp-validation-for="Depto" class="text-danger"></span>
                 </div>
                 <div class="col-md-3">
                     <label asp-for="CodigoPostal" class="form-label"></label>
                     <input asp-for="CodigoPostal" class="form-control" />
+                    <span asp-validation-for="CodigoPostal" class="text-danger"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="Ciudad" class="form-label"></label>
                     <input asp-for="Ciudad" class="form-control" />
+                    <span asp-validation-for="Ciudad" class="text-danger"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="ProvinciaId" class="form-label"></label>
-                    <input asp-for="ProvinciaId" type="number" class="form-control" />
+                    <select asp-for="ProvinciaId" class="form-select">
+                        <option value="">-- Seleccione provincia --</option>
+                        @foreach (var p in (IEnumerable<ExtraGasMVC.DTOs.ProvinciaDto>)ViewBag.Provincias)
+                        {
+                            <option value="@p.Id">@p.Nombre</option>
+                        }
+                    </select>
+                    <span asp-validation-for="ProvinciaId" class="text-danger"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="Referencias" class="form-label"></label>
                     <input asp-for="Referencias" class="form-control" />
+                    <span asp-validation-for="Referencias" class="text-danger"></span>
                 </div>
             </div>
             <h5 class="mt-4">Observaciones</h5>
             <textarea asp-for="Observaciones" class="form-control" rows="3"></textarea>
+            <span asp-validation-for="Observaciones" class="text-danger"></span>
         </div>
         <div class="card-footer d-flex gap-2">
             <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i> Guardar</button>

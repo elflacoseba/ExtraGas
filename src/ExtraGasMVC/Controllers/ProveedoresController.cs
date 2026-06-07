@@ -1,3 +1,4 @@
+using AutoMapper;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -6,55 +7,68 @@ using Microsoft.AspNetCore.Mvc;
 namespace ExtraGasMVC.Controllers;
 
 [Authorize(Policy = "OperadorOrAdmin")]
-public class ProveedoresController : Controller
+public class ProveedoresController : BaseController
 {
     private readonly IProveedorService _proveedorService;
+    private readonly IMapper _mapper;
 
-    public ProveedoresController(IProveedorService proveedorService)
+    public ProveedoresController(IProveedorService proveedorService, IMapper mapper)
     {
         _proveedorService = proveedorService;
+        _mapper = mapper;
     }
 
-    public async Task<IActionResult> Index(string? busqueda, bool soloActivos = true, CancellationToken ct = default)
+    public async Task<IActionResult> Index(string? busqueda, bool soloActivos = true, int pagina = 1, int tamanio = 25, CancellationToken ct = default)
     {
-        var proveedores = await _proveedorService.GetAllAsync(ct);
-        if (soloActivos) proveedores = proveedores.Where(p => p.Activo);
-        if (!string.IsNullOrWhiteSpace(busqueda))
-        {
-            var q = busqueda.Trim().ToLower();
-            proveedores = proveedores.Where(p =>
-                p.RazonSocial.ToLower().Contains(q)
-                || p.Cuit.Contains(q)
-                || (p.NombreFantasia ?? string.Empty).ToLower().Contains(q));
-        }
+        var resultado = await _proveedorService.SearchAsync(busqueda, soloActivos, pagina, tamanio, ct);
         ViewBag.Busqueda = busqueda;
         ViewBag.SoloActivos = soloActivos;
-        return View(proveedores.OrderBy(p => p.RazonSocial).ToList());
+        ViewBag.Pagina = resultado.Pagina;
+        ViewBag.Tamanio = resultado.Tamanio;
+        ViewBag.Total = resultado.Total;
+        return View(resultado.Items);
     }
 
     public async Task<IActionResult> Details(ulong id, CancellationToken ct = default)
     {
         var proveedor = await _proveedorService.GetByIdAsync(id, ct);
         if (proveedor is null) return NotFound();
+        await CargarProvinciasAsync(ct);
         return View(proveedor);
     }
 
-    public IActionResult Create() => View(new CreateProveedorDto { Activo = true });
+    public async Task<IActionResult> Create(CancellationToken ct = default)
+    {
+        await CargarProvinciasAsync(ct);
+        return View(new CreateProveedorDto { Activo = true });
+    }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(CreateProveedorDto proveedor, CancellationToken ct = default)
     {
-        if (!ModelState.IsValid) return View(proveedor);
+        if (!ModelState.IsValid)
+        {
+            await CargarProvinciasAsync(ct);
+            return View(proveedor);
+        }
         try
         {
-            await _proveedorService.CreateAsync(proveedor, ct);
+            var currentUserId = GetCurrentUserId();
+            await _proveedorService.CreateAsync(proveedor, currentUserId, ct);
             TempData["Success"] = $"Proveedor {proveedor.RazonSocial} creado.";
             return RedirectToAction(nameof(Index));
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError("Cuit", ex.Message);
+            await CargarProvinciasAsync(ct);
+            return View(proveedor);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear el proveedor: {ex.Message}");
+            await CargarProvinciasAsync(ct);
             return View(proveedor);
         }
     }
@@ -64,31 +78,8 @@ public class ProveedoresController : Controller
         var proveedor = await _proveedorService.GetByIdAsync(id, ct);
         if (proveedor is null) return NotFound();
         
-        var updateDto = new UpdateProveedorDto
-        {
-            Id = proveedor.Id,
-            Codigo = proveedor.Codigo,
-            RazonSocial = proveedor.RazonSocial,
-            NombreFantasia = proveedor.NombreFantasia,
-            Cuit = proveedor.Cuit,
-            TelefonoPrincipal = proveedor.TelefonoPrincipal,
-            TelefonoSecundario = proveedor.TelefonoSecundario,
-            Email = proveedor.Email,
-            Calle = proveedor.Calle,
-            Numero = proveedor.Numero,
-            Piso = proveedor.Piso,
-            Depto = proveedor.Depto,
-            Ciudad = proveedor.Ciudad,
-            CodigoPostal = proveedor.CodigoPostal,
-            ProvinciaId = proveedor.ProvinciaId,
-            Referencias = proveedor.Referencias,
-            ContactoNombre = proveedor.ContactoNombre,
-            ContactoTelefono = proveedor.ContactoTelefono,
-            ContactoEmail = proveedor.ContactoEmail,
-            Observaciones = proveedor.Observaciones,
-            Activo = proveedor.Activo
-        };
-        
+        var updateDto = _mapper.Map<UpdateProveedorDto>(proveedor);
+        await CargarProvinciasAsync(ct);
         return View(updateDto);
     }
 
@@ -97,16 +88,28 @@ public class ProveedoresController : Controller
     public async Task<IActionResult> Edit(ulong id, UpdateProveedorDto proveedor, CancellationToken ct = default)
     {
         if (id != proveedor.Id) return BadRequest();
-        if (!ModelState.IsValid) return View(proveedor);
+        if (!ModelState.IsValid)
+        {
+            await CargarProvinciasAsync(ct);
+            return View(proveedor);
+        }
         try
         {
-            await _proveedorService.UpdateAsync(proveedor, ct);
+            var currentUserId = GetCurrentUserId();
+            await _proveedorService.UpdateAsync(id, proveedor, currentUserId, ct);
             TempData["Success"] = $"Proveedor {proveedor.RazonSocial} actualizado.";
             return RedirectToAction(nameof(Index));
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError("Cuit", ex.Message);
+            await CargarProvinciasAsync(ct);
+            return View(proveedor);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar el proveedor: {ex.Message}");
+            await CargarProvinciasAsync(ct);
             return View(proveedor);
         }
     }
@@ -115,8 +118,14 @@ public class ProveedoresController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(ulong id, CancellationToken ct = default)
     {
-        var ok = await _proveedorService.DeleteAsync(id, ct);
-        TempData[ok ? "Success" : "Error"] = ok ? "Proveedor eliminado." : "No se encontro el proveedor.";
+        var currentUserId = GetCurrentUserId();
+        var ok = await _proveedorService.DeleteAsync(id, currentUserId, ct);
+        TempData[ok ? "Success" : "Error"] = ok ? "Proveedor eliminado." : "No se encontró el proveedor.";
         return RedirectToAction(nameof(Index));
+    }
+
+    private async Task CargarProvinciasAsync(CancellationToken ct = default)
+    {
+        ViewBag.Provincias = await _proveedorService.GetProvinciasAsync(ct);
     }
 }
