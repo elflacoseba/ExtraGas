@@ -47,7 +47,7 @@
                     </select>
                     <span asp-validation-for="CanalVentaId" class="text-danger small"></span>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label asp-for="ClienteId" class="form-label"></label> <span class="text-danger">*</span>
                     <select asp-for="ClienteId" class="form-select" required>
                         <option value="">-- Seleccione cliente --</option>
@@ -58,7 +58,7 @@
                     </select>
                     <span asp-validation-for="ClienteId" class="text-danger small"></span>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label asp-for="EmpleadoId" class="form-label"></label> <span class="text-danger">*</span>
                     <select asp-for="EmpleadoId" class="form-select" required>
                         <option value="">-- Seleccione empleado --</option>
@@ -69,7 +69,7 @@
                     </select>
                     <span asp-validation-for="EmpleadoId" class="text-danger small"></span>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label asp-for="EstadoPedidoId" class="form-label"></label> <span class="text-danger">*</span>
                     <select asp-for="EstadoPedidoId" class="form-select" required>
                         @foreach (var e in estados)
