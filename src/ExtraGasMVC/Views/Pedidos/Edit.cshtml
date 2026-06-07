@@ -8,11 +8,18 @@
     };
     var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.DTOs.ClienteDto> ?? Array.Empty<ExtraGasMVC.DTOs.ClienteDto>();
     var empleados = ViewBag.Empleados as IEnumerable<ExtraGasMVC.DTOs.EmpleadoDto> ?? Array.Empty<ExtraGasMVC.DTOs.EmpleadoDto>();
-    var estados = ViewBag.Estados as IEnumerable<ExtraGasMVC.DTOs.EstadoPedidoDto> ?? Array.Empty<ExtraGasMVC.DTOs.EstadoPedidoDto>();
     var canales = ViewBag.Canales as IEnumerable<ExtraGasMVC.DTOs.CanalVentaDto> ?? Array.Empty<ExtraGasMVC.DTOs.CanalVentaDto>();
     var medios = ViewBag.MediosContacto as IEnumerable<ExtraGasMVC.DTOs.MedioContactoPedidoDto> ?? Array.Empty<ExtraGasMVC.DTOs.MedioContactoPedidoDto>();
     var productos = ViewBag.Productos as IEnumerable<ExtraGasMVC.DTOs.ProductoDto> ?? Array.Empty<ExtraGasMVC.DTOs.ProductoDto>();
     var items = ViewBag.Items as IEnumerable<ExtraGasMVC.DTOs.PedidoItemDto> ?? Array.Empty<ExtraGasMVC.DTOs.PedidoItemDto>();
+    var transiciones = ViewBag.Transiciones as List<ExtraGasMVC.DTOs.EstadoPedidoDto> ?? new List<ExtraGasMVC.DTOs.EstadoPedidoDto>();
+    dynamic estadoActual = ViewBag.EstadoActual;
+    var estadoCodigo = (string?)estadoActual?.Codigo;
+    var estadoColor = (string?)estadoActual?.Color ?? "#6c757d";
+    var estadoNombre = (string?)estadoActual?.Nombre ?? "-";
+    var esFinal = estadoCodigo == "ENTREGADO" || estadoCodigo == "CANCELADO";
+    var soloObservaciones = estadoCodigo == "EN_PREPARACION" || estadoCodigo == "CONFIRMADO";
+    var editable = !esFinal && !soloObservaciones;
 }
 @section PageHeader {
     <div class="mb-3">
@@ -32,16 +39,16 @@
             <div class="row g-3">
                 <div class="col-md-4">
                     <label asp-for="Fecha" class="form-label"></label> <span class="text-danger">*</span>
-                    <input asp-for="Fecha" type="datetime-local" class="form-control" required />
+                    <input asp-for="Fecha" type="datetime-local" class="form-control" required disabled="@(!editable)" />
                     <span asp-validation-for="Fecha" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="FechaEntrega" class="form-label"></label>
-                    <input asp-for="FechaEntrega" type="date" class="form-control" />
+                    <input asp-for="FechaEntrega" type="date" class="form-control" disabled="@(esFinal || soloObservaciones)" />
                 </div>
                 <div class="col-md-4">
                     <label asp-for="CanalVentaId" class="form-label"></label> <span class="text-danger">*</span>
-                    <select asp-for="CanalVentaId" class="form-select" required>
+                    <select asp-for="CanalVentaId" class="form-select" required disabled="@(!editable)">
                         <option value="">-- Seleccione canal --</option>
                         @foreach (var c in canales)
                         {
@@ -52,7 +59,7 @@
                 </div>
                 <div class="col-md-4">
                     <label asp-for="ClienteId" class="form-label"></label> <span class="text-danger">*</span>
-                    <select asp-for="ClienteId" class="form-select" required>
+                    <select asp-for="ClienteId" class="form-select" required disabled="@(!editable)">
                         <option value="">-- Seleccione cliente --</option>
                         @foreach (var c in clientes)
                         {
@@ -63,7 +70,7 @@
                 </div>
                 <div class="col-md-4">
                     <label asp-for="EmpleadoId" class="form-label"></label> <span class="text-danger">*</span>
-                    <select asp-for="EmpleadoId" class="form-select" required>
+                    <select asp-for="EmpleadoId" class="form-select" required disabled="@(!editable)">
                         <option value="">-- Seleccione empleado --</option>
                         @foreach (var e in empleados)
                         {
@@ -73,18 +80,14 @@
                     <span asp-validation-for="EmpleadoId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="EstadoPedidoId" class="form-label"></label> <span class="text-danger">*</span>
-                    <select asp-for="EstadoPedidoId" class="form-select" required>
-                        @foreach (var e in estados)
-                        {
-                            <option value="@e.Id" selected="@(Model.EstadoPedidoId == e.Id)">@e.Nombre</option>
-                        }
-                    </select>
-                    <span asp-validation-for="EstadoPedidoId" class="text-danger small"></span>
+                    <label class="form-label">Estado</label>
+                    <div>
+                        <span class="badge fs-6" style="background-color: @estadoColor">@estadoNombre</span>
+                    </div>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="MedioContactoId" class="form-label"></label>
-                    <select asp-for="MedioContactoId" class="form-select">
+                    <select asp-for="MedioContactoId" class="form-select" disabled="@(!editable)">
                         <option value="">-- Seleccione medio --</option>
                         @foreach (var m in medios)
                         {
@@ -93,6 +96,12 @@
                     </select>
                 </div>
             </div>
+            @if (estadoCodigo == "CANCELADO" && !string.IsNullOrEmpty(ViewBag.MotivoCancelacion as string))
+            {
+                <div class="alert alert-danger mt-3 mb-0">
+                    <strong>Motivo de cancelación:</strong> @ViewBag.MotivoCancelacion
+                </div>
+            }
             <h5 class="mt-4">Totales</h5>
             <div class="row g-3">
                 <div class="col-md-4">
@@ -105,7 +114,7 @@
                 <div class="col-md-4">
                     <label asp-for="Descuento" class="form-label"></label>
                     <div class="input-group">
-                        <input asp-for="Descuento" id="js-descuento" type="number" step="0.01" min="0" max="100" class="form-control" />
+                        <input asp-for="Descuento" id="js-descuento" type="number" step="0.01" min="0" max="100" class="form-control" disabled="@(esFinal || soloObservaciones)" />
                         <span class="input-group-text"><i class="bi bi-percent"></i></span>
                     </div>
                     <span asp-validation-for="Descuento" class="text-danger small"></span>
@@ -122,131 +131,199 @@
             <div class="row g-3">
                 <div class="col-12">
                     <label asp-for="DireccionEntrega" class="form-label"></label>
-                    <input asp-for="DireccionEntrega" class="form-control" placeholder="Calle, número, piso, depto., ciudad" />
+                    <input asp-for="DireccionEntrega" class="form-control" placeholder="Calle, número, piso, depto., ciudad" disabled="@(esFinal)" />
                     <span asp-validation-for="DireccionEntrega" class="text-danger small"></span>
                 </div>
                 <div class="col-12">
                     <label asp-for="Observaciones" class="form-label"></label>
-                    <textarea asp-for="Observaciones" class="form-control" rows="3"></textarea>
+                    <textarea asp-for="Observaciones" class="form-control" rows="3" disabled="@(esFinal)"></textarea>
                     <span asp-validation-for="Observaciones" class="text-danger small"></span>
                 </div>
             </div>
         </div>
-        <div class="card-footer d-flex gap-2">
-            <button type="submit" class="btn btn-primary">
-                <i class="bi bi-save me-1"></i> Guardar cambios
-            </button>
-            <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
+        <div class="card-footer d-flex flex-wrap gap-2">
+            @if (editable || soloObservaciones)
+            {
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save me-1"></i> Guardar cambios
+                </button>
+            }
+            @if (transiciones.Any())
+            {
+                <div class="vr"></div>
+                @foreach (var t in transiciones)
+                {
+                    if (t.Codigo == "ENTREGADO")
+                    {
+                        <form asp-action="CambiarEstado" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <input type="hidden" name="nuevoEstadoId" value="@t.Id" />
+                            <button type="button" class="btn btn-success js-entregar-btn">
+                                <i class="bi bi-check-circle me-1"></i> @t.Nombre
+                            </button>
+                        </form>
+                    }
+                    else if (t.Codigo == "CANCELADO")
+                    {
+                        <form asp-action="CambiarEstado" method="post" class="d-inline js-cancelar-form">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <input type="hidden" name="nuevoEstadoId" value="@t.Id" />
+                            <input type="hidden" name="motivoCancelacion" value="" />
+                            <button type="button" class="btn btn-danger js-cancelar-btn">
+                                <i class="bi bi-x-circle me-1"></i> @t.Nombre
+                            </button>
+                        </form>
+                    }
+                    else if (t.Codigo == "CONFIRMADO")
+                    {
+                        <button type="button" class="btn btn-outline-primary js-confirmar-btn"
+                                data-tiene-items="@items.Any().ToString().ToLower()"
+                                data-action="@Url.Action("CambiarEstado")"
+                                data-pedido-id="@Model.Id"
+                                data-nuevo-estado-id="@t.Id">
+                            <i class="bi bi-arrow-right-circle me-1"></i> @t.Nombre
+                        </button>
+                    }
+                    else if (t.Codigo == "EN_PREPARACION" || t.Codigo == "PENDIENTE")
+                    {
+                        <button type="button" class="btn btn-outline-primary js-preparacion-btn"
+                                data-estado-nombre="@t.Nombre"
+                                data-action="@Url.Action("CambiarEstado")"
+                                data-pedido-id="@Model.Id"
+                                data-nuevo-estado-id="@t.Id">
+                            <i class="bi bi-arrow-right-circle me-1"></i> @t.Nombre
+                        </button>
+                    }
+                }
+            }
+            <a asp-action="Index" class="btn btn-outline-secondary ms-auto">Volver al listado</a>
         </div>
     </form>
 </div>
 
-<div class="card mt-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0">Items del pedido</h3>
-        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="collapse" data-bs-target="#addItemForm">
-            <i class="bi bi-plus-circle me-1"></i> Agregar item
-        </button>
-    </div>
-    <div class="collapse" id="addItemForm">
-        <div class="card-body border-bottom bg-light">
-            <form asp-action="AddItem" method="post" id="js-add-item-form">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="PedidoId" value="@Model.Id" />
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-5">
-                        <label class="form-label">Producto <span class="text-danger">*</span></label>
-                        <select name="ProductoId" class="form-select" required>
-                            <option value="">-- Seleccione producto --</option>
-                            @foreach (var p in productos)
-                            {
-                                <option value="@p.Id">@p.Nombre (@p.Codigo) - @p.PrecioActual.ToArs()</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Tipo <span class="text-danger">*</span></label>
-                        <select name="TipoLinea" class="form-select" required>
-                            <option value="VENTA">Venta</option>
-                            <option value="ENTREGA">Entrega</option>
-                            <option value="DEVOLUCION">Devolución</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Cantidad <span class="text-danger">*</span></label>
-                        <input name="Cantidad" type="number" step="0.01" min="0.01" class="form-control" value="1" required />
-                    </div>
-                    <div class="col-md-2 d-grid">
-                        <button type="submit" class="btn btn-success">
-                            <i class="bi bi-plus-circle me-1"></i> Agregar
-                        </button>
-                    </div>
+@if (!esFinal)
+{
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title mb-0">Items del pedido</h3>
+            @if (!soloObservaciones)
+            {
+                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="collapse" data-bs-target="#addItemForm">
+                    <i class="bi bi-plus-circle me-1"></i> Agregar item
+                </button>
+            }
+        </div>
+        @if (!soloObservaciones)
+        {
+            <div class="collapse" id="addItemForm">
+                <div class="card-body border-bottom bg-light">
+                    <form asp-action="AddItem" method="post" id="js-add-item-form">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="PedidoId" value="@Model.Id" />
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-5">
+                                <label class="form-label">Producto <span class="text-danger">*</span></label>
+                                <select name="ProductoId" class="form-select" required>
+                                    <option value="">-- Seleccione producto --</option>
+                                    @foreach (var p in productos)
+                                    {
+                                        <option value="@p.Id">@p.Nombre (@p.Codigo) - @p.PrecioActual.ToArs()</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Tipo <span class="text-danger">*</span></label>
+                                <select name="TipoLinea" class="form-select" required>
+                                    <option value="VENTA">Venta</option>
+                                    <option value="ENTREGA">Entrega</option>
+                                    <option value="DEVOLUCION">Devolución</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Cantidad <span class="text-danger">*</span></label>
+                                <input name="Cantidad" type="number" step="0.01" min="0.01" class="form-control" value="1" required />
+                            </div>
+                            <div class="col-md-2 d-grid">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-plus-circle me-1"></i> Agregar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
                 </div>
-            </form>
+            </div>
+        }
+        <div class="card-body table-responsive p-0" id="itemsTable" style="scroll-margin-top: 70px;">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Tipo</th>
+                        <th class="text-end">Cantidad</th>
+                        <th class="text-end">Precio unitario</th>
+                        <th class="text-end">Subtotal</th>
+                        @if (!soloObservaciones)
+                        {
+                            <th class="text-end" style="width: 80px;">Acciones</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!items.Any())
+                    {
+                        <tr><td colspan="@(soloObservaciones ? 5 : 6)" class="text-center py-3 text-secondary">No hay items cargados.</td></tr>
+                    }
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@(item.ProductoNombre ?? "-")</strong>
+                                @if (!string.IsNullOrEmpty(item.ProductoCodigo))
+                                {
+                                    <br /><small class="text-secondary">@item.ProductoCodigo</small>
+                                }
+                            </td>
+                            <td>
+                                @switch (item.TipoLinea)
+                                {
+                                    case "ENTREGA":
+                                        <span class="badge text-bg-primary">Entrega</span>
+                                        break;
+                                    case "DEVOLUCION":
+                                        <span class="badge text-bg-warning">Devolución</span>
+                                        break;
+                                    case "VENTA":
+                                        <span class="badge text-bg-info">Venta</span>
+                                        break;
+                                }
+                            </td>
+                            <td class="text-end">@item.Cantidad</td>
+                            <td class="text-end">@item.PrecioUnitario.ToArs()</td>
+                            <td class="text-end fw-semibold @(item.TipoLinea == "DEVOLUCION" ? "text-danger" : "")">
+                                @(item.TipoLinea == "DEVOLUCION" ? "- " : "")@item.Subtotal.ToArs()
+                            </td>
+                            @if (!soloObservaciones)
+                            {
+                                <td class="text-end">
+                                    <form asp-action="RemoveItem" method="post" class="d-inline js-remove-item" data-producto="@(item.ProductoNombre ?? "-")">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="itemId" value="@item.Id" />
+                                        <input type="hidden" name="pedidoId" value="@Model.Id" />
+                                        <button type="button" class="btn btn-sm btn-danger js-remove-item-btn" title="Eliminar item">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     </div>
-    <div class="card-body table-responsive p-0" id="itemsTable" style="scroll-margin-top: 70px;">
-        <table class="table table-hover align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Producto</th>
-                    <th>Tipo</th>
-                    <th class="text-end">Cantidad</th>
-                    <th class="text-end">Precio unitario</th>
-                    <th class="text-end">Subtotal</th>
-                    <th class="text-end" style="width: 80px;">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                @if (!items.Any())
-                {
-                    <tr><td colspan="6" class="text-center py-3 text-secondary">No hay items cargados.</td></tr>
-                }
-                @foreach (var item in items)
-                {
-                    <tr>
-                        <td>
-                            <strong>@(item.ProductoNombre ?? "-")</strong>
-                            @if (!string.IsNullOrEmpty(item.ProductoCodigo))
-                            {
-                                <br /><small class="text-secondary">@item.ProductoCodigo</small>
-                            }
-                        </td>
-                        <td>
-                            @switch (item.TipoLinea)
-                            {
-                                case "ENTREGA":
-                                    <span class="badge text-bg-primary">Entrega</span>
-                                    break;
-                                case "DEVOLUCION":
-                                    <span class="badge text-bg-warning">Devolución</span>
-                                    break;
-                                case "VENTA":
-                                    <span class="badge text-bg-info">Venta</span>
-                                    break;
-                            }
-                        </td>
-                        <td class="text-end">@item.Cantidad</td>
-                        <td class="text-end">@item.PrecioUnitario.ToArs()</td>
-                        <td class="text-end fw-semibold @(item.TipoLinea == "DEVOLUCION" ? "text-danger" : "")">
-                            @(item.TipoLinea == "DEVOLUCION" ? "- " : "")@item.Subtotal.ToArs()
-                        </td>
-                        <td class="text-end">
-                            <form asp-action="RemoveItem" method="post" class="d-inline js-remove-item" data-producto="@(item.ProductoNombre ?? "-")">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="itemId" value="@item.Id" />
-                                <input type="hidden" name="pedidoId" value="@Model.Id" />
-                                <button type="button" class="btn btn-sm btn-danger js-remove-item-btn" title="Eliminar item">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-</div>
+}
 
 @{
     var itemsExistentes = items
@@ -317,6 +394,170 @@
                     reverseButtons: true
                 }).then(function (result) {
                     if (result.isConfirmed) {
+                        form.submit();
+                    }
+                });
+            });
+        });
+
+        document.querySelectorAll('.js-entregar-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var form = this.closest('form');
+                Swal.fire({
+                    title: '¿Confirmar entrega?',
+                    html: 'El pedido pasará a estado <strong>Entregado</strong>.<br>Esta acción <strong>no se puede deshacer</strong>.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#228B22',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Sí, marcar como entregado',
+                    cancelButtonText: 'Volver',
+                    reverseButtons: true
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        form.submit();
+                    }
+                });
+            });
+        });
+
+        document.querySelectorAll('.js-cancelar-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var form = this.closest('form');
+                Swal.fire({
+                    title: 'Cancelar Pedido',
+                    html: '<p class="text-danger mb-2">Esta acción <strong>no se puede deshacer</strong>.</p>',
+                    input: 'textarea',
+                    inputLabel: 'Motivo de cancelación',
+                    inputPlaceholder: 'Describa el motivo de la cancelación...',
+                    inputAttributes: { maxlength: 500 },
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Sí, cancelar pedido',
+                    cancelButtonText: 'Volver',
+                    reverseButtons: true,
+                    inputValidator: function (value) {
+                        if (!value || !value.trim()) {
+                            return 'Debe ingresar un motivo de cancelación';
+                        }
+                        if (value.length > 500) {
+                            return 'Máximo 500 caracteres';
+                        }
+                    }
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        form.querySelector('[name="motivoCancelacion"]').value = result.value.trim();
+                        form.submit();
+                    }
+                });
+            });
+        });
+
+        document.querySelectorAll('.js-preparacion-btn').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                var estadoNombre = btn.getAttribute('data-estado-nombre');
+                Swal.fire({
+                    title: '¿Cambiar estado?',
+                    html: 'El pedido pasará a estado <strong>' + estadoNombre + '</strong>.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#0d6efd',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Sí, continuar',
+                    cancelButtonText: 'Cancelar',
+                    reverseButtons: true
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        var form = document.createElement('form');
+                        form.method = 'post';
+                        form.action = btn.getAttribute('data-action');
+
+                        var tokenSrc = document.querySelector('input[name="__RequestVerificationToken"]');
+                        if (tokenSrc) {
+                            var token = document.createElement('input');
+                            token.type = 'hidden';
+                            token.name = '__RequestVerificationToken';
+                            token.value = tokenSrc.value;
+                            form.appendChild(token);
+                        }
+
+                        var idInput = document.createElement('input');
+                        idInput.type = 'hidden';
+                        idInput.name = 'id';
+                        idInput.value = btn.getAttribute('data-pedido-id');
+                        form.appendChild(idInput);
+
+                        var estadoInput = document.createElement('input');
+                        estadoInput.type = 'hidden';
+                        estadoInput.name = 'nuevoEstadoId';
+                        estadoInput.value = btn.getAttribute('data-nuevo-estado-id');
+                        form.appendChild(estadoInput);
+
+                        document.body.appendChild(form);
+                        form.submit();
+                    }
+                });
+            });
+        });
+
+        document.querySelectorAll('.js-confirmar-btn').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                var tieneItems = btn.getAttribute('data-tiene-items') === 'true';
+
+                if (!tieneItems) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'No se puede confirmar',
+                        html: 'El pedido no tiene <strong>ningún ítem</strong> agregado.<br>Agregue al menos un ítem antes de pasarlo a <strong>Confirmado</strong>.',
+                        confirmButtonText: 'Entendido',
+                        confirmButtonColor: '#0d6efd',
+                        allowOutsideClick: true,
+                        allowEscapeKey: true
+                    });
+                    return;
+                }
+
+                Swal.fire({
+                    title: '¿Pasar a Confirmado?',
+                    text: 'El pedido cambiará a estado Confirmado.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#0d6efd',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Sí, confirmar',
+                    cancelButtonText: 'Cancelar',
+                    reverseButtons: true
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        var form = document.createElement('form');
+                        form.method = 'post';
+                        form.action = btn.getAttribute('data-action');
+
+                        var tokenSrc = document.querySelector('input[name="__RequestVerificationToken"]');
+                        if (tokenSrc) {
+                            var token = document.createElement('input');
+                            token.type = 'hidden';
+                            token.name = '__RequestVerificationToken';
+                            token.value = tokenSrc.value;
+                            form.appendChild(token);
+                        }
+
+                        var idInput = document.createElement('input');
+                        idInput.type = 'hidden';
+                        idInput.name = 'id';
+                        idInput.value = btn.getAttribute('data-pedido-id');
+                        form.appendChild(idInput);
+
+                        var estadoInput = document.createElement('input');
+                        estadoInput.type = 'hidden';
+                        estadoInput.name = 'nuevoEstadoId';
+                        estadoInput.value = btn.getAttribute('data-nuevo-estado-id');
+                        form.appendChild(estadoInput);
+
+                        document.body.appendChild(form);
                         form.submit();
                     }
                 });

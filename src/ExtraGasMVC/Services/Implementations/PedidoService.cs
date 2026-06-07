@@ -168,7 +168,13 @@ public class PedidoService : IPedidoService
 
     public async Task<PedidoDto> CreateAsync(CreatePedidoDto pedidoDto, ulong? usuarioId, CancellationToken ct = default)
     {
+        var estadoPendiente = await _context.EstadosPedido
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Codigo == "PENDIENTE", ct)
+            ?? throw new InvalidOperationException("No se encontró el estado PENDIENTE en el catálogo.");
+
         var pedido = _mapper.Map<Pedido>(pedidoDto);
+        pedido.EstadoPedidoId = estadoPendiente.Id;
         pedido.Subtotal = 0;
         pedido.Descuento = 0;
         pedido.Total = 0;
@@ -193,7 +199,6 @@ public class PedidoService : IPedidoService
         pedido.FechaEntrega = pedidoDto.FechaEntrega;
         pedido.ClienteId = pedidoDto.ClienteId;
         pedido.EmpleadoId = pedidoDto.EmpleadoId;
-        pedido.EstadoPedidoId = pedidoDto.EstadoPedidoId;
         pedido.CanalVentaId = pedidoDto.CanalVentaId;
         pedido.MedioContactoId = pedidoDto.MedioContactoId;
         pedido.DireccionEntrega = pedidoDto.DireccionEntrega;
@@ -245,7 +250,7 @@ public class PedidoService : IPedidoService
         return true;
     }
 
-    public async Task<bool> CambiarEstadoAsync(ulong id, ulong nuevoEstadoId, ulong? usuarioId, CancellationToken ct = default)
+    public async Task<bool> CambiarEstadoAsync(ulong id, ulong nuevoEstadoId, string? motivoCancelacion, ulong? usuarioId, CancellationToken ct = default)
     {
         var pedido = await _context.Pedidos.FindAsync(new object[] { id }, ct);
         if (pedido == null)
@@ -254,12 +259,36 @@ public class PedidoService : IPedidoService
         if (pedido.EstadoPedidoId == nuevoEstadoId)
             return true;
 
-        var estadoActual = await _context.EstadosPedido
+        var estados = await _context.EstadosPedido
             .AsNoTracking()
-            .FirstOrDefaultAsync(e => e.Id == pedido.EstadoPedidoId, ct);
+            .ToListAsync(ct);
 
-        if (estadoActual?.EsFinal == true)
+        var estadoActual = estados.FirstOrDefault(e => e.Id == pedido.EstadoPedidoId);
+        var estadoDestino = estados.FirstOrDefault(e => e.Id == nuevoEstadoId);
+
+        if (estadoActual is null)
+            throw new InvalidOperationException("El estado actual del pedido no existe.");
+        if (estadoDestino is null)
+            throw new InvalidOperationException("El estado destino no existe.");
+
+        if (estadoActual.EsFinal)
             throw new InvalidOperationException($"No se puede cambiar el estado de un pedido en estado final ({estadoActual.Nombre}).");
+
+        var transicionesValidas = TransicionesValidasPorCodigo;
+        if (!transicionesValidas.TryGetValue(estadoActual.Codigo, out var codigosPermitidos) ||
+            !codigosPermitidos.Contains(estadoDestino.Codigo))
+        {
+            throw new InvalidOperationException(
+                $"Transición no permitida: de '{estadoActual.Nombre}' a '{estadoDestino.Nombre}'.");
+        }
+
+        if (estadoDestino.Codigo == "CANCELADO")
+        {
+            if (string.IsNullOrWhiteSpace(motivoCancelacion))
+                throw new InvalidOperationException("Debe ingresar un motivo de cancelación.");
+
+            pedido.MotivoCancelacion = motivoCancelacion.Trim();
+        }
 
         pedido.EstadoPedidoId = nuevoEstadoId;
         pedido.UpdatedAt = DateTime.UtcNow;
@@ -269,6 +298,37 @@ public class PedidoService : IPedidoService
 
         return true;
     }
+
+    public async Task<List<EstadoPedidoDto>> GetTransicionesDisponiblesAsync(ulong pedidoId, CancellationToken ct = default)
+    {
+        var pedido = await _context.Pedidos
+            .AsNoTracking()
+            .Include(p => p.EstadoPedido)
+            .FirstOrDefaultAsync(p => p.Id == pedidoId, ct);
+
+        if (pedido is null || pedido.EstadoPedido is null)
+            return new List<EstadoPedidoDto>();
+
+        var codigoActual = pedido.EstadoPedido.Codigo;
+        if (!TransicionesValidasPorCodigo.TryGetValue(codigoActual, out var codigosPermitidos))
+            return new List<EstadoPedidoDto>();
+
+        var estados = await _context.EstadosPedido
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        return estados
+            .Where(e => codigosPermitidos.Contains(e.Codigo))
+            .Select(e => _mapper.Map<EstadoPedidoDto>(e))
+            .ToList();
+    }
+
+    private static readonly Dictionary<string, string[]> TransicionesValidasPorCodigo = new()
+    {
+        ["PENDIENTE"]      = new[] { "CONFIRMADO", "CANCELADO" },
+        ["CONFIRMADO"]     = new[] { "PENDIENTE", "EN_PREPARACION", "CANCELADO" },
+        ["EN_PREPARACION"] = new[] { "CONFIRMADO", "ENTREGADO", "CANCELADO" },
+    };
 
     public async Task<PedidoItemDto> AddItemAsync(CreatePedidoItemDto itemDto, CancellationToken ct = default)
     {

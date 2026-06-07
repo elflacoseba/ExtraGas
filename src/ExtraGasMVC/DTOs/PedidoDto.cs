@@ -13,6 +13,7 @@ public class PedidoDto
     public ulong EmpleadoId { get; set; }
     public string? EmpleadoNombre { get; set; }
     public ulong EstadoPedidoId { get; set; }
+    public string? EstadoCodigo { get; set; }
     public string? EstadoNombre { get; set; }
     public string? EstadoColor { get; set; }
     public ulong CanalVentaId { get; set; }
@@ -25,6 +26,7 @@ public class PedidoDto
     public decimal MontoPagado { get; set; }
     public decimal Saldo { get; set; }
     public string? Observaciones { get; set; }
+    public string? MotivoCancelacion { get; set; }
     public string? DireccionEntrega { get; set; }
     public List<PedidoItemDto> Items { get; set; } = new();
 }
@@ -47,11 +49,6 @@ public class CreatePedidoDto
     [Required(ErrorMessage = "El empleado es obligatorio.")]
     [Range(1, ulong.MaxValue, ErrorMessage = "Seleccione un empleado válido.")]
     public ulong EmpleadoId { get; set; }
-
-    [Display(Name = "Estado")]
-    [Required(ErrorMessage = "El estado es obligatorio.")]
-    [Range(1, ulong.MaxValue, ErrorMessage = "Seleccione un estado válido.")]
-    public ulong EstadoPedidoId { get; set; }
 
     [Display(Name = "Canal de venta")]
     [Required(ErrorMessage = "El canal de venta es obligatorio.")]
@@ -90,11 +87,6 @@ public class UpdatePedidoDto
     [Required(ErrorMessage = "El empleado es obligatorio.")]
     [Range(1, ulong.MaxValue, ErrorMessage = "Seleccione un empleado válido.")]
     public ulong EmpleadoId { get; set; }
-
-    [Display(Name = "Estado")]
-    [Required(ErrorMessage = "El estado es obligatorio.")]
-    [Range(1, ulong.MaxValue, ErrorMessage = "Seleccione un estado válido.")]
-    public ulong EstadoPedidoId { get; set; }
 
     [Display(Name = "Canal de venta")]
     [Required(ErrorMessage = "El canal de venta es obligatorio.")]

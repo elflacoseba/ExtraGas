@@ -54,8 +54,7 @@ public class PedidosController : BaseController
         await CargarViewBagLookups(ct);
         return View(new CreatePedidoDto
         {
-            Fecha = DateTime.Now,
-            EstadoPedidoId = 1
+            Fecha = DateTime.Now
         });
     }
 
@@ -93,8 +92,26 @@ public class PedidosController : BaseController
     {
         var pedido = await _pedidoService.GetByIdAsync(id, ct);
         if (pedido is null) return NotFound();
+
+        if (pedido.EstadoCodigo == "ENTREGADO" || pedido.EstadoCodigo == "CANCELADO")
+        {
+            TempData["Info"] = "El pedido se encuentra en un estado final y no puede editarse.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         await CargarViewBagLookups(ct);
         ViewBag.Items = pedido.Items;
+
+        var transiciones = await _pedidoService.GetTransicionesDisponiblesAsync(id, ct);
+        ViewBag.Transiciones = transiciones;
+        ViewBag.EstadoActual = new
+        {
+            Id = pedido.EstadoPedidoId,
+            Codigo = pedido.EstadoCodigo,
+            Nombre = pedido.EstadoNombre,
+            Color = pedido.EstadoColor,
+            EsFinal = pedido.EstadoCodigo == "ENTREGADO" || pedido.EstadoCodigo == "CANCELADO"
+        };
 
         var updateDto = new UpdatePedidoDto
         {
@@ -103,7 +120,6 @@ public class PedidosController : BaseController
             FechaEntrega = pedido.FechaEntrega,
             ClienteId = pedido.ClienteId,
             EmpleadoId = pedido.EmpleadoId,
-            EstadoPedidoId = pedido.EstadoPedidoId,
             CanalVentaId = pedido.CanalVentaId,
             MedioContactoId = pedido.MedioContactoId,
             Subtotal = pedido.Subtotal,
@@ -113,6 +129,8 @@ public class PedidosController : BaseController
             DireccionEntrega = pedido.DireccionEntrega
         };
 
+        ViewBag.MotivoCancelacion = pedido.MotivoCancelacion;
+
         return View(updateDto);
     }
 
@@ -121,6 +139,34 @@ public class PedidosController : BaseController
     public async Task<IActionResult> Edit(ulong id, UpdatePedidoDto pedido, CancellationToken ct = default)
     {
         if (id != pedido.Id) return BadRequest();
+
+        var pedidoActual = await _pedidoService.GetByIdAsync(id, ct);
+        if (pedidoActual is null) return NotFound();
+        if (pedidoActual.EstadoCodigo == "ENTREGADO" || pedidoActual.EstadoCodigo == "CANCELADO")
+        {
+            TempData["Error"] = "El pedido se encuentra en un estado final y no puede editarse.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var soloDirYObs = pedidoActual.EstadoCodigo == "CONFIRMADO" || pedidoActual.EstadoCodigo == "EN_PREPARACION";
+        if (soloDirYObs)
+        {
+            pedido.Fecha = pedidoActual.Fecha;
+            pedido.FechaEntrega = pedidoActual.FechaEntrega;
+            pedido.ClienteId = pedidoActual.ClienteId;
+            pedido.EmpleadoId = pedidoActual.EmpleadoId;
+            pedido.CanalVentaId = pedidoActual.CanalVentaId;
+            pedido.MedioContactoId = pedidoActual.MedioContactoId;
+            pedido.Subtotal = pedidoActual.Subtotal;
+            pedido.Descuento = pedidoActual.Descuento;
+            pedido.Total = pedidoActual.Total;
+
+            foreach (var key in new[] { "Fecha", "FechaEntrega", "ClienteId", "EmpleadoId", "CanalVentaId", "MedioContactoId", "Subtotal", "Descuento", "Total" })
+            {
+                ModelState.Remove(key);
+            }
+        }
+
         if (!ModelState.IsValid)
         {
             await CargarViewBagLookups(ct);
@@ -192,6 +238,36 @@ public class PedidosController : BaseController
         return RedirectToAction(nameof(Index));
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CambiarEstado(ulong id, ulong nuevoEstadoId, string? motivoCancelacion, CancellationToken ct = default)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var ok = await _pedidoService.CambiarEstadoAsync(id, nuevoEstadoId, motivoCancelacion, userId, ct);
+            TempData[ok ? "Success" : "Error"] = ok
+                ? "Estado del pedido actualizado correctamente."
+                : "No se encontró el pedido.";
+
+            if (ok)
+            {
+                var pedido = await _pedidoService.GetByIdAsync(id, ct);
+                if (pedido?.EstadoCodigo == "CANCELADO" || pedido?.EstadoCodigo == "ENTREGADO")
+                    return RedirectToAction(nameof(Details), new { id });
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["Error"] = ex.Message;
+        }
+        catch (Exception)
+        {
+            TempData["Error"] = "Ocurrió un error al cambiar el estado del pedido. Intente nuevamente.";
+        }
+        return RedirectToAction(nameof(Edit), new { id });
+    }
+
     public async Task<IActionResult> Pendientes(CancellationToken ct = default)
     {
         var pedidos = await _pedidoService.GetPendientesAsync(ct);
@@ -207,6 +283,13 @@ public class PedidosController : BaseController
         if (!ModelState.IsValid)
         {
             TempData["Error"] = "Datos de item inválidos.";
+            return RedirectToAction(nameof(Edit), new { id = item.PedidoId });
+        }
+        var pedidoActual = await _pedidoService.GetByIdAsync(item.PedidoId, ct);
+        if (pedidoActual is null) return NotFound();
+        if (pedidoActual.EstadoCodigo != "PENDIENTE")
+        {
+            TempData["Error"] = $"No se pueden agregar items en estado {pedidoActual.EstadoNombre}. Solo se permite en estado Pendiente.";
             return RedirectToAction(nameof(Edit), new { id = item.PedidoId });
         }
         try
@@ -225,6 +308,13 @@ public class PedidosController : BaseController
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RemoveItem(ulong itemId, ulong pedidoId, CancellationToken ct = default)
     {
+        var pedidoActual = await _pedidoService.GetByIdAsync(pedidoId, ct);
+        if (pedidoActual is null) return NotFound();
+        if (pedidoActual.EstadoCodigo != "PENDIENTE")
+        {
+            TempData["Error"] = $"No se pueden eliminar items en estado {pedidoActual.EstadoNombre}. Solo se permite en estado Pendiente.";
+            return RedirectToAction(nameof(Edit), new { id = pedidoId, fragment = "itemsTable" });
+        }
         try
         {
             await _pedidoService.RemoveItemAsync(itemId, ct);

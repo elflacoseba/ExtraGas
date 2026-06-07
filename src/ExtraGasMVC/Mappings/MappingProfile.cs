@@ -22,6 +22,8 @@ public class MappingProfile : Profile
                 s.Empleado != null ? s.Empleado.Apellido + ", " + s.Empleado.Nombre : null))
             .ForMember(d => d.EstadoNombre, o => o.MapFrom(s =>
                 s.EstadoPedido != null ? s.EstadoPedido.Nombre : null))
+            .ForMember(d => d.EstadoCodigo, o => o.MapFrom(s =>
+                s.EstadoPedido != null ? s.EstadoPedido.Codigo : null))
             .ForMember(d => d.EstadoColor, o => o.MapFrom(s =>
                 s.EstadoPedido != null ? s.EstadoPedido.Color : null))
             .ForMember(d => d.CanalNombre, o => o.MapFrom(s =>

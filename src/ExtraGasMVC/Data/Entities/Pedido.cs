@@ -17,6 +17,7 @@ public class Pedido
     public decimal MontoPagado { get; set; }
     public decimal Saldo { get; set; }
     public string? Observaciones { get; set; }
+    public string? MotivoCancelacion { get; set; }
     public string? DireccionEntrega { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

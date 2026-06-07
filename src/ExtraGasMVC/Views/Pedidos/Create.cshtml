@@ -8,7 +8,6 @@
     };
     var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.DTOs.ClienteDto> ?? Array.Empty<ExtraGasMVC.DTOs.ClienteDto>();
     var empleados = ViewBag.Empleados as IEnumerable<ExtraGasMVC.DTOs.EmpleadoDto> ?? Array.Empty<ExtraGasMVC.DTOs.EmpleadoDto>();
-    var estados = ViewBag.Estados as IEnumerable<ExtraGasMVC.DTOs.EstadoPedidoDto> ?? Array.Empty<ExtraGasMVC.DTOs.EstadoPedidoDto>();
     var canales = ViewBag.Canales as IEnumerable<ExtraGasMVC.DTOs.CanalVentaDto> ?? Array.Empty<ExtraGasMVC.DTOs.CanalVentaDto>();
     var medios = ViewBag.MediosContacto as IEnumerable<ExtraGasMVC.DTOs.MedioContactoPedidoDto> ?? Array.Empty<ExtraGasMVC.DTOs.MedioContactoPedidoDto>();
 }
@@ -68,16 +67,6 @@
                         }
                     </select>
                     <span asp-validation-for="EmpleadoId" class="text-danger small"></span>
-                </div>
-                <div class="col-md-4">
-                    <label asp-for="EstadoPedidoId" class="form-label"></label> <span class="text-danger">*</span>
-                    <select asp-for="EstadoPedidoId" class="form-select" required>
-                        @foreach (var e in estados)
-                        {
-                            <option value="@e.Id" selected="@(Model.EstadoPedidoId == e.Id)">@e.Nombre</option>
-                        }
-                    </select>
-                    <span asp-validation-for="EstadoPedidoId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="MedioContactoId" class="form-label"></label>

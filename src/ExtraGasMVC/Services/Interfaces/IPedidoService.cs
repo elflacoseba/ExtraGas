@@ -19,7 +19,8 @@ public interface IPedidoService
     Task<PedidoDto> UpdateAsync(UpdatePedidoDto pedido, ulong? usuarioId, CancellationToken ct = default);
     Task<bool> DeleteAsync(ulong id, ulong? usuarioId, CancellationToken ct = default);
     Task<bool> RestoreAsync(ulong id, ulong? usuarioId, CancellationToken ct = default);
-    Task<bool> CambiarEstadoAsync(ulong id, ulong nuevoEstadoId, ulong? usuarioId, CancellationToken ct = default);
+    Task<bool> CambiarEstadoAsync(ulong id, ulong nuevoEstadoId, string? motivoCancelacion, ulong? usuarioId, CancellationToken ct = default);
+    Task<List<EstadoPedidoDto>> GetTransicionesDisponiblesAsync(ulong pedidoId, CancellationToken ct = default);
 
     Task<PedidoItemDto> AddItemAsync(CreatePedidoItemDto item, CancellationToken ct = default);
     Task<PedidoItemDto> UpdateItemAsync(UpdatePedidoItemDto item, CancellationToken ct = default);

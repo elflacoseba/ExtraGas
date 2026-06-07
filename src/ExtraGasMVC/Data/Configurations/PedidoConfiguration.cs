@@ -70,6 +70,10 @@ public class PedidoConfiguration : IEntityTypeConfiguration<Pedido>
             .HasColumnName("observaciones")
             .HasColumnType("text");
 
+        builder.Property(p => p.MotivoCancelacion)
+            .HasColumnName("motivo_cancelacion")
+            .HasMaxLength(500);
+
         builder.Property(p => p.DireccionEntrega)
             .HasColumnName("direccion_entrega")
             .HasMaxLength(255);

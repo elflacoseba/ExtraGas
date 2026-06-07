@@ -91,9 +91,12 @@
                             <a asp-action="Details" asp-route-id="@p.Id" class="btn btn-sm btn-info" title="Ver detalle">
                                 <i class="bi bi-eye"></i>
                             </a>
-                            <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-sm btn-primary" title="Editar">
-                                <i class="bi bi-pencil"></i>
-                            </a>
+                            @if (p.EstadoCodigo != "ENTREGADO" && p.EstadoCodigo != "CANCELADO")
+                            {
+                                <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-sm btn-primary" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            }
                             <a asp-action="Delete" asp-route-id="@p.Id" class="btn btn-sm btn-danger" title="Eliminar">
                                 <i class="bi bi-trash"></i>
                             </a>
