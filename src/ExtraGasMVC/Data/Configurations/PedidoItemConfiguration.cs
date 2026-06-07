@@ -40,7 +40,6 @@ public class PedidoItemConfiguration : IEntityTypeConfiguration<PedidoItem>
 
         builder.Property(pi => pi.Subtotal)
             .HasColumnName("subtotal")
-            .HasPrecision(12, 2)
             .HasComputedColumnSql("`cantidad` * `precio_unitario`", stored: true);
 
         builder.Property(pi => pi.Observaciones)
@@ -59,6 +58,10 @@ public class PedidoItemConfiguration : IEntityTypeConfiguration<PedidoItem>
             .ValueGeneratedOnAddOrUpdate()
             .HasDefaultValueSql("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
 
+        builder.Property(pi => pi.DeletedAt)
+            .HasColumnName("deleted_at")
+            .HasColumnType("datetime");
+
         builder.HasOne(pi => pi.Pedido)
             .WithMany(p => p.Items)
             .HasForeignKey(pi => pi.PedidoId)
@@ -71,9 +74,17 @@ public class PedidoItemConfiguration : IEntityTypeConfiguration<PedidoItem>
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_pedido_items_producto");
 
+        // Unique constraint: one item per (pedido, producto, tipo_linea) among active items.
+        // MySQL partial index workaround: we use a filter on DeletedAt == null.
+        // Note: MySQL 9.6 does not support filtered unique indexes natively,
+        // so the constraint enforcement is handled in PedidoService.AddItemAsync
+        // with a defensive check + DbUpdateException catch for duplicate key violations.
         builder.HasIndex(pi => pi.PedidoId).HasDatabaseName("idx_pedido_items_pedido");
         builder.HasIndex(pi => pi.ProductoId).HasDatabaseName("idx_pedido_items_producto");
         builder.HasIndex(pi => pi.TipoLinea).HasDatabaseName("idx_pedido_items_tipo");
+        builder.HasIndex(pi => pi.DeletedAt).HasDatabaseName("idx_pedido_items_deleted_at");
 
+        // Soft-delete query filter: active items only
+        builder.HasQueryFilter(pi => pi.DeletedAt == null);
     }
 }

@@ -1,4 +1,7 @@
 @model ExtraGasMVC.DTOs.UpdatePedidoDto
+@using ExtraGasMVC.Constants
+@using ExtraGasMVC.DTOs
+@using ExtraGasMVC.Extensions
 @{
     ViewData["Title"] = "Editar pedido";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -17,8 +20,8 @@
     var estadoCodigo = (string?)estadoActual?.Codigo;
     var estadoColor = (string?)estadoActual?.Color ?? "#6c757d";
     var estadoNombre = (string?)estadoActual?.Nombre ?? "-";
-    var esFinal = estadoCodigo == "ENTREGADO" || estadoCodigo == "CANCELADO";
-    var soloObservaciones = estadoCodigo == "EN_PREPARACION" || estadoCodigo == "CONFIRMADO";
+    var esFinal = PedidoEstados.EstadosFinales.Contains(estadoCodigo ?? "");
+    var soloObservaciones = PedidoEstados.EstadosSoloLecturaParcial.Contains(estadoCodigo ?? "");
     var editable = !esFinal && !soloObservaciones;
 }
 @section PageHeader {
@@ -96,7 +99,7 @@
                     </select>
                 </div>
             </div>
-            @if (estadoCodigo == "CANCELADO" && !string.IsNullOrEmpty(ViewBag.MotivoCancelacion as string))
+            @if (estadoCodigo == PedidoEstados.Cancelado && !string.IsNullOrEmpty(ViewBag.MotivoCancelacion as string))
             {
                 <div class="alert alert-danger mt-3 mb-0">
                     <strong>Motivo de cancelación:</strong> @ViewBag.MotivoCancelacion
@@ -105,11 +108,12 @@
             <h5 class="mt-4">Totales</h5>
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label asp-for="Subtotal" class="form-label"></label>
+                    <label class="form-label">Subtotal</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
-                        <input asp-for="Subtotal" type="number" step="0.01" class="form-control" readonly />
+                        <input type="text" class="form-control bg-light" value="@(((decimal)ViewBag.Subtotal).ToArs())" readonly tabindex="-1" />
                     </div>
+                    <small class="text-secondary">Calculado automáticamente a partir de los items.</small>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="Descuento" class="form-label"></label>
@@ -120,18 +124,19 @@
                     <span asp-validation-for="Descuento" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="Total" class="form-label"></label>
+                    <label class="form-label">Total</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
-                        <input asp-for="Total" id="js-total" type="number" step="0.01" class="form-control" readonly />
+                        <input type="text" id="js-total" class="form-control bg-light" value="@(((decimal)ViewBag.Total).ToArs())" readonly tabindex="-1" />
                     </div>
+                    <small class="text-secondary">Calculado: Subtotal − Descuento.</small>
                 </div>
             </div>
             <h5 class="mt-4">Entrega y observaciones</h5>
             <div class="row g-3">
                 <div class="col-12">
                     <label asp-for="DireccionEntrega" class="form-label"></label>
-                    <input asp-for="DireccionEntrega" class="form-control" placeholder="Calle, número, piso, depto., ciudad" disabled="@(esFinal)" />
+                    <input asp-for="DireccionEntrega" class="form-control" placeholder="Calle, número, piso, depto., ciudad" disabled="@esFinal" />
                     <span asp-validation-for="DireccionEntrega" class="text-danger small"></span>
                 </div>
                 <div class="col-12">
@@ -155,26 +160,21 @@
                 {
                     if (t.Codigo == "ENTREGADO")
                     {
-                        <form asp-action="CambiarEstado" method="post" class="d-inline">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="id" value="@Model.Id" />
-                            <input type="hidden" name="nuevoEstadoId" value="@t.Id" />
-                            <button type="button" class="btn btn-success js-entregar-btn">
-                                <i class="bi bi-check-circle me-1"></i> @t.Nombre
-                            </button>
-                        </form>
+                        <button type="button" class="btn btn-success js-entregar-btn"
+                                data-action="@Url.Action("CambiarEstado")"
+                                data-pedido-id="@Model.Id"
+                                data-nuevo-estado-id="@t.Id">
+                            <i class="bi bi-check-circle me-1"></i> @t.Nombre
+                        </button>
                     }
                     else if (t.Codigo == "CANCELADO")
                     {
-                        <form asp-action="CambiarEstado" method="post" class="d-inline js-cancelar-form">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="id" value="@Model.Id" />
-                            <input type="hidden" name="nuevoEstadoId" value="@t.Id" />
-                            <input type="hidden" name="motivoCancelacion" value="" />
-                            <button type="button" class="btn btn-danger js-cancelar-btn">
-                                <i class="bi bi-x-circle me-1"></i> @t.Nombre
-                            </button>
-                        </form>
+                        <button type="button" class="btn btn-danger js-cancelar-btn"
+                                data-action="@Url.Action("CambiarEstado")"
+                                data-pedido-id="@Model.Id"
+                                data-nuevo-estado-id="@t.Id">
+                            <i class="bi bi-x-circle me-1"></i> @t.Nombre
+                        </button>
                     }
                     else if (t.Codigo == "CONFIRMADO")
                     {
@@ -334,7 +334,6 @@
             tipoLinea = i.TipoLinea
         })
         .ToArray();
-    var itemsJson = System.Text.Json.JsonSerializer.Serialize(itemsExistentes);
 }
 
 @section Scripts {
@@ -344,7 +343,7 @@
             var form = document.getElementById('js-add-item-form');
             if (!form) return;
 
-            var existentes = @Html.Raw(itemsJson);
+            var existentes = @Json.Serialize(itemsExistentes);
             var tipoLabels = {
                 'VENTA': 'Venta',
                 'ENTREGA': 'Entrega',
@@ -402,7 +401,6 @@
 
         document.querySelectorAll('.js-entregar-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                var form = this.closest('form');
                 Swal.fire({
                     title: '¿Confirmar entrega?',
                     html: 'El pedido pasará a estado <strong>Entregado</strong>.<br>Esta acción <strong>no se puede deshacer</strong>.',
@@ -415,6 +413,32 @@
                     reverseButtons: true
                 }).then(function (result) {
                     if (result.isConfirmed) {
+                        var form = document.createElement('form');
+                        form.method = 'post';
+                        form.action = btn.getAttribute('data-action');
+
+                        var tokenSrc = document.querySelector('input[name="__RequestVerificationToken"]');
+                        if (tokenSrc) {
+                            var token = document.createElement('input');
+                            token.type = 'hidden';
+                            token.name = '__RequestVerificationToken';
+                            token.value = tokenSrc.value;
+                            form.appendChild(token);
+                        }
+
+                        var idInput = document.createElement('input');
+                        idInput.type = 'hidden';
+                        idInput.name = 'id';
+                        idInput.value = btn.getAttribute('data-pedido-id');
+                        form.appendChild(idInput);
+
+                        var estadoInput = document.createElement('input');
+                        estadoInput.type = 'hidden';
+                        estadoInput.name = 'nuevoEstadoId';
+                        estadoInput.value = btn.getAttribute('data-nuevo-estado-id');
+                        form.appendChild(estadoInput);
+
+                        document.body.appendChild(form);
                         form.submit();
                     }
                 });
@@ -423,7 +447,6 @@
 
         document.querySelectorAll('.js-cancelar-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                var form = this.closest('form');
                 Swal.fire({
                     title: 'Cancelar Pedido',
                     html: '<p class="text-danger mb-2">Esta acción <strong>no se puede deshacer</strong>.</p>',
@@ -447,7 +470,38 @@
                     }
                 }).then(function (result) {
                     if (result.isConfirmed) {
-                        form.querySelector('[name="motivoCancelacion"]').value = result.value.trim();
+                        var form = document.createElement('form');
+                        form.method = 'post';
+                        form.action = btn.getAttribute('data-action');
+
+                        var tokenSrc = document.querySelector('input[name="__RequestVerificationToken"]');
+                        if (tokenSrc) {
+                            var token = document.createElement('input');
+                            token.type = 'hidden';
+                            token.name = '__RequestVerificationToken';
+                            token.value = tokenSrc.value;
+                            form.appendChild(token);
+                        }
+
+                        var idInput = document.createElement('input');
+                        idInput.type = 'hidden';
+                        idInput.name = 'id';
+                        idInput.value = btn.getAttribute('data-pedido-id');
+                        form.appendChild(idInput);
+
+                        var estadoInput = document.createElement('input');
+                        estadoInput.type = 'hidden';
+                        estadoInput.name = 'nuevoEstadoId';
+                        estadoInput.value = btn.getAttribute('data-nuevo-estado-id');
+                        form.appendChild(estadoInput);
+
+                        var motivoInput = document.createElement('input');
+                        motivoInput.type = 'hidden';
+                        motivoInput.name = 'motivoCancelacion';
+                        motivoInput.value = result.value.trim();
+                        form.appendChild(motivoInput);
+
+                        document.body.appendChild(form);
                         form.submit();
                     }
                 });
@@ -577,16 +631,16 @@
 
         (function () {
             var descuento = document.getElementById('js-descuento');
-            var total = document.getElementById('js-total');
-            var subtotal = document.querySelector('input[name="Subtotal"]');
-            if (!descuento || !total || !subtotal) return;
+            var totalDisplay = document.getElementById('js-total');
+            var subtotalValue = @(ViewBag.Subtotal ?? 0m);
+            if (!descuento || !totalDisplay) return;
 
             function recalcularTotal() {
-                var s = parseFloat(subtotal.value) || 0;
                 var d = parseFloat(descuento.value) || 0;
                 if (d < 0) d = 0;
                 if (d > 100) d = 100;
-                total.value = (s - (s * d / 100)).toFixed(2);
+                var result = subtotalValue - (subtotalValue * d / 100);
+                totalDisplay.value = result.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
 
             descuento.addEventListener('blur', recalcularTotal);

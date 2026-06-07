@@ -1,4 +1,5 @@
 using AutoMapper;
+using ExtraGasMVC.Constants;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.Data.Entities.Enums;
@@ -19,6 +20,20 @@ public class PedidoService : IPedidoService
     private readonly IMapper _mapper;
     private readonly IMemoryCache _cache;
 
+    /// <summary>
+    /// Valid state transitions for pedidos, keyed by current state code.
+    /// Business rule: PENDIENTE → CONFIRMADO or CANCELADO,
+    /// CONFIRMADO → PENDIENTE, EN_PREPARACION, or CANCELADO,
+    /// EN_PREPARACION → CONFIRMADO, ENTREGADO, or CANCELADO.
+    /// Final states (ENTREGADO, CANCELADO) have no outgoing transitions.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> TransicionesValidasPorCodigo = new()
+    {
+        [PedidoEstados.Pendiente]      = new[] { PedidoEstados.Confirmado, PedidoEstados.Cancelado },
+        [PedidoEstados.Confirmado]     = new[] { PedidoEstados.Pendiente, PedidoEstados.EnPreparacion, PedidoEstados.Cancelado },
+        [PedidoEstados.EnPreparacion]  = new[] { PedidoEstados.Confirmado, PedidoEstados.Entregado, PedidoEstados.Cancelado },
+    };
+
     public PedidoService(ExtraGasDbContext context, IMapper mapper, IMemoryCache cache)
     {
         _context = context;
@@ -26,15 +41,12 @@ public class PedidoService : IPedidoService
         _cache = cache;
     }
 
+    #region Queries
+
     public async Task<PedidoDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
     {
-        var pedido = await _context.Pedidos
+        var pedido = await GetWithIncludes()
             .AsNoTracking()
-            .Include(p => p.Cliente)
-            .Include(p => p.Empleado)
-            .Include(p => p.EstadoPedido)
-            .Include(p => p.CanalVenta)
-            .Include(p => p.MedioContactoPedido)
             .Include(p => p.Items)
                 .ThenInclude(i => i.Producto)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
@@ -47,13 +59,8 @@ public class PedidoService : IPedidoService
         DateTime? desde, DateTime? hasta,
         int pagina, int tamanio, CancellationToken ct = default)
     {
-        var query = _context.Pedidos
+        var query = GetWithIncludes()
             .AsNoTracking()
-            .Include(p => p.Cliente)
-            .Include(p => p.Empleado)
-            .Include(p => p.EstadoPedido)
-            .Include(p => p.CanalVenta)
-            .Include(p => p.MedioContactoPedido)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(numero))
@@ -93,13 +100,8 @@ public class PedidoService : IPedidoService
 
     public async Task<IEnumerable<PedidoDto>> GetAllAsync(CancellationToken ct = default)
     {
-        var pedidos = await _context.Pedidos
+        var pedidos = await GetWithIncludes()
             .AsNoTracking()
-            .Include(p => p.Cliente)
-            .Include(p => p.Empleado)
-            .Include(p => p.EstadoPedido)
-            .Include(p => p.CanalVenta)
-            .Include(p => p.MedioContactoPedido)
             .OrderByDescending(p => p.Fecha)
             .ToListAsync(ct);
 
@@ -108,13 +110,8 @@ public class PedidoService : IPedidoService
 
     public async Task<IEnumerable<PedidoDto>> GetByClienteAsync(ulong clienteId, CancellationToken ct = default)
     {
-        var pedidos = await _context.Pedidos
+        var pedidos = await GetWithIncludes()
             .AsNoTracking()
-            .Include(p => p.Cliente)
-            .Include(p => p.Empleado)
-            .Include(p => p.EstadoPedido)
-            .Include(p => p.CanalVenta)
-            .Include(p => p.MedioContactoPedido)
             .Where(p => p.ClienteId == clienteId)
             .OrderByDescending(p => p.Fecha)
             .ToListAsync(ct);
@@ -124,13 +121,8 @@ public class PedidoService : IPedidoService
 
     public async Task<IEnumerable<PedidoDto>> GetByEstadoAsync(ulong estadoId, CancellationToken ct = default)
     {
-        var pedidos = await _context.Pedidos
+        var pedidos = await GetWithIncludes()
             .AsNoTracking()
-            .Include(p => p.Cliente)
-            .Include(p => p.Empleado)
-            .Include(p => p.EstadoPedido)
-            .Include(p => p.CanalVenta)
-            .Include(p => p.MedioContactoPedido)
             .Where(p => p.EstadoPedidoId == estadoId)
             .OrderByDescending(p => p.Fecha)
             .ToListAsync(ct);
@@ -140,13 +132,8 @@ public class PedidoService : IPedidoService
 
     public async Task<IEnumerable<PedidoDto>> GetPendientesAsync(CancellationToken ct = default)
     {
-        var pedidos = await _context.Pedidos
+        var pedidos = await GetWithIncludes()
             .AsNoTracking()
-            .Include(p => p.Cliente)
-            .Include(p => p.Empleado)
-            .Include(p => p.EstadoPedido)
-            .Include(p => p.CanalVenta)
-            .Include(p => p.MedioContactoPedido)
             .Where(p => p.Saldo > 0)
             .OrderBy(p => p.Fecha)
             .ToListAsync(ct);
@@ -159,18 +146,22 @@ public class PedidoService : IPedidoService
         var items = await _context.PedidoItems
             .AsNoTracking()
             .Include(i => i.Producto)
-            .Where(i => i.PedidoId == pedidoId)
+            .Where(i => i.PedidoId == pedidoId && i.DeletedAt == null)
             .OrderBy(i => i.Id)
             .ToListAsync(ct);
 
         return _mapper.Map<IEnumerable<PedidoItemDto>>(items);
     }
 
+    #endregion
+
+    #region Commands
+
     public async Task<PedidoDto> CreateAsync(CreatePedidoDto pedidoDto, ulong? usuarioId, CancellationToken ct = default)
     {
         var estadoPendiente = await _context.EstadosPedido
             .AsNoTracking()
-            .FirstOrDefaultAsync(e => e.Codigo == "PENDIENTE", ct)
+            .FirstOrDefaultAsync(e => e.Codigo == PedidoEstados.Pendiente, ct)
             ?? throw new InvalidOperationException("No se encontró el estado PENDIENTE en el catálogo.");
 
         var pedido = _mapper.Map<Pedido>(pedidoDto);
@@ -195,17 +186,39 @@ public class PedidoService : IPedidoService
         if (pedido == null)
             throw new KeyNotFoundException($"Pedido con Id {pedidoDto.Id} no encontrado.");
 
-        pedido.Fecha = pedidoDto.Fecha;
-        pedido.FechaEntrega = pedidoDto.FechaEntrega;
-        pedido.ClienteId = pedidoDto.ClienteId;
-        pedido.EmpleadoId = pedidoDto.EmpleadoId;
-        pedido.CanalVentaId = pedidoDto.CanalVentaId;
-        pedido.MedioContactoId = pedidoDto.MedioContactoId;
-        pedido.DireccionEntrega = pedidoDto.DireccionEntrega;
-        pedido.Observaciones = pedidoDto.Observaciones;
-        pedido.Descuento = pedidoDto.Descuento;
+        // Business rule: final state orders cannot be edited
+        var estadoActual = await _context.EstadosPedido
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == pedido.EstadoPedidoId, ct);
+
+        if (estadoActual is not null && PedidoEstados.EstadosFinales.Contains(estadoActual.Codigo))
+            throw new InvalidOperationException($"No se puede editar un pedido en estado final ({estadoActual.Nombre}).");
+
+        // Business rule: CONFIRMADO/EN_PREPARACION orders can only edit DireccionEntrega and Observaciones
+        var isPartialEdit = estadoActual is not null && PedidoEstados.EstadosSoloLecturaParcial.Contains(estadoActual.Codigo);
+
         pedido.UpdatedAt = DateTime.UtcNow;
         pedido.UpdatedBy = usuarioId;
+
+        if (isPartialEdit)
+        {
+            // Only allow editing delivery address and observations
+            pedido.DireccionEntrega = pedidoDto.DireccionEntrega;
+            pedido.Observaciones = pedidoDto.Observaciones;
+            pedido.Descuento = pedidoDto.Descuento;
+        }
+        else
+        {
+            pedido.Fecha = pedidoDto.Fecha;
+            pedido.FechaEntrega = pedidoDto.FechaEntrega;
+            pedido.ClienteId = pedidoDto.ClienteId;
+            pedido.EmpleadoId = pedidoDto.EmpleadoId;
+            pedido.CanalVentaId = pedidoDto.CanalVentaId;
+            pedido.MedioContactoId = pedidoDto.MedioContactoId;
+            pedido.DireccionEntrega = pedidoDto.DireccionEntrega;
+            pedido.Observaciones = pedidoDto.Observaciones;
+            pedido.Descuento = pedidoDto.Descuento;
+        }
 
         await RecalculateTotalsAsync(pedido.Id, ct);
 
@@ -271,18 +284,17 @@ public class PedidoService : IPedidoService
         if (estadoDestino is null)
             throw new InvalidOperationException("El estado destino no existe.");
 
-        if (estadoActual.EsFinal)
+        if (PedidoEstados.EstadosFinales.Contains(estadoActual.Codigo))
             throw new InvalidOperationException($"No se puede cambiar el estado de un pedido en estado final ({estadoActual.Nombre}).");
 
-        var transicionesValidas = TransicionesValidasPorCodigo;
-        if (!transicionesValidas.TryGetValue(estadoActual.Codigo, out var codigosPermitidos) ||
+        if (!TransicionesValidasPorCodigo.TryGetValue(estadoActual.Codigo, out var codigosPermitidos) ||
             !codigosPermitidos.Contains(estadoDestino.Codigo))
         {
             throw new InvalidOperationException(
                 $"Transición no permitida: de '{estadoActual.Nombre}' a '{estadoDestino.Nombre}'.");
         }
 
-        if (estadoDestino.Codigo == "CANCELADO")
+        if (estadoDestino.Codigo == PedidoEstados.Cancelado)
         {
             if (string.IsNullOrWhiteSpace(motivoCancelacion))
                 throw new InvalidOperationException("Debe ingresar un motivo de cancelación.");
@@ -298,6 +310,135 @@ public class PedidoService : IPedidoService
 
         return true;
     }
+
+    public async Task<PedidoItemDto> AddItemAsync(CreatePedidoItemDto itemDto, CancellationToken ct = default)
+    {
+        // Business rule: only PENDIENTE orders can have items added
+        var pedido = await _context.Pedidos.FindAsync(new object[] { itemDto.PedidoId }, ct);
+        if (pedido is null)
+            throw new KeyNotFoundException($"Pedido con Id {itemDto.PedidoId} no encontrado.");
+
+        var estadoPedido = await _context.EstadosPedido
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == pedido.EstadoPedidoId, ct);
+
+        if (estadoPedido is not null && estadoPedido.Codigo != PedidoEstados.Pendiente)
+            throw new InvalidOperationException($"No se pueden agregar items en estado {estadoPedido.Nombre}. Solo se permite en estado Pendiente.");
+
+        var tipoLinea = ParseTipoLinea(itemDto.TipoLinea);
+
+        var producto = await _context.Productos
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == itemDto.ProductoId, ct);
+
+        if (producto == null)
+            throw new KeyNotFoundException($"Producto con Id {itemDto.ProductoId} no encontrado.");
+
+        // Duplicate check — defensive; database unique constraint is the authoritative guard
+        var yaExiste = await _context.PedidoItems
+            .AsNoTracking()
+            .AnyAsync(i => i.PedidoId == itemDto.PedidoId
+                        && i.ProductoId == itemDto.ProductoId
+                        && i.TipoLinea == tipoLinea
+                        && i.DeletedAt == null, ct);
+
+        if (yaExiste)
+            throw new InvalidOperationException(
+                $"El producto \"{producto.Nombre}\" ya está agregado al pedido con tipo {itemDto.TipoLinea}. " +
+                $"Si necesita modificar la cantidad, elimine el item existente y vuelva a cargarlo.");
+
+        var item = _mapper.Map<PedidoItem>(itemDto);
+        item.PrecioUnitario = producto.PrecioActual;
+        item.TipoLinea = tipoLinea;
+
+        using var transaction = await _context.Database.BeginTransactionAsync(ct);
+        try
+        {
+            _context.PedidoItems.Add(item);
+            await _context.SaveChangesAsync(ct);
+            await RecalculateTotalsInternalAsync(pedido.Id, ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            await transaction.RollbackAsync(ct);
+            throw new InvalidOperationException(
+                $"El producto \"{producto.Nombre}\" ya está agregado al pedido con tipo {itemDto.TipoLinea}. " +
+                $"Si necesita modificar la cantidad, elimine el item existente y vuelva a cargarlo.");
+        }
+
+        return (await _context.PedidoItems
+            .AsNoTracking()
+            .Include(i => i.Producto)
+            .FirstOrDefaultAsync(i => i.Id == item.Id, ct)) is { } saved
+            ? _mapper.Map<PedidoItemDto>(saved)
+            : throw new InvalidOperationException("No se pudo recuperar el item creado.");
+    }
+
+    public async Task<PedidoItemDto> UpdateItemAsync(UpdatePedidoItemDto itemDto, CancellationToken ct = default)
+    {
+        var item = await _context.PedidoItems.FindAsync(new object[] { itemDto.Id }, ct);
+        if (item == null)
+            throw new KeyNotFoundException($"Item con Id {itemDto.Id} no encontrado.");
+
+        _mapper.Map(itemDto, item);
+        item.TipoLinea = ParseTipoLinea(itemDto.TipoLinea);
+        item.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(ct);
+        await RecalculateTotalsAsync(item.PedidoId, ct);
+
+        return (await _context.PedidoItems
+            .AsNoTracking()
+            .Include(i => i.Producto)
+            .FirstOrDefaultAsync(i => i.Id == item.Id, ct)) is { } saved
+            ? _mapper.Map<PedidoItemDto>(saved)
+            : throw new InvalidOperationException("No se pudo recuperar el item actualizado.");
+    }
+
+    public async Task<bool> RemoveItemAsync(ulong itemId, CancellationToken ct = default)
+    {
+        var item = await _context.PedidoItems.FindAsync(new object[] { itemId }, ct);
+        if (item == null)
+            return false;
+
+        // Business rule: only PENDIENTE orders can have items removed
+        var pedido = await _context.Pedidos.FindAsync(new object[] { item.PedidoId }, ct);
+        if (pedido is not null)
+        {
+            var estadoPedido = await _context.EstadosPedido
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.Id == pedido.EstadoPedidoId, ct);
+
+            if (estadoPedido is not null && estadoPedido.Codigo != PedidoEstados.Pendiente)
+                throw new InvalidOperationException($"No se pueden eliminar items en estado {estadoPedido.Nombre}. Solo se permite en estado Pendiente.");
+        }
+
+        var pedidoId = item.PedidoId;
+
+        // Soft-delete per project convention (AGENTS.md decision #6)
+        item.DeletedAt = DateTime.UtcNow;
+        item.UpdatedAt = DateTime.UtcNow;
+
+        using var transaction = await _context.Database.BeginTransactionAsync(ct);
+        try
+        {
+            await _context.SaveChangesAsync(ct);
+            await RecalculateTotalsInternalAsync(pedidoId, ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
+
+        return true;
+    }
+
+    #endregion
+
+    #region State & Lookups
 
     public async Task<List<EstadoPedidoDto>> GetTransicionesDisponiblesAsync(ulong pedidoId, CancellationToken ct = default)
     {
@@ -321,110 +462,6 @@ public class PedidoService : IPedidoService
             .Where(e => codigosPermitidos.Contains(e.Codigo))
             .Select(e => _mapper.Map<EstadoPedidoDto>(e))
             .ToList();
-    }
-
-    private static readonly Dictionary<string, string[]> TransicionesValidasPorCodigo = new()
-    {
-        ["PENDIENTE"]      = new[] { "CONFIRMADO", "CANCELADO" },
-        ["CONFIRMADO"]     = new[] { "PENDIENTE", "EN_PREPARACION", "CANCELADO" },
-        ["EN_PREPARACION"] = new[] { "CONFIRMADO", "ENTREGADO", "CANCELADO" },
-    };
-
-    public async Task<PedidoItemDto> AddItemAsync(CreatePedidoItemDto itemDto, CancellationToken ct = default)
-    {
-        var producto = await _context.Productos
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == itemDto.ProductoId, ct);
-
-        if (producto == null)
-            throw new KeyNotFoundException($"Producto con Id {itemDto.ProductoId} no encontrado.");
-
-        var yaExiste = await _context.PedidoItems
-            .AsNoTracking()
-            .AnyAsync(i => i.PedidoId == itemDto.PedidoId
-                        && i.ProductoId == itemDto.ProductoId
-                        && i.TipoLinea == ParseTipoLinea(itemDto.TipoLinea), ct);
-
-        if (yaExiste)
-            throw new InvalidOperationException(
-                $"El producto \"{producto.Nombre}\" ya está agregado al pedido con tipo {itemDto.TipoLinea}. " +
-                $"Si necesita modificar la cantidad, elimine el item existente y vuelva a cargarlo.");
-
-        var item = _mapper.Map<PedidoItem>(itemDto);
-        item.PrecioUnitario = producto.PrecioActual;
-
-        _context.PedidoItems.Add(item);
-        await _context.SaveChangesAsync(ct);
-
-        await RecalculateTotalsAsync(item.PedidoId, ct);
-
-        return (await _context.PedidoItems
-            .AsNoTracking()
-            .Include(i => i.Producto)
-            .FirstOrDefaultAsync(i => i.Id == item.Id, ct)) is { } saved
-            ? _mapper.Map<PedidoItemDto>(saved)
-            : throw new InvalidOperationException("No se pudo recuperar el item creado.");
-    }
-
-    public async Task<PedidoItemDto> UpdateItemAsync(UpdatePedidoItemDto itemDto, CancellationToken ct = default)
-    {
-        var item = await _context.PedidoItems.FindAsync(new object[] { itemDto.Id }, ct);
-        if (item == null)
-            throw new KeyNotFoundException($"Item con Id {itemDto.Id} no encontrado.");
-
-        _mapper.Map(itemDto, item);
-        item.UpdatedAt = DateTime.UtcNow;
-
-        await _context.SaveChangesAsync(ct);
-        await RecalculateTotalsAsync(item.PedidoId, ct);
-
-        return (await _context.PedidoItems
-            .AsNoTracking()
-            .Include(i => i.Producto)
-            .FirstOrDefaultAsync(i => i.Id == item.Id, ct)) is { } saved
-            ? _mapper.Map<PedidoItemDto>(saved)
-            : throw new InvalidOperationException("No se pudo recuperar el item actualizado.");
-    }
-
-    public async Task<bool> RemoveItemAsync(ulong itemId, CancellationToken ct = default)
-    {
-        var item = await _context.PedidoItems.FindAsync(new object[] { itemId }, ct);
-        if (item == null)
-            return false;
-
-        var pedidoId = item.PedidoId;
-        _context.PedidoItems.Remove(item);
-        await _context.SaveChangesAsync(ct);
-        await RecalculateTotalsAsync(pedidoId, ct);
-
-        return true;
-    }
-
-    public async Task RecalculateTotalsAsync(ulong pedidoId, CancellationToken ct = default)
-    {
-        var items = await _context.PedidoItems
-            .AsNoTracking()
-            .Where(i => i.PedidoId == pedidoId)
-            .ToListAsync(ct);
-
-        var subtotal = 0m;
-        foreach (var item in items)
-        {
-            var lineaSubtotal = item.Cantidad * item.PrecioUnitario;
-            if (item.TipoLinea == TipoLinea.DEVOLUCION)
-                subtotal -= lineaSubtotal;
-            else
-                subtotal += lineaSubtotal;
-        }
-
-        var pedido = await _context.Pedidos.FindAsync(new object[] { pedidoId }, ct);
-        if (pedido == null) return;
-
-        pedido.Subtotal = subtotal;
-        pedido.Total = subtotal - (subtotal * pedido.Descuento / 100m);
-        pedido.UpdatedAt = DateTime.UtcNow;
-
-        await _context.SaveChangesAsync(ct);
     }
 
     public async Task<List<EstadoPedidoDto>> GetEstadosPedidoAsync(CancellationToken ct = default)
@@ -478,12 +515,111 @@ public class PedidoService : IPedidoService
         return _mapper.Map<IEnumerable<EmpleadoDto>>(empleados);
     }
 
+    #endregion
+
+    #region Private Helpers
+
+    /// <summary>
+    /// Common include chain for Pedido queries. Reduces duplication across query methods.
+    /// </summary>
+    private IQueryable<Pedido> GetWithIncludes()
+    {
+        return _context.Pedidos
+            .Include(p => p.Cliente)
+            .Include(p => p.Empleado)
+            .Include(p => p.EstadoPedido)
+            .Include(p => p.CanalVenta)
+            .Include(p => p.MedioContactoPedido);
+    }
+
+    /// <summary>
+    /// Recalculates Subtotal and Total for a pedido based on its active items.
+    /// <para>
+    /// Business rule for TipoLinea (per AGENTS.md decision #2):
+    /// - VENTA: product sold to the customer → adds to total
+    /// - ENTREGA: full gas cylinder delivered to customer → adds to total (represents the physical canje charge)
+    /// - DEVOLUCION: empty cylinder returned by customer → subtracts from total (deposit refund)
+    /// </para>
+    /// <para>
+    /// In the canje model, ENTREGA and VENTA serve the same financial purpose (charge).
+    /// If the business rule changes, this method must be updated accordingly.
+    /// </para>
+    /// </summary>
+    private async Task RecalculateTotalsAsync(ulong pedidoId, CancellationToken ct = default)
+    {
+        var items = await _context.PedidoItems
+            .AsNoTracking()
+            .Where(i => i.PedidoId == pedidoId && i.DeletedAt == null)
+            .ToListAsync(ct);
+
+        var subtotal = CalculateSubtotal(items);
+        var pedido = await _context.Pedidos.FindAsync(new object[] { pedidoId }, ct);
+        if (pedido == null) return;
+
+        pedido.Subtotal = subtotal;
+        pedido.Total = subtotal - (subtotal * pedido.Descuento / 100m);
+        pedido.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Same as RecalculateTotalsAsync but for use within an existing transaction.
+    /// Does not create its own SaveChangesAsync — the caller manages the transaction.
+    /// </summary>
+    private async Task RecalculateTotalsInternalAsync(ulong pedidoId, CancellationToken ct = default)
+    {
+        var items = await _context.PedidoItems
+            .Where(i => i.PedidoId == pedidoId && i.DeletedAt == null)
+            .ToListAsync(ct);
+
+        var subtotal = CalculateSubtotal(items);
+        var pedido = await _context.Pedidos.FindAsync(new object[] { pedidoId }, ct);
+        if (pedido == null) return;
+
+        pedido.Subtotal = subtotal;
+        pedido.Total = subtotal - (subtotal * pedido.Descuento / 100m);
+        pedido.UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Computes subtotal from items: VENTA and ENTREGA add, DEVOLUCION subtracts.
+    /// </summary>
+    private static decimal CalculateSubtotal(List<PedidoItem> items)
+    {
+        var subtotal = 0m;
+        foreach (var item in items)
+        {
+            var lineaSubtotal = item.Cantidad * item.PrecioUnitario;
+            if (item.TipoLinea == TipoLinea.DEVOLUCION)
+                subtotal -= lineaSubtotal;
+            else
+                subtotal += lineaSubtotal;
+        }
+        return subtotal;
+    }
+
     private static TipoLinea ParseTipoLinea(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return TipoLinea.VENTA;
         return Enum.TryParse<TipoLinea>(value, ignoreCase: true, out var parsed)
             ? parsed
-            : TipoLinea.VENTA;
+            : throw new ArgumentException(
+                $"Tipo de línea inválido: '{value}'. Valores válidos: ENTREGA, DEVOLUCION, VENTA.");
     }
+
+    /// <summary>
+    /// Checks whether a DbUpdateException is a unique constraint violation (MySQL error 1062).
+    /// Used to handle duplicate (PedidoId, ProductoId, TipoLinea) inserts gracefully.
+    /// </summary>
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+    {
+        var innerException = ex.InnerException;
+        if (innerException is MySqlConnector.MySqlException mysqlEx)
+            return mysqlEx.Number == 1062; // Duplicate entry
+        return false;
+    }
+
+    #endregion
 }

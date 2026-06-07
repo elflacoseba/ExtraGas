@@ -1,3 +1,4 @@
+using ExtraGasMVC.Constants;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -93,7 +94,7 @@ public class PedidosController : BaseController
         var pedido = await _pedidoService.GetByIdAsync(id, ct);
         if (pedido is null) return NotFound();
 
-        if (pedido.EstadoCodigo == "ENTREGADO" || pedido.EstadoCodigo == "CANCELADO")
+        if (PedidoEstados.EstadosFinales.Contains(pedido.EstadoCodigo ?? ""))
         {
             TempData["Info"] = "El pedido se encuentra en un estado final y no puede editarse.";
             return RedirectToAction(nameof(Details), new { id });
@@ -110,7 +111,7 @@ public class PedidosController : BaseController
             Codigo = pedido.EstadoCodigo,
             Nombre = pedido.EstadoNombre,
             Color = pedido.EstadoColor,
-            EsFinal = pedido.EstadoCodigo == "ENTREGADO" || pedido.EstadoCodigo == "CANCELADO"
+            EsFinal = PedidoEstados.EstadosFinales.Contains(pedido.EstadoCodigo ?? "")
         };
 
         var updateDto = new UpdatePedidoDto
@@ -122,13 +123,13 @@ public class PedidosController : BaseController
             EmpleadoId = pedido.EmpleadoId,
             CanalVentaId = pedido.CanalVentaId,
             MedioContactoId = pedido.MedioContactoId,
-            Subtotal = pedido.Subtotal,
             Descuento = pedido.Descuento,
-            Total = pedido.Total,
-            Observaciones = pedido.Observaciones,
-            DireccionEntrega = pedido.DireccionEntrega
+            DireccionEntrega = pedido.DireccionEntrega,
+            Observaciones = pedido.Observaciones
         };
 
+        ViewBag.Subtotal = pedido.Subtotal;
+        ViewBag.Total = pedido.Total;
         ViewBag.MotivoCancelacion = pedido.MotivoCancelacion;
 
         return View(updateDto);
@@ -142,36 +143,27 @@ public class PedidosController : BaseController
 
         var pedidoActual = await _pedidoService.GetByIdAsync(id, ct);
         if (pedidoActual is null) return NotFound();
-        if (pedidoActual.EstadoCodigo == "ENTREGADO" || pedidoActual.EstadoCodigo == "CANCELADO")
-        {
-            TempData["Error"] = "El pedido se encuentra en un estado final y no puede editarse.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
 
-        var soloDirYObs = pedidoActual.EstadoCodigo == "CONFIRMADO" || pedidoActual.EstadoCodigo == "EN_PREPARACION";
-        if (soloDirYObs)
-        {
-            pedido.Fecha = pedidoActual.Fecha;
-            pedido.FechaEntrega = pedidoActual.FechaEntrega;
-            pedido.ClienteId = pedidoActual.ClienteId;
-            pedido.EmpleadoId = pedidoActual.EmpleadoId;
-            pedido.CanalVentaId = pedidoActual.CanalVentaId;
-            pedido.MedioContactoId = pedidoActual.MedioContactoId;
-            pedido.Subtotal = pedidoActual.Subtotal;
-            pedido.Descuento = pedidoActual.Descuento;
-            pedido.Total = pedidoActual.Total;
-
-            foreach (var key in new[] { "Fecha", "FechaEntrega", "ClienteId", "EmpleadoId", "CanalVentaId", "MedioContactoId", "Subtotal", "Descuento", "Total" })
-            {
-                ModelState.Remove(key);
-            }
-        }
+        // The service layer handles state-based validation (final states, partial edit).
+        // The controller only handles HTTP-level concerns (ModelState, TempData, redirects).
 
         if (!ModelState.IsValid)
         {
             await CargarViewBagLookups(ct);
             var existingPedido = await _pedidoService.GetByIdAsync(id, ct);
             ViewBag.Items = existingPedido?.Items ?? new List<PedidoItemDto>();
+            ViewBag.Subtotal = existingPedido?.Subtotal ?? 0m;
+            ViewBag.Total = existingPedido?.Total ?? 0m;
+            ViewBag.Transiciones = await _pedidoService.GetTransicionesDisponiblesAsync(id, ct);
+            ViewBag.EstadoActual = new
+            {
+                Id = pedidoActual.EstadoPedidoId,
+                Codigo = pedidoActual.EstadoCodigo,
+                Nombre = pedidoActual.EstadoNombre,
+                Color = pedidoActual.EstadoColor,
+                EsFinal = PedidoEstados.EstadosFinales.Contains(pedidoActual.EstadoCodigo ?? "")
+            };
+            ViewBag.MotivoCancelacion = pedidoActual.MotivoCancelacion;
             return View(pedido);
         }
         try
@@ -187,6 +179,8 @@ public class PedidosController : BaseController
             await CargarViewBagLookups(ct);
             var existingPedido = await _pedidoService.GetByIdAsync(id, ct);
             ViewBag.Items = existingPedido?.Items ?? new List<PedidoItemDto>();
+            ViewBag.Subtotal = existingPedido?.Subtotal ?? 0m;
+            ViewBag.Total = existingPedido?.Total ?? 0m;
             return View(pedido);
         }
         catch (Exception)
@@ -195,6 +189,8 @@ public class PedidosController : BaseController
             await CargarViewBagLookups(ct);
             var existingPedido = await _pedidoService.GetByIdAsync(id, ct);
             ViewBag.Items = existingPedido?.Items ?? new List<PedidoItemDto>();
+            ViewBag.Subtotal = existingPedido?.Subtotal ?? 0m;
+            ViewBag.Total = existingPedido?.Total ?? 0m;
             return View(pedido);
         }
     }
@@ -253,7 +249,7 @@ public class PedidosController : BaseController
             if (ok)
             {
                 var pedido = await _pedidoService.GetByIdAsync(id, ct);
-                if (pedido?.EstadoCodigo == "CANCELADO" || pedido?.EstadoCodigo == "ENTREGADO")
+                if (PedidoEstados.EstadosFinales.Contains(pedido?.EstadoCodigo ?? ""))
                     return RedirectToAction(nameof(Details), new { id });
             }
         }
@@ -285,13 +281,6 @@ public class PedidosController : BaseController
             TempData["Error"] = "Datos de item inválidos.";
             return RedirectToAction(nameof(Edit), new { id = item.PedidoId });
         }
-        var pedidoActual = await _pedidoService.GetByIdAsync(item.PedidoId, ct);
-        if (pedidoActual is null) return NotFound();
-        if (pedidoActual.EstadoCodigo != "PENDIENTE")
-        {
-            TempData["Error"] = $"No se pueden agregar items en estado {pedidoActual.EstadoNombre}. Solo se permite en estado Pendiente.";
-            return RedirectToAction(nameof(Edit), new { id = item.PedidoId });
-        }
         try
         {
             await _pedidoService.AddItemAsync(item, ct);
@@ -308,21 +297,20 @@ public class PedidosController : BaseController
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RemoveItem(ulong itemId, ulong pedidoId, CancellationToken ct = default)
     {
-        var pedidoActual = await _pedidoService.GetByIdAsync(pedidoId, ct);
-        if (pedidoActual is null) return NotFound();
-        if (pedidoActual.EstadoCodigo != "PENDIENTE")
-        {
-            TempData["Error"] = $"No se pueden eliminar items en estado {pedidoActual.EstadoNombre}. Solo se permite en estado Pendiente.";
-            return RedirectToAction(nameof(Edit), new { id = pedidoId, fragment = "itemsTable" });
-        }
         try
         {
-            await _pedidoService.RemoveItemAsync(itemId, ct);
-            TempData["Success"] = "Item eliminado correctamente.";
+            var ok = await _pedidoService.RemoveItemAsync(itemId, ct);
+            TempData[ok ? "Success" : "Error"] = ok
+                ? "Item eliminado correctamente."
+                : "No se encontró el item.";
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
             TempData["Error"] = ex.Message;
+        }
+        catch (Exception)
+        {
+            TempData["Error"] = "Ocurrió un error al eliminar el item.";
         }
         return RedirectToAction(nameof(Edit), new { id = pedidoId, fragment = "itemsTable" });
     }

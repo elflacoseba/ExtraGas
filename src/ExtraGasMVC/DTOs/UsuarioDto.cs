@@ -78,14 +78,6 @@ public class ChangePasswordDto
     public string ConfirmPassword { get; set; } = null!;
 }
 
-public class SearchResultDto<T>
-{
-    public List<T> Items { get; set; } = new();
-    public int Total { get; set; }
-    public int Pagina { get; set; }
-    public int Tamanio { get; set; }
-}
-
 public class RolDto
 {
     public ulong Id { get; set; }

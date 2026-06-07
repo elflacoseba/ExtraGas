@@ -25,7 +25,6 @@ public interface IPedidoService
     Task<PedidoItemDto> AddItemAsync(CreatePedidoItemDto item, CancellationToken ct = default);
     Task<PedidoItemDto> UpdateItemAsync(UpdatePedidoItemDto item, CancellationToken ct = default);
     Task<bool> RemoveItemAsync(ulong itemId, CancellationToken ct = default);
-    Task RecalculateTotalsAsync(ulong pedidoId, CancellationToken ct = default);
 
     Task<List<EstadoPedidoDto>> GetEstadosPedidoAsync(CancellationToken ct = default);
     Task<List<CanalVentaDto>> GetCanalesVentaAsync(CancellationToken ct = default);

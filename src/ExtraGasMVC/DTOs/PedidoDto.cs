@@ -96,17 +96,9 @@ public class UpdatePedidoDto
     [Display(Name = "Medio de contacto")]
     public ulong? MedioContactoId { get; set; }
 
-    [Display(Name = "Subtotal")]
-    [Range(0, 9999999999.99, ErrorMessage = "El subtotal debe ser mayor o igual a 0.")]
-    public decimal Subtotal { get; set; }
-
     [Display(Name = "Descuento (%)")]
     [Range(0, 100, ErrorMessage = "El descuento debe estar entre 0 y 100.")]
     public decimal Descuento { get; set; }
-
-    [Display(Name = "Total")]
-    [Range(0, 9999999999.99, ErrorMessage = "El total debe ser mayor o igual a 0.")]
-    public decimal Total { get; set; }
 
     [Display(Name = "Dirección de entrega")]
     [StringLength(255, ErrorMessage = "La dirección no puede superar {1} caracteres.")]
