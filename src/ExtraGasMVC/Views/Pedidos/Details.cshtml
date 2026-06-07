@@ -37,13 +37,6 @@
                     <dd class="col-sm-7">
                         <span class="badge" style="background-color: @(Model.EstadoColor ?? "#6c757d")">@(Model.EstadoNombre ?? "-")</span>
                     </dd>
-                    <dt class="col-sm-5">Entregado</dt>
-                    <dd class="col-sm-7">
-                        @if (Model.Entregado)
-                        { <span class="badge text-bg-success">Sí</span> }
-                        else
-                        { <span class="badge text-bg-warning">No</span> }
-                    </dd>
                 </dl>
             </div>
         </div>

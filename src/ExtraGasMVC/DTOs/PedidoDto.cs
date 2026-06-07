@@ -8,7 +8,6 @@ public class PedidoDto
     public string? Numero { get; set; }
     public DateTime Fecha { get; set; }
     public DateTime? FechaEntrega { get; set; }
-    public bool Entregado { get; set; }
     public ulong ClienteId { get; set; }
     public string? ClienteNombre { get; set; }
     public ulong EmpleadoId { get; set; }
@@ -116,9 +115,6 @@ public class UpdatePedidoDto
     [Display(Name = "Total")]
     [Range(0, 9999999999.99, ErrorMessage = "El total debe ser mayor o igual a 0.")]
     public decimal Total { get; set; }
-
-    [Display(Name = "Entregado")]
-    public bool Entregado { get; set; }
 
     [Display(Name = "Dirección de entrega")]
     [StringLength(255, ErrorMessage = "La dirección no puede superar {1} caracteres.")]

@@ -33,11 +33,6 @@ public class PedidoConfiguration : IEntityTypeConfiguration<Pedido>
             .HasColumnName("fecha_entrega")
             .HasColumnType("datetime");
 
-        builder.Property(p => p.Entregado)
-            .HasColumnName("entregado")
-            .HasColumnType("tinyint(1)")
-            .HasDefaultValue(false);
-
         builder.Property(p => p.ClienteId).HasColumnName("cliente_id");
         builder.Property(p => p.EmpleadoId).HasColumnName("empleado_id");
         builder.Property(p => p.EstadoPedidoId).HasColumnName("estado_pedido_id");

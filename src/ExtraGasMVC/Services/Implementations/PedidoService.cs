@@ -196,7 +196,6 @@ public class PedidoService : IPedidoService
         pedido.EstadoPedidoId = pedidoDto.EstadoPedidoId;
         pedido.CanalVentaId = pedidoDto.CanalVentaId;
         pedido.MedioContactoId = pedidoDto.MedioContactoId;
-        pedido.Entregado = pedidoDto.Entregado;
         pedido.DireccionEntrega = pedidoDto.DireccionEntrega;
         pedido.Observaciones = pedidoDto.Observaciones;
         pedido.Descuento = pedidoDto.Descuento;

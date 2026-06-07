@@ -6,7 +6,6 @@ public class Pedido
     public string? Numero { get; set; }
     public DateTime Fecha { get; set; }
     public DateTime? FechaEntrega { get; set; }
-    public bool Entregado { get; set; }
     public ulong ClienteId { get; set; }
     public ulong EmpleadoId { get; set; }
     public ulong EstadoPedidoId { get; set; }

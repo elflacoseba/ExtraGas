@@ -101,7 +101,6 @@ public class PedidosController : BaseController
             Id = pedido.Id,
             Fecha = pedido.Fecha,
             FechaEntrega = pedido.FechaEntrega,
-            Entregado = pedido.Entregado,
             ClienteId = pedido.ClienteId,
             EmpleadoId = pedido.EmpleadoId,
             EstadoPedidoId = pedido.EstadoPedidoId,
