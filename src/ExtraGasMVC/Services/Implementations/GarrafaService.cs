@@ -70,13 +70,16 @@ public class GarrafaService : IGarrafaService
 
     public async Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafaDto, CancellationToken ct = default)
     {
+        if (await _context.Garrafas.AnyAsync(g => g.Codigo == garrafaDto.Codigo, ct))
+            throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafaDto.Codigo}.");
+
         var garrafa = _mapper.Map<Garrafa>(garrafaDto);
         garrafa.CreatedAt = DateTime.UtcNow;
         garrafa.UpdatedAt = DateTime.UtcNow;
-        
+
         _context.Garrafas.Add(garrafa);
         await _context.SaveChangesAsync(ct);
-        
+
         return _mapper.Map<GarrafaDto>(garrafa);
     }
 
@@ -86,11 +89,14 @@ public class GarrafaService : IGarrafaService
         if (garrafa == null)
             throw new KeyNotFoundException($"Garrafa con Id {garrafaDto.Id} no encontrada.");
 
+        if (await _context.Garrafas.AnyAsync(g => g.Codigo == garrafaDto.Codigo && g.Id != garrafaDto.Id, ct))
+            throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafaDto.Codigo}.");
+
         _mapper.Map(garrafaDto, garrafa);
         garrafa.UpdatedAt = DateTime.UtcNow;
-        
+
         await _context.SaveChangesAsync(ct);
-        
+
         return _mapper.Map<GarrafaDto>(garrafa);
     }
 
