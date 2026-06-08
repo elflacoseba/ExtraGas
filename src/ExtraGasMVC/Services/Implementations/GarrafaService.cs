@@ -64,8 +64,18 @@ public class GarrafaService : IGarrafaService
             .Where(g => g.EstadoGarrafaId == estadoId)
             .OrderBy(g => g.Codigo)
             .ToListAsync(ct);
-        
+
         return _mapper.Map<IEnumerable<GarrafaDto>>(garrafas);
+    }
+
+    public async Task<IEnumerable<EstadoGarrafaDto>> GetEstadosAsync(CancellationToken ct = default)
+    {
+        var estados = await _context.EstadosGarrafa
+            .AsNoTracking()
+            .OrderBy(e => e.Nombre)
+            .ToListAsync(ct);
+
+        return _mapper.Map<IEnumerable<EstadoGarrafaDto>>(estados);
     }
 
     public async Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafaDto, CancellationToken ct = default)
@@ -149,5 +159,34 @@ public class GarrafaService : IGarrafaService
             await transaction.RollbackAsync(ct);
             throw;
         }
+    }
+
+    public async Task<bool> DeleteAsync(ulong id, CancellationToken ct = default)
+    {
+        var garrafa = await _context.Garrafas
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(g => g.Id == id, ct);
+
+        if (garrafa == null)
+            return false;
+
+        var codigosBloqueados = new[] { "EN_CLIENTE", "EN_TRANSITO" };
+        var estadoCodigo = await _context.EstadosGarrafa
+            .AsNoTracking()
+            .Where(e => e.Id == garrafa.EstadoGarrafaId)
+            .Select(e => e.Codigo)
+            .FirstOrDefaultAsync(ct);
+
+        if (estadoCodigo != null && codigosBloqueados.Contains(estadoCodigo))
+            throw new InvalidOperationException(
+                $"No se puede eliminar una garrafa en estado {estadoCodigo}. Primero cambie su estado.");
+
+        garrafa.DeletedAt = DateTime.UtcNow;
+        garrafa.Activo = false;
+        garrafa.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(ct);
+
+        return true;
     }
 }
