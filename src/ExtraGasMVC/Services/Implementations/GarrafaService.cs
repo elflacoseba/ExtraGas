@@ -131,9 +131,11 @@ public class GarrafaService : IGarrafaService
 
         try
         {
-            garrafa.EstadoGarrafaId = dto.NuevoEstadoId;
+            // NOTA: estado_garrafa_id y fecha_ultimo_movimiento NO se actualizan acá.
+            // El trigger trg_mov_garrafa_ai los setea automáticamente desde el
+            // movimiento (estado_destino_id y fecha) para mantener una sola fuente
+            // de verdad. La app solo actualiza los campos que el trigger no toca.
             garrafa.ClienteId = dto.ClienteId;
-            garrafa.FechaUltimoMovimiento = DateTime.UtcNow;
             garrafa.UpdatedAt = DateTime.UtcNow;
 
             var movimiento = new MovimientoGarrafa
