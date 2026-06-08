@@ -46,4 +46,5 @@ public class CambiarEstadoGarrafaDto
 {
     public ulong NuevoEstadoId { get; set; }
     public ulong? ClienteId { get; set; }
+    public string? Observaciones { get; set; }
 }

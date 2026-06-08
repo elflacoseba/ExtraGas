@@ -106,13 +106,48 @@ public class GarrafaService : IGarrafaService
         if (garrafa == null)
             return false;
 
-        garrafa.EstadoGarrafaId = dto.NuevoEstadoId;
-        garrafa.ClienteId = dto.ClienteId;
-        garrafa.FechaUltimoMovimiento = DateTime.UtcNow;
-        garrafa.UpdatedAt = DateTime.UtcNow;
-        
-        await _context.SaveChangesAsync(ct);
-        
-        return true;
+        var tipoCambioEstadoId = await _context.TiposMovimientoGarrafa
+            .AsNoTracking()
+            .Where(t => t.Codigo == "CAMBIO_ESTADO")
+            .Select(t => t.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if (tipoCambioEstadoId == 0)
+            throw new InvalidOperationException("No se encontró el tipo de movimiento CAMBIO_ESTADO en la base de datos.");
+
+        var estadoOrigen = garrafa.EstadoGarrafaId;
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+
+        try
+        {
+            garrafa.EstadoGarrafaId = dto.NuevoEstadoId;
+            garrafa.ClienteId = dto.ClienteId;
+            garrafa.FechaUltimoMovimiento = DateTime.UtcNow;
+            garrafa.UpdatedAt = DateTime.UtcNow;
+
+            var movimiento = new MovimientoGarrafa
+            {
+                GarrafaId = garrafa.Id,
+                Fecha = DateTime.UtcNow,
+                TipoMovimientoId = tipoCambioEstadoId,
+                ClienteId = dto.ClienteId,
+                EstadoOrigenId = estadoOrigen,
+                EstadoDestinoId = dto.NuevoEstadoId,
+                Observaciones = dto.Observaciones
+            };
+
+            _context.MovimientosGarrafa.Add(movimiento);
+
+            await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
     }
 }
