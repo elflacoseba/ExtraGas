@@ -52,6 +52,7 @@ public class MappingProfile : Profile
         CreateMap<EstadoPedido, EstadoPedidoDto>().ReverseMap();
         CreateMap<CanalVenta, CanalVentaDto>().ReverseMap();
         CreateMap<MedioContactoPedido, MedioContactoPedidoDto>().ReverseMap();
+        CreateMap<EstadoGarrafa, EstadoGarrafaDto>().ReverseMap();
 
         // Producto mappings
         CreateMap<Producto, ProductoDto>()

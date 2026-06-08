@@ -4,6 +4,7 @@ using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using MySqlConnector;
 
 namespace ExtraGasMVC.Services.Implementations;
 
@@ -64,19 +65,32 @@ public class GarrafaService : IGarrafaService
             .Where(g => g.EstadoGarrafaId == estadoId)
             .OrderBy(g => g.Codigo)
             .ToListAsync(ct);
-        
+
         return _mapper.Map<IEnumerable<GarrafaDto>>(garrafas);
+    }
+
+    public async Task<IEnumerable<EstadoGarrafaDto>> GetEstadosAsync(CancellationToken ct = default)
+    {
+        var estados = await _context.EstadosGarrafa
+            .AsNoTracking()
+            .OrderBy(e => e.Nombre)
+            .ToListAsync(ct);
+
+        return _mapper.Map<IEnumerable<EstadoGarrafaDto>>(estados);
     }
 
     public async Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafaDto, CancellationToken ct = default)
     {
+        if (await _context.Garrafas.AnyAsync(g => g.Codigo == garrafaDto.Codigo, ct))
+            throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafaDto.Codigo}.");
+
         var garrafa = _mapper.Map<Garrafa>(garrafaDto);
         garrafa.CreatedAt = DateTime.UtcNow;
         garrafa.UpdatedAt = DateTime.UtcNow;
-        
+
         _context.Garrafas.Add(garrafa);
-        await _context.SaveChangesAsync(ct);
-        
+        await SaveOrThrowDuplicateAsync(garrafaDto.Codigo, ct);
+
         return _mapper.Map<GarrafaDto>(garrafa);
     }
 
@@ -86,11 +100,14 @@ public class GarrafaService : IGarrafaService
         if (garrafa == null)
             throw new KeyNotFoundException($"Garrafa con Id {garrafaDto.Id} no encontrada.");
 
+        if (await _context.Garrafas.AnyAsync(g => g.Codigo == garrafaDto.Codigo && g.Id != garrafaDto.Id, ct))
+            throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafaDto.Codigo}.");
+
         _mapper.Map(garrafaDto, garrafa);
         garrafa.UpdatedAt = DateTime.UtcNow;
-        
-        await _context.SaveChangesAsync(ct);
-        
+
+        await SaveOrThrowDuplicateAsync(garrafaDto.Codigo, ct);
+
         return _mapper.Map<GarrafaDto>(garrafa);
     }
 
@@ -100,13 +117,91 @@ public class GarrafaService : IGarrafaService
         if (garrafa == null)
             return false;
 
-        garrafa.EstadoGarrafaId = dto.NuevoEstadoId;
-        garrafa.ClienteId = dto.ClienteId;
-        garrafa.FechaUltimoMovimiento = DateTime.UtcNow;
+        var tipoCambioEstadoId = await _context.TiposMovimientoGarrafa
+            .AsNoTracking()
+            .Where(t => t.Codigo == "CAMBIO_ESTADO")
+            .Select(t => t.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if (tipoCambioEstadoId == 0)
+            throw new InvalidOperationException("No se encontró el tipo de movimiento CAMBIO_ESTADO en la base de datos.");
+
+        var estadoOrigen = garrafa.EstadoGarrafaId;
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+
+        try
+        {
+            // NOTA: estado_garrafa_id y fecha_ultimo_movimiento NO se actualizan acá.
+            // El trigger trg_mov_garrafa_ai los setea automáticamente desde el
+            // movimiento (estado_destino_id y fecha) para mantener una sola fuente
+            // de verdad. La app solo actualiza los campos que el trigger no toca.
+            garrafa.ClienteId = dto.ClienteId;
+            garrafa.UpdatedAt = DateTime.UtcNow;
+
+            var movimiento = new MovimientoGarrafa
+            {
+                GarrafaId = garrafa.Id,
+                Fecha = DateTime.UtcNow,
+                TipoMovimientoId = tipoCambioEstadoId,
+                ClienteId = dto.ClienteId,
+                EstadoOrigenId = estadoOrigen,
+                EstadoDestinoId = dto.NuevoEstadoId,
+                Observaciones = dto.Observaciones
+            };
+
+            _context.MovimientosGarrafa.Add(movimiento);
+
+            await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public async Task<bool> DeleteAsync(ulong id, CancellationToken ct = default)
+    {
+        var garrafa = await _context.Garrafas
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(g => g.Id == id, ct);
+
+        if (garrafa == null)
+            return false;
+
+        var codigosBloqueados = new[] { "EN_CLIENTE", "EN_TRANSITO" };
+        var estadoCodigo = await _context.EstadosGarrafa
+            .AsNoTracking()
+            .Where(e => e.Id == garrafa.EstadoGarrafaId)
+            .Select(e => e.Codigo)
+            .FirstOrDefaultAsync(ct);
+
+        if (estadoCodigo != null && codigosBloqueados.Contains(estadoCodigo))
+            throw new InvalidOperationException(
+                $"No se puede eliminar una garrafa en estado {estadoCodigo}. Primero cambie su estado.");
+
+        garrafa.DeletedAt = DateTime.UtcNow;
+        garrafa.Activo = false;
         garrafa.UpdatedAt = DateTime.UtcNow;
-        
+
         await _context.SaveChangesAsync(ct);
-        
+
         return true;
+    }
+
+    private async Task SaveOrThrowDuplicateAsync(string codigo, CancellationToken ct)
+    {
+        try
+        {
+            await _context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException dbex) when (dbex.InnerException is MySqlException my && my.Number == 1062)
+        {
+            throw new InvalidOperationException($"Ya existe una garrafa con el código {codigo}.");
+        }
     }
 }

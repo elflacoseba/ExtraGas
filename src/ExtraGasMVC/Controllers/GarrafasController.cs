@@ -51,6 +51,11 @@ public class GarrafasController : Controller
             TempData["Success"] = $"Garrafa {garrafa.Codigo} creada.";
             return RedirectToAction(nameof(Index));
         }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return View(garrafa);
+        }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear la garrafa: {ex.Message}");
@@ -97,6 +102,12 @@ public class GarrafasController : Controller
             TempData["Success"] = $"Garrafa {garrafa.Codigo} actualizada.";
             return RedirectToAction(nameof(Index));
         }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+            return View(garrafa);
+        }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar la garrafa: {ex.Message}");
@@ -133,5 +144,94 @@ public class GarrafasController : Controller
         var todas = await _garrafaService.GetAllAsync(ct);
         var enClientes = todas.Where(g => g.ClienteId.HasValue);
         return View(enClientes);
+    }
+
+    public async Task<IActionResult> CambiarEstado(ulong id, CancellationToken ct = default)
+    {
+        var garrafa = await _garrafaService.GetByIdAsync(id, ct);
+        if (garrafa is null) return NotFound();
+
+        ViewBag.Estados = await _garrafaService.GetEstadosAsync(ct);
+        ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+
+        var dto = new CambiarEstadoGarrafaDto
+        {
+            NuevoEstadoId = garrafa.EstadoGarrafaId,
+            ClienteId = garrafa.ClienteId
+        };
+
+        ViewBag.Garrafa = garrafa;
+        return View(dto);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CambiarEstado(ulong id, CambiarEstadoGarrafaDto dto, CancellationToken ct = default)
+    {
+        var garrafa = await _garrafaService.GetByIdAsync(id, ct);
+        if (garrafa is null) return NotFound();
+
+        if (!ModelState.IsValid)
+        {
+            ViewBag.Estados = await _garrafaService.GetEstadosAsync(ct);
+            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+            ViewBag.Garrafa = garrafa;
+            return View(dto);
+        }
+
+        try
+        {
+            var ok = await _garrafaService.CambiarEstadoAsync(id, dto, ct);
+            if (!ok) return NotFound();
+            TempData["Success"] = $"Estado de la garrafa {garrafa.Codigo} actualizado correctamente.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            ViewBag.Estados = await _garrafaService.GetEstadosAsync(ct);
+            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+            ViewBag.Garrafa = garrafa;
+            return View(dto);
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, $"No se pudo cambiar el estado: {ex.Message}");
+            ViewBag.Estados = await _garrafaService.GetEstadosAsync(ct);
+            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+            ViewBag.Garrafa = garrafa;
+            return View(dto);
+        }
+    }
+
+    public async Task<IActionResult> Delete(ulong id, CancellationToken ct = default)
+    {
+        var garrafa = await _garrafaService.GetByIdAsync(id, ct);
+        if (garrafa is null) return NotFound();
+        return View(garrafa);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [ActionName("Delete")]
+    public async Task<IActionResult> DeleteConfirmed(ulong id, CancellationToken ct = default)
+    {
+        try
+        {
+            var ok = await _garrafaService.DeleteAsync(id, ct);
+            if (!ok) return NotFound();
+            TempData["Success"] = "Garrafa eliminada correctamente.";
+            return RedirectToAction(nameof(Index));
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["Error"] = ex.Message;
+            return RedirectToAction(nameof(Delete), new { id });
+        }
+        catch (Exception ex)
+        {
+            TempData["Error"] = $"No se pudo eliminar la garrafa: {ex.Message}";
+            return RedirectToAction(nameof(Delete), new { id });
+        }
     }
 }

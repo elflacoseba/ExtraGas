@@ -1,28 +1,29 @@
 @model ExtraGasMVC.DTOs.GarrafaDto
 @{
-    ViewData["Title"] = "Detalle de la garrafa";
+    ViewData["Title"] = "Eliminar garrafa";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
     {
         new() { Label = "Garrafas", Controller = "Garrafas", Action = "Index" },
-        new() { Label = Model.Codigo }
+        new() { Label = Model.Codigo },
+        new() { Label = "Eliminar" }
     };
 }
 @section PageHeader {
-    <div class="mb-3 d-flex gap-2">
+    <div class="mb-3">
         <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Volver</a>
-        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-primary"><i class="bi bi-pencil me-1"></i> Editar</a>
-        <a asp-action="CambiarEstado" asp-route-id="@Model.Id" class="btn btn-warning"><i class="bi bi-arrow-repeat me-1"></i> Cambiar estado</a>
     </div>
 }
 <div class="card">
-    <div class="card-header"><h3 class="card-title">Garrafa @Model.Codigo</h3></div>
+    <div class="card-header bg-danger text-white"><h3 class="card-title mb-0">Eliminar garrafa</h3></div>
     <div class="card-body">
+        <div class="alert alert-warning" role="alert">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Esta acción no se puede deshacer. La garrafa quedará marcada como eliminada (baja lógica) y no aparecerá en las búsquedas normales.
+        </div>
         <dl class="row">
             <dt class="col-sm-3">Codigo</dt><dd class="col-sm-9"><code>@Model.Codigo</code></dd>
             <dt class="col-sm-3">Capacidad</dt><dd class="col-sm-9">@Model.CapacidadKg kg</dd>
             <dt class="col-sm-3">Estado</dt><dd class="col-sm-9"><span class="badge text-bg-secondary">#@Model.EstadoGarrafaId</span></dd>
-            <dt class="col-sm-3">Fecha de compra</dt><dd class="col-sm-9">@Model.FechaCompra.ToString("dd/MM/yyyy")</dd>
-            <dt class="col-sm-3">Ultimo movimiento</dt><dd class="col-sm-9">@Model.FechaUltimoMovimiento.ToShortDateTime()</dd>
             <dt class="col-sm-3">Cliente actual</dt>
             <dd class="col-sm-9">
                 @if (Model.ClienteId.HasValue)
@@ -31,11 +32,15 @@
             </dd>
             <dt class="col-sm-3">Proveedor</dt><dd class="col-sm-9">@(Model.ProveedorId?.ToString() ?? "-")</dd>
             <dt class="col-sm-3">Recepcion</dt><dd class="col-sm-9">@(Model.RecepcionId?.ToString() ?? "-")</dd>
-            <dt class="col-sm-3">Activo</dt>
-            <dd class="col-sm-9">
-                @if (Model.Activo) { <span class="badge text-bg-success">Si</span> } else { <span class="badge text-bg-secondary">No</span> }
-            </dd>
+            <dt class="col-sm-3">Fecha de compra</dt><dd class="col-sm-9">@Model.FechaCompra.ToString("dd/MM/yyyy")</dd>
             <dt class="col-sm-3">Observaciones</dt><dd class="col-sm-9">@(Model.Observaciones ?? "-")</dd>
         </dl>
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <form asp-action="Delete" asp-route-id="@Model.Id" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i> Eliminar definitivamente</button>
+        </form>
+        <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary">Cancelar</a>
     </div>
 </div>
