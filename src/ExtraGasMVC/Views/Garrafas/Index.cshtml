@@ -70,8 +70,9 @@
                         <td>@g.FechaCompra.ToString("dd/MM/yyyy")</td>
                         <td>@g.FechaUltimoMovimiento.ToShortDate()</td>
                         <td class="text-end">
-                            <a asp-action="Details" asp-route-id="@g.Id" class="btn btn-sm btn-info"><i class="bi bi-eye"></i></a>
-                            <a asp-action="Edit" asp-route-id="@g.Id" class="btn btn-sm btn-primary"><i class="bi bi-pencil"></i></a>
+                            <a asp-action="Details" asp-route-id="@g.Id" class="btn btn-sm btn-info" title="Ver"><i class="bi bi-eye"></i></a>
+                            <a asp-action="Edit" asp-route-id="@g.Id" class="btn btn-sm btn-primary" title="Editar"><i class="bi bi-pencil"></i></a>
+                            <a asp-action="Delete" asp-route-id="@g.Id" class="btn btn-sm btn-danger" title="Eliminar"><i class="bi bi-trash"></i></a>
                         </td>
                     </tr>
                 }
