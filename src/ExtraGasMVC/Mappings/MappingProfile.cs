@@ -67,6 +67,7 @@ public class MappingProfile : Profile
         CreateMap<Proveedor, ProveedorDto>().ReverseMap();
         CreateMap<CreateProveedorDto, Proveedor>();
         CreateMap<UpdateProveedorDto, Proveedor>();
+        CreateMap<ProveedorDto, UpdateProveedorDto>();
 
         // Pago mappings
         CreateMap<Pago, PagoDto>().ReverseMap();
