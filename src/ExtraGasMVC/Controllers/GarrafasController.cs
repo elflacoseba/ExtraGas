@@ -51,6 +51,11 @@ public class GarrafasController : Controller
             TempData["Success"] = $"Garrafa {garrafa.Codigo} creada.";
             return RedirectToAction(nameof(Index));
         }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return View(garrafa);
+        }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear la garrafa: {ex.Message}");
@@ -96,6 +101,12 @@ public class GarrafasController : Controller
             await _garrafaService.UpdateAsync(garrafa, ct);
             TempData["Success"] = $"Garrafa {garrafa.Codigo} actualizada.";
             return RedirectToAction(nameof(Index));
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+            return View(garrafa);
         }
         catch (Exception ex)
         {
@@ -174,6 +185,14 @@ public class GarrafasController : Controller
             if (!ok) return NotFound();
             TempData["Success"] = $"Estado de la garrafa {garrafa.Codigo} actualizado correctamente.";
             return RedirectToAction(nameof(Details), new { id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            ViewBag.Estados = await _garrafaService.GetEstadosAsync(ct);
+            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+            ViewBag.Garrafa = garrafa;
+            return View(dto);
         }
         catch (Exception ex)
         {

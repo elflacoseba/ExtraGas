@@ -4,6 +4,7 @@ using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using MySqlConnector;
 
 namespace ExtraGasMVC.Services.Implementations;
 
@@ -88,7 +89,7 @@ public class GarrafaService : IGarrafaService
         garrafa.UpdatedAt = DateTime.UtcNow;
 
         _context.Garrafas.Add(garrafa);
-        await _context.SaveChangesAsync(ct);
+        await SaveOrThrowDuplicateAsync(garrafaDto.Codigo, ct);
 
         return _mapper.Map<GarrafaDto>(garrafa);
     }
@@ -105,7 +106,7 @@ public class GarrafaService : IGarrafaService
         _mapper.Map(garrafaDto, garrafa);
         garrafa.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync(ct);
+        await SaveOrThrowDuplicateAsync(garrafaDto.Codigo, ct);
 
         return _mapper.Map<GarrafaDto>(garrafa);
     }
@@ -190,5 +191,17 @@ public class GarrafaService : IGarrafaService
         await _context.SaveChangesAsync(ct);
 
         return true;
+    }
+
+    private async Task SaveOrThrowDuplicateAsync(string codigo, CancellationToken ct)
+    {
+        try
+        {
+            await _context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException dbex) when (dbex.InnerException is MySqlException my && my.Number == 1062)
+        {
+            throw new InvalidOperationException($"Ya existe una garrafa con el código {codigo}.");
+        }
     }
 }
