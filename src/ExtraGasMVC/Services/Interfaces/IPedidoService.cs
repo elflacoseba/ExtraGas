@@ -10,8 +10,19 @@ public interface IPedidoService
         DateTime? desde, DateTime? hasta,
         int pagina, int tamanio, CancellationToken ct = default);
     Task<IEnumerable<PedidoDto>> GetAllAsync(CancellationToken ct = default);
-    Task<IEnumerable<PedidoDto>> GetByClienteAsync(ulong clienteId, CancellationToken ct = default);
-    Task<IEnumerable<PedidoDto>> GetByEstadoAsync(ulong estadoId, CancellationToken ct = default);
+    Task<SearchResultDto<PedidoDto>> GetByClienteAsync(ulong clienteId, int pagina, int tamanio, CancellationToken ct = default);
+    Task<SearchResultDto<PedidoDto>> GetByEstadoAsync(ulong estadoId, int pagina, int tamanio, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns pedidos with saldo pendiente (saldo &gt; 0). Used by the dashboard
+    /// dropdown in <c>PagosController</c> and the <c>Pendientes</c> view.
+    /// <para>
+    /// Not paginated by design — the dataset is bounded by pedidos with debt,
+    /// which is small in practice. If this grows large, add pagination
+    /// parameters and return a <see cref="SearchResultDto{T}"/> like
+    /// <see cref="SearchAsync"/> does.
+    /// </para>
+    /// </summary>
     Task<IEnumerable<PedidoDto>> GetPendientesAsync(CancellationToken ct = default);
     Task<IEnumerable<PedidoItemDto>> GetItemsByPedidoAsync(ulong pedidoId, CancellationToken ct = default);
 
