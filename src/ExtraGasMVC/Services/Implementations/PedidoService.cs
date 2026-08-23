@@ -108,26 +108,50 @@ public class PedidoService : IPedidoService
         return _mapper.Map<IEnumerable<PedidoDto>>(pedidos);
     }
 
-    public async Task<IEnumerable<PedidoDto>> GetByClienteAsync(ulong clienteId, CancellationToken ct = default)
+    public async Task<SearchResultDto<PedidoDto>> GetByClienteAsync(ulong clienteId, int pagina, int tamanio, CancellationToken ct = default)
     {
-        var pedidos = await GetWithIncludes()
+        var query = GetWithIncludes()
             .AsNoTracking()
-            .Where(p => p.ClienteId == clienteId)
+            .Where(p => p.ClienteId == clienteId);
+
+        var total = await query.CountAsync(ct);
+
+        var pedidos = await query
             .OrderByDescending(p => p.Fecha)
+            .Skip((pagina - 1) * tamanio)
+            .Take(tamanio)
             .ToListAsync(ct);
 
-        return _mapper.Map<IEnumerable<PedidoDto>>(pedidos);
+        return new SearchResultDto<PedidoDto>
+        {
+            Items = _mapper.Map<List<PedidoDto>>(pedidos),
+            Total = total,
+            Pagina = pagina,
+            Tamanio = tamanio
+        };
     }
 
-    public async Task<IEnumerable<PedidoDto>> GetByEstadoAsync(ulong estadoId, CancellationToken ct = default)
+    public async Task<SearchResultDto<PedidoDto>> GetByEstadoAsync(ulong estadoId, int pagina, int tamanio, CancellationToken ct = default)
     {
-        var pedidos = await GetWithIncludes()
+        var query = GetWithIncludes()
             .AsNoTracking()
-            .Where(p => p.EstadoPedidoId == estadoId)
+            .Where(p => p.EstadoPedidoId == estadoId);
+
+        var total = await query.CountAsync(ct);
+
+        var pedidos = await query
             .OrderByDescending(p => p.Fecha)
+            .Skip((pagina - 1) * tamanio)
+            .Take(tamanio)
             .ToListAsync(ct);
 
-        return _mapper.Map<IEnumerable<PedidoDto>>(pedidos);
+        return new SearchResultDto<PedidoDto>
+        {
+            Items = _mapper.Map<List<PedidoDto>>(pedidos),
+            Total = total,
+            Pagina = pagina,
+            Tamanio = tamanio
+        };
     }
 
     public async Task<IEnumerable<PedidoDto>> GetPendientesAsync(CancellationToken ct = default)
