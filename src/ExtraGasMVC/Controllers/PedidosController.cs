@@ -1,5 +1,6 @@
 using ExtraGasMVC.Constants;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -52,11 +53,8 @@ public class PedidosController : BaseController
 
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
-        await CargarViewBagLookups(ct);
-        return View(new CreatePedidoDto
-        {
-            Fecha = DateTime.Now
-        });
+        var vm = await BuildCreateViewModelAsync(new CreatePedidoDto { Fecha = DateTime.Now }, ct);
+        return View(vm);
     }
 
     [HttpPost]
@@ -65,8 +63,8 @@ public class PedidosController : BaseController
     {
         if (!ModelState.IsValid)
         {
-            await CargarViewBagLookups(ct);
-            return View(pedido);
+            var vm = await BuildCreateViewModelAsync(pedido, ct);
+            return View(vm);
         }
         try
         {
@@ -78,14 +76,14 @@ public class PedidosController : BaseController
         catch (InvalidOperationException ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            await CargarViewBagLookups(ct);
-            return View(pedido);
+            var vm = await BuildCreateViewModelAsync(pedido, ct);
+            return View(vm);
         }
         catch (Exception)
         {
             ModelState.AddModelError(string.Empty, "Ocurrió un error al crear el pedido. Intente nuevamente.");
-            await CargarViewBagLookups(ct);
-            return View(pedido);
+            var vm = await BuildCreateViewModelAsync(pedido, ct);
+            return View(vm);
         }
     }
 
@@ -99,20 +97,6 @@ public class PedidosController : BaseController
             TempData["Info"] = "El pedido se encuentra en un estado final y no puede editarse.";
             return RedirectToAction(nameof(Details), new { id });
         }
-
-        await CargarViewBagLookups(ct);
-        ViewBag.Items = pedido.Items;
-
-        var transiciones = await _pedidoService.GetTransicionesDisponiblesAsync(id, ct);
-        ViewBag.Transiciones = transiciones;
-        ViewBag.EstadoActual = new
-        {
-            Id = pedido.EstadoPedidoId,
-            Codigo = pedido.EstadoCodigo,
-            Nombre = pedido.EstadoNombre,
-            Color = pedido.EstadoColor,
-            EsFinal = PedidoEstados.EstadosFinales.Contains(pedido.EstadoCodigo ?? "")
-        };
 
         var updateDto = new UpdatePedidoDto
         {
@@ -128,11 +112,8 @@ public class PedidosController : BaseController
             Observaciones = pedido.Observaciones
         };
 
-        ViewBag.Subtotal = pedido.Subtotal;
-        ViewBag.Total = pedido.Total;
-        ViewBag.MotivoCancelacion = pedido.MotivoCancelacion;
-
-        return View(updateDto);
+        var vm = await BuildEditViewModelAsync(id, updateDto, ct);
+        return View(vm);
     }
 
     [HttpPost]
@@ -149,22 +130,8 @@ public class PedidosController : BaseController
 
         if (!ModelState.IsValid)
         {
-            await CargarViewBagLookups(ct);
-            var existingPedido = await _pedidoService.GetByIdAsync(id, ct);
-            ViewBag.Items = existingPedido?.Items ?? new List<PedidoItemDto>();
-            ViewBag.Subtotal = existingPedido?.Subtotal ?? 0m;
-            ViewBag.Total = existingPedido?.Total ?? 0m;
-            ViewBag.Transiciones = await _pedidoService.GetTransicionesDisponiblesAsync(id, ct);
-            ViewBag.EstadoActual = new
-            {
-                Id = pedidoActual.EstadoPedidoId,
-                Codigo = pedidoActual.EstadoCodigo,
-                Nombre = pedidoActual.EstadoNombre,
-                Color = pedidoActual.EstadoColor,
-                EsFinal = PedidoEstados.EstadosFinales.Contains(pedidoActual.EstadoCodigo ?? "")
-            };
-            ViewBag.MotivoCancelacion = pedidoActual.MotivoCancelacion;
-            return View(pedido);
+            var vm = await BuildEditViewModelAsync(id, pedido, ct);
+            return View(vm);
         }
         try
         {
@@ -176,22 +143,14 @@ public class PedidosController : BaseController
         catch (InvalidOperationException ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            await CargarViewBagLookups(ct);
-            var existingPedido = await _pedidoService.GetByIdAsync(id, ct);
-            ViewBag.Items = existingPedido?.Items ?? new List<PedidoItemDto>();
-            ViewBag.Subtotal = existingPedido?.Subtotal ?? 0m;
-            ViewBag.Total = existingPedido?.Total ?? 0m;
-            return View(pedido);
+            var vm = await BuildEditViewModelAsync(id, pedido, ct);
+            return View(vm);
         }
         catch (Exception)
         {
             ModelState.AddModelError(string.Empty, "Ocurrió un error al actualizar el pedido. Intente nuevamente.");
-            await CargarViewBagLookups(ct);
-            var existingPedido = await _pedidoService.GetByIdAsync(id, ct);
-            ViewBag.Items = existingPedido?.Items ?? new List<PedidoItemDto>();
-            ViewBag.Subtotal = existingPedido?.Subtotal ?? 0m;
-            ViewBag.Total = existingPedido?.Total ?? 0m;
-            return View(pedido);
+            var vm = await BuildEditViewModelAsync(id, pedido, ct);
+            return View(vm);
         }
     }
 
@@ -315,13 +274,70 @@ public class PedidosController : BaseController
         return RedirectToAction(nameof(Edit), new { id = pedidoId, fragment = "itemsTable" });
     }
 
-    private async Task CargarViewBagLookups(CancellationToken ct)
+    private async Task<PedidoCreateViewModel> BuildCreateViewModelAsync(
+        CreatePedidoDto pedido,
+        CancellationToken ct = default)
     {
-        ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-        ViewBag.Empleados = await _pedidoService.GetEmpleadosActivosAsync(ct);
-        ViewBag.Estados = await _pedidoService.GetEstadosPedidoAsync(ct);
-        ViewBag.Canales = await _pedidoService.GetCanalesVentaAsync(ct);
-        ViewBag.MediosContacto = await _pedidoService.GetMediosContactoAsync(ct);
-        ViewBag.Productos = await _productoService.GetActivosAsync(ct);
+        // Lookups are independent — fan them out in parallel.
+        var clientesTask = _clienteService.GetActivosAsync(ct);
+        var empleadosTask = _pedidoService.GetEmpleadosActivosAsync(ct);
+        var canalesTask = _pedidoService.GetCanalesVentaAsync(ct);
+        var mediosTask = _pedidoService.GetMediosContactoAsync(ct);
+
+        await Task.WhenAll(clientesTask, empleadosTask, canalesTask, mediosTask);
+
+        return new PedidoCreateViewModel
+        {
+            Pedido = pedido,
+            Clientes = clientesTask.Result,
+            Empleados = empleadosTask.Result,
+            Canales = canalesTask.Result,
+            MediosContacto = mediosTask.Result
+        };
+    }
+
+    private async Task<PedidoEditViewModel> BuildEditViewModelAsync(
+        ulong id,
+        UpdatePedidoDto pedido,
+        CancellationToken ct = default)
+    {
+        // All of these are read-only reads against the pedido + lookups — safe to fan out.
+        var pedidoDbTask = _pedidoService.GetByIdAsync(id, ct);
+        var clientesTask = _clienteService.GetActivosAsync(ct);
+        var empleadosTask = _pedidoService.GetEmpleadosActivosAsync(ct);
+        var canalesTask = _pedidoService.GetCanalesVentaAsync(ct);
+        var mediosTask = _pedidoService.GetMediosContactoAsync(ct);
+        var productosTask = _productoService.GetActivosAsync(ct);
+        var transicionesTask = _pedidoService.GetTransicionesDisponiblesAsync(id, ct);
+
+        await Task.WhenAll(
+            pedidoDbTask, clientesTask, empleadosTask, canalesTask,
+            mediosTask, productosTask, transicionesTask);
+
+        var pedidoDb = pedidoDbTask.Result;
+        var estadoCodigo = pedidoDb?.EstadoCodigo ?? "";
+
+        return new PedidoEditViewModel
+        {
+            Pedido = pedido,
+            Clientes = clientesTask.Result,
+            Empleados = empleadosTask.Result,
+            Canales = canalesTask.Result,
+            MediosContacto = mediosTask.Result,
+            Productos = productosTask.Result,
+            Items = pedidoDb?.Items ?? new List<PedidoItemDto>(),
+            Transiciones = transicionesTask.Result,
+            EstadoActual = new PedidoEstadoActualInfo
+            {
+                Id = pedidoDb?.EstadoPedidoId ?? 0,
+                Codigo = pedidoDb?.EstadoCodigo,
+                Nombre = pedidoDb?.EstadoNombre,
+                Color = pedidoDb?.EstadoColor,
+                EsFinal = PedidoEstados.EstadosFinales.Contains(estadoCodigo)
+            },
+            Subtotal = pedidoDb?.Subtotal ?? 0m,
+            Total = pedidoDb?.Total ?? 0m,
+            MotivoCancelacion = pedidoDb?.MotivoCancelacion
+        };
     }
 }
