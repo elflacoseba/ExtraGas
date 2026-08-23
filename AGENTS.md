@@ -19,6 +19,7 @@ Sistema de gestión para una empresa familiar de **venta de gas envasado (garraf
 - **Entity Framework Core 9.0.16** con **Pomelo.EntityFrameworkCore.MySql 9.0.0** (driver MySQL nativo).
 - **Sin autenticación/autorización** configurada aún — solo `UseAuthorization()` sin middleware de identidad.
 - **AdminLTE 4** como template admin (CSS/JS en `wwwroot/lib/admin-lte/`), cargado vía npm (`package.json` con `admin-lte ^4.0.0`).
+- **SweetAlert2** para diálogos modales (confirmaciones, mensajes), cargado vía npm (`package.json` con `sweetalert2 ^11.26.25`).
 - **User Secrets** habilitado para configuración sensible (`appsettings.Development.json`).
 
 ### Capa de datos (EF Core)
@@ -38,9 +39,10 @@ Sistema de gestión para una empresa familiar de **venta de gas envasado (garraf
 - **AutoMapper** con perfil único `Mappings/MappingProfile.cs` para conversión Entity ↔ DTO.
 
 ### Controllers
-- 11 controllers MVC en `Controllers/`:
+- 12 controllers MVC en `Controllers/`:
   - `HomeController` — dashboard, errores
   - `AccountController` — login/logout (vistas básicas, sin Identity)
+  - `BaseController` — base compartido (helpers de auditoría `CreatedBy`/`UpdatedBy`, `Json` camelCase, antiforgery)
   - `ClientesController`, `PedidosController`, `ProductosController`, `ProveedoresController`, `PagosController`, `RecepcionesController`, `GarrafasController`
   - `EmpleadosController`, `UsuariosController` — ABM completo
   - `Reportes` — vistas de reportes (pagos por forma, productos más vendidos, regularidad de clientes)
@@ -83,7 +85,7 @@ Las credenciales por defecto en los scripts de BD son `root` sin password (insta
 ├── AGENTS.md                       este archivo
 ├── README.md                       descripción funcional del sistema
 ├── ExtraGasMVC.sln                 solución .NET (proyecto único)
-├── package.json                    npm — dependencia admin-lte ^4.0.0
+├── package.json                    npm — dependencias admin-lte ^4.0.0 y sweetalert2 ^11.26.25
 └── db/
     ├── migrations/                 SQL versionado, orden alfabético = orden de ejecución
     │   ├── 20260101_*_create_database.sql
@@ -91,11 +93,16 @@ Las credenciales por defecto en los scripts de BD son `root` sin password (insta
     │   ├── 20260102_000002_*_personas_y_seguridad.sql
     │   ├── 20260102_000003_*_productos.sql
     │   ├── 20260102_000004_*_pedidos_y_pagos.sql
-    │   ├── 20260102_000005_*_garrafas.sql
-    │   ├── 20260102_000006_*_proveedores_y_recepciones.sql
+    │   ├── 20260102_000005_*_proveedores_y_recepciones.sql
+    │   ├── 20260102_000006_*_garrafas.sql
     │   ├── 20260102_000007_*_triggers.sql
     │   ├── 20260102_000008_*_views.sql
-    │   └── 20260102_000009_*_seed_data.sql
+    │   ├── 20260102_000009_*_seed_data.sql
+    │   ├── 20260606_000001_*_add_unique_index_clientes_dni.sql
+    │   ├── 20260607_000001_*_drop_pedidos_entregado.sql
+    │   ├── 20260607_000002_*_add_motivo_cancelacion_pedidos.sql
+    │   ├── 20260607_000002_*_pedido_items_soft_delete_and_unique.sql
+    │   └── 20260608_000001_*_add_tipo_movimiento_cambio_estado.sql
     ├── seed/                       datos iniciales (provincias, productos, catálogos)
     ├── scripts/
     │   ├── install.sh              crea BD + aplica migraciones + seed
@@ -107,7 +114,7 @@ Las credenciales por defecto en los scripts de BD son `root` sin password (insta
 src/ExtraGasMVC/                    proyecto ASP.NET Core MVC (.NET 10.0)
 ├── Program.cs                      entry point — DI, middleware, routing
 ├── appsettings.json                config (connection string en User Secrets)
-├── Controllers/                    11 controllers MVC (ver abajo)
+├── Controllers/                    12 controllers MVC (ver abajo)
 ├── Data/
 │   ├── Context/ExtraGasDbContext.cs  DbContext — 30+ DbSets, ApplyConfigurationsFromAssembly
 │   ├── Entities/                   25 entidades POCO (una por tabla) + 10 vistas + Enums/
@@ -118,14 +125,15 @@ src/ExtraGasMVC/                    proyecto ASP.NET Core MVC (.NET 10.0)
 ├── DTOs/                           8 DTOs (Cliente, Empleado, Garrafa, Pago, Pedido, Producto, Proveedor, Usuario)
 ├── Mappings/MappingProfile.cs      perfil AutoMapper — Entity ↔ DTO
 ├── Extensions/FormatExtensions.cs  helpers de formato ARS y fechas
+├── Constants/                      constantes tipadas (ej. `PedidoEstados.cs`)
 ├── Models/ViewModels/              DTOs compuestos (Dashboard, Sidebar, Navbar, BreadcrumbItem, PagedResult)
 ├── Views/                          Razor views (ver abajo)
 └── wwwroot/lib/admin-lte/          CSS + JS AdminLTE 4 (via npm)
 ```
 
-**Controllers** (11): `Home`, `Account`, `Clientes`, `Pedidos`, `Productos`, `Proveedores`, `Pagos`, `Recepciones`, `Garrafas`, `Empleados`, `Usuarios`, `Reportes` (vistas de reportes).
+**Controllers** (12): `Home`, `Account`, `Base` (compartido), `Clientes`, `Pedidos`, `Productos`, `Proveedores`, `Pagos`, `Recepciones`, `Garrafas`, `Empleados`, `Usuarios`, `Reportes` (vistas de reportes).
 
-**Vistas** (carpetas): `Home/`, `Account/`, `Clientes/`, `Pedidos/`, `Productos/`, `Proveedores/`, `Pagos/`, `PagosProveedor/`, `Recepciones/`, `Empleados/`, `Usuarios/`, `Reportes/`, `Shared/` (layouts y partials). **No se listan** las ~64 vistas individuales (CRUD por controller) ni las ~35 configuraciones EF — son convencionales y un agente puede encontrarlas por patrón.
+**Vistas** (carpetas): `Home/`, `Account/`, `Clientes/`, `Pedidos/`, `Productos/`, `Proveedores/`, `Pagos/`, `PagosProveedor/`, `Recepciones/`, `Garrafas/`, `Empleados/`, `Usuarios/`, `Reportes/`, `Shared/` (layouts y partials). **No se listan** las ~64 vistas individuales (CRUD por controller) ni las ~35 configuraciones EF — son convencionales y un agente puede encontrarlas por patrón.
 
 ## Convenciones de la BD
 
@@ -196,6 +204,9 @@ SELECT * FROM v_regularidad_clientes ORDER BY dias_promedio_entre_pedidos ASC;
 - Skill `dotnet-best-practices` en `.agents/skills/dotnet-best-practices/` — mejores prácticas generales de .NET.
 - Skill `github-issues` en `.agents/skills/github-issues/` — creación, actualización y gestión de GitHub issues.
 - Skill `pr-review-dotnet` en `.agents/skills/pr-review-dotnet/` — revisión integral de PRs para .NET/ASP.NET Core MVC/EF Core.
+- Skill `mysql` en `.agents/skills/mysql/` — schema MySQL/InnoDB, índices, tuning de queries, transacciones.
+- Skill `enriquecer-issue` en `.agents/skills/enriquecer-issue/` — enriquecer issues existentes con contexto del codebase (NO para crear nuevas; para eso está `issue-creation`).
+- Skill `caveman` en `.agents/skills/caveman/` — modo de comunicación ultra-comprimido (ahorra ~65% tokens). Actívalo con "caveman mode" o `/caveman full`.
 - Diagrama ER: `db/docs/ERD.mmd` (Mermaid).
 - Decisiones y supuestos: `db/docs/DECISIONES.md`.
-- Skills lock: `skills-lock.json` — control de versiones de skills instaladas.
+- Skills lock: `skills-lock.json` — control de versiones de skills instaladas (8 skills registradas).

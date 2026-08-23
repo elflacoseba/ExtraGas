@@ -58,6 +58,7 @@ Los pedidos, recibos de pago e informes generados por el sistema podrán emitirs
 - Time zone: `America/Argentina/Buenos_Aires`
 - **.NET 10** (ASP.NET Core MVC)
 - **EF Core 9** + **Pomelo 9** (database-first, sin migraciones EF)
+- **AdminLTE 4** + **SweetAlert2** como UI base
 - La BD es la fuente de verdad; los cambios de esquema van por SQL en `db/migrations/`
 
 ## Estructura de la solución
@@ -75,7 +76,7 @@ Los pedidos, recibos de pago e informes generados por el sistema podrán emitirs
 │   │   ├── Context/                ExtraGasDbContext (punto de entrada del ORM)
 │   │   ├── Entities/               modelos POCO (25 tablas + 10 vistas + 1 enum)
 │   │   └── Configurations/         Fluent API por entidad (35 archivos separados)
-│   ├── Controllers/                controladores MVC (11 controllers)
+│   ├── Controllers/                controladores MVC (12 controllers)
 │   ├── Services/                   lógica de negocio (8 interfaces + 8 implementaciones)
 │   ├── DTOs/                       objetos de transferencia de datos (8 DTOs)
 │   ├── Mappings/                   perfil AutoMapper (Entity ↔ DTO)
@@ -90,7 +91,11 @@ Los pedidos, recibos de pago e informes generados por el sistema podrán emitirs
 │   ├── database-designer/          análisis de esquema, migraciones, índices
 │   ├── dotnet-backend-patterns/    patrones backend .NET, repository, EF Core
 │   ├── dotnet-best-practices/      mejores prácticas .NET
-│   └── pr-review-dotnet/           revisión de PRs para .NET
+│   ├── pr-review-dotnet/           revisión de PRs para .NET
+│   ├── github-issues/              gestión de GitHub issues
+│   ├── mysql/                      schema MySQL/InnoDB, índices, tuning
+│   ├── enriquecer-issue/           enriquecer issues existentes con contexto del codebase
+│   └── caveman/                    modo de comunicación ultra-comprimido
 │
 └── db/
     ├── migrations/                 SQL versionado (orden alfabético = orden de ejecución)
@@ -120,7 +125,7 @@ mysql -uroot extragas
 
 ## Skills de OpenCode
 
-El proyecto incluye 4 skills instaladas (gestionadas en `skills-lock.json`):
+El proyecto incluye 8 skills instaladas (gestionadas en `skills-lock.json`):
 
 | Skill | Propósito |
 |-------|-----------|
@@ -128,3 +133,7 @@ El proyecto incluye 4 skills instaladas (gestionadas en `skills-lock.json`):
 | `dotnet-backend-patterns` | Patrones de backend .NET, repository, EF Core, Dapper |
 | `dotnet-best-practices` | Mejores prácticas generales de .NET/C# |
 | `pr-review-dotnet` | Revisión integral de PRs para .NET, ASP.NET Core MVC, EF Core |
+| `github-issues` | Creación, actualización y gestión de GitHub issues |
+| `mysql` | Schema MySQL/InnoDB, índices, tuning de queries, transacciones |
+| `enriquecer-issue` | Enriquece issues existentes con contexto del codebase (no para crear nuevas) |
+| `caveman` | Modo de comunicación ultra-comprimido (ahorra ~65% tokens) |

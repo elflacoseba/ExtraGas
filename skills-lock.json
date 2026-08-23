@@ -24,6 +24,30 @@
       "sourceType": "github",
       "skillPath": "skills/github-issues/SKILL.md",
       "computedHash": "efa9746a60c4507ad5a7ad60e1e9a704b4eea06c1229befe3c86b3bbcaea67c9"
+    },
+    "pr-review-dotnet": {
+      "source": "local",
+      "sourceType": "filesystem",
+      "skillPath": ".agents/skills/pr-review-dotnet/SKILL.md",
+      "computedHash": "21b9f4be8b1b704eb91fdd4fd780131c161f788da2051d7b24230fe09c9dd8a4"
+    },
+    "mysql": {
+      "source": "planetscale/database-skills",
+      "sourceType": "github",
+      "skillPath": "skills/mysql/SKILL.md",
+      "computedHash": "e4ea38add289809904805cc9e078a9b84a8fd8184da277466717aee8c51dc110"
+    },
+    "enriquecer-issue": {
+      "source": "elflacoseba",
+      "sourceType": "local",
+      "skillPath": ".agents/skills/enriquecer-issue/SKILL.md",
+      "computedHash": "050dd23ee092b701416b6bc4b3742175ca5d32309447239c7b05131d09021bc5"
+    },
+    "caveman": {
+      "source": "local",
+      "sourceType": "filesystem",
+      "skillPath": ".agents/skills/caveman/SKILL.md",
+      "computedHash": "daf9cec496ebd039809d8236f99f17fa1b4beaadf8ce4e2d532d0da51d70afce"
     }
   }
 }
