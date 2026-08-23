@@ -14,4 +14,16 @@ public interface IGarrafaService
     Task<GarrafaDto> UpdateAsync(UpdateGarrafaDto garrafa, CancellationToken ct = default);
     Task<bool> CambiarEstadoAsync(ulong id, CambiarEstadoGarrafaDto dto, CancellationToken ct = default);
     Task<bool> DeleteAsync(ulong id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the catalog rows for the destination states that the given
+    /// garrafa is allowed to transition to. Used by the UI to filter the
+    /// state dropdown shown on the "Cambiar estado" view.
+    /// </summary>
+    /// <returns>
+    /// Empty enumerable when the garrafa doesn't exist, when its current
+    /// state has no outgoing transitions (terminal state), or when the
+    /// current state code is not present in the transition matrix.
+    /// </returns>
+    Task<IEnumerable<EstadoGarrafaDto>> GetTransicionesDisponiblesAsync(ulong garrafaId, CancellationToken ct = default);
 }

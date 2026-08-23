@@ -4,6 +4,8 @@
     var garrafa = ViewBag.Garrafa as ExtraGasMVC.DTOs.GarrafaDto;
     var estados = ViewBag.Estados as IEnumerable<ExtraGasMVC.DTOs.EstadoGarrafaDto> ?? Array.Empty<ExtraGasMVC.DTOs.EstadoGarrafaDto>();
     var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.DTOs.ClienteDto> ?? Array.Empty<ExtraGasMVC.DTOs.ClienteDto>();
+    var hayTransiciones = estados.Any();
+    var placeholderDestino = hayTransiciones ? "Seleccione un estado" : "Sin transiciones disponibles";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
     {
         new() { Label = "Garrafas", Controller = "Garrafas", Action = "Index" },
@@ -27,41 +29,62 @@
             </dl>
         </div>
     }
-    <form asp-action="CambiarEstado" asp-route-id="@garrafa?.Id" method="post">
-        @Html.AntiForgeryToken()
+    @if (!hayTransiciones)
+    {
         <div class="card-body">
-            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label asp-for="NuevoEstadoId" class="form-label">Nuevo estado</label>
-                    <select asp-for="NuevoEstadoId" class="form-select" required>
-                        <option value="">-- Seleccione un estado --</option>
-                        @foreach (var e in estados)
-                        {
-                            <option value="@e.Id">@e.Nombre (@e.Codigo)</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label asp-for="ClienteId" class="form-label">Cliente (opcional)</label>
-                    <select asp-for="ClienteId" class="form-select">
-                        <option value="">-- Sin cliente --</option>
-                        @foreach (var c in clientes)
-                        {
-                            <option value="@c.Id">@c.Apellido, @c.Nombre</option>
-                        }
-                    </select>
-                    <small class="form-text text-secondary">Requerido si el estado lo exige.</small>
-                </div>
-                <div class="col-12">
-                    <label asp-for="Observaciones" class="form-label">Observaciones</label>
-                    <textarea asp-for="Observaciones" class="form-control" rows="3" placeholder="Motivo del cambio de estado"></textarea>
-                </div>
+            <div class="alert alert-warning mb-0" role="alert">
+                <h5 class="alert-heading"><i class="bi bi-exclamation-triangle me-1"></i> Estado terminal</h5>
+                La garrafa no tiene transiciones manuales válidas hacia otros estados desde su estado actual.
+                No es posible registrar un cambio desde este formulario.
             </div>
         </div>
         <div class="card-footer d-flex gap-2">
-            <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i> Guardar cambio</button>
-            <a asp-action="Details" asp-route-id="@garrafa?.Id" class="btn btn-outline-secondary">Cancelar</a>
+            <a asp-action="Details" asp-route-id="@garrafa?.Id" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Volver al detalle
+            </a>
         </div>
-    </form>
+    }
+    else
+    {
+        <form asp-action="CambiarEstado" asp-route-id="@garrafa?.Id" method="post">
+            @Html.AntiForgeryToken()
+            <div class="card-body">
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="NuevoEstadoId" class="form-label">Nuevo estado</label>
+                        <select asp-for="NuevoEstadoId" class="form-select" required>
+                            <option value="">-- @placeholderDestino --</option>
+                            @foreach (var e in estados)
+                            {
+                                <option value="@e.Id">@e.Nombre (@e.Codigo)</option>
+                            }
+                        </select>
+                        <small class="form-text text-secondary">Solo se muestran los estados a los que es válido transicionar.</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="ClienteId" class="form-label">Cliente (opcional)</label>
+                        <select asp-for="ClienteId" class="form-select">
+                            <option value="">-- Sin cliente --</option>
+                            @foreach (var c in clientes)
+                            {
+                                <option value="@c.Id">@c.Apellido, @c.Nombre</option>
+                            }
+                        </select>
+                        <small class="form-text text-secondary">Requerido si el estado lo exige.</small>
+                    </div>
+                    <div class="col-12">
+                        <label asp-for="Observaciones" class="form-label">Observaciones</label>
+                        <textarea asp-for="Observaciones" class="form-control" rows="3" placeholder="Motivo del cambio de estado"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save me-1"></i> Guardar cambio
+                </button>
+                <a asp-action="Details" asp-route-id="@garrafa?.Id" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    }
 </div>
