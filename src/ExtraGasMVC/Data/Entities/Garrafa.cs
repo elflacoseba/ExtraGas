@@ -18,4 +18,6 @@ public class Garrafa
     public ulong? CreatedBy { get; set; }
     public ulong? UpdatedBy { get; set; }
     public DateTime? DeletedAt { get; set; }
+
+    public virtual EstadoGarrafa? EstadoGarrafa { get; set; }
 }
