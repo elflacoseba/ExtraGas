@@ -1,4 +1,5 @@
 using AutoMapper;
+using ExtraGasMVC.Constants;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
@@ -117,6 +118,43 @@ public class GarrafaService : IGarrafaService
         if (garrafa == null)
             return false;
 
+        // Cargar ambos extremos de la transición (origen y destino) en una sola
+        // consulta para poder validar contra GarrafaTransiciones y contra las
+        // reglas del catálogo (requiere_cliente, etc.).
+        var extremos = await _context.EstadosGarrafa
+            .AsNoTracking()
+            .Where(e => e.Id == garrafa.EstadoGarrafaId || e.Id == dto.NuevoEstadoId)
+            .Select(e => new { e.Id, e.Codigo, e.RequiereCliente, e.Nombre })
+            .ToListAsync(ct);
+
+        var origen = extremos.FirstOrDefault(e => e.Id == garrafa.EstadoGarrafaId);
+        var destino = extremos.FirstOrDefault(e => e.Id == dto.NuevoEstadoId);
+
+        if (origen is null)
+            throw new InvalidOperationException(
+                $"El estado actual de la garrafa (id={garrafa.EstadoGarrafaId}) no existe en el catálogo estados_garrafa.");
+
+        if (destino is null)
+            throw new InvalidOperationException(
+                $"El estado destino solicitado (id={dto.NuevoEstadoId}) no existe en el catálogo estados_garrafa.");
+
+        // Issue #40: validar la transición contra la matriz de estados.
+        if (!GarrafaTransiciones.EsValida(origen.Codigo, destino.Codigo))
+        {
+            throw new InvalidOperationException(
+                $"Transición inválida: {origen.Nombre} ({origen.Codigo}) → {destino.Nombre} ({destino.Codigo}). " +
+                $"Consulte la matriz de transiciones válidas en la documentación del módulo Garrafas.");
+        }
+
+        // Si el estado destino exige un cliente (p.ej. EN_CLIENTE) el DTO debe traerlo.
+        // El trigger trg_garrafas_bi_validate sólo cubre INSERT — para los cambios
+        // de estado hechos por CAMBIO_ESTADO la validación la hace la app.
+        if (destino.RequiereCliente && !dto.ClienteId.HasValue)
+        {
+            throw new InvalidOperationException(
+                $"El estado {destino.Nombre} requiere seleccionar un cliente.");
+        }
+
         var tipoCambioEstadoId = await _context.TiposMovimientoGarrafa
             .AsNoTracking()
             .Where(t => t.Codigo == "CAMBIO_ESTADO")
@@ -162,6 +200,37 @@ public class GarrafaService : IGarrafaService
             await transaction.RollbackAsync(ct);
             throw;
         }
+    }
+
+    public async Task<IEnumerable<EstadoGarrafaDto>> GetTransicionesDisponiblesAsync(ulong garrafaId, CancellationToken ct = default)
+    {
+        // Solo necesitamos el código del estado actual para consultar la matriz;
+        // hacerlo con un join manual evita tener que añadir una navigation
+        // property a Garrafa (la entidad lo mantiene plano por convención).
+        var estadoCodigo = await (
+            from g in _context.Garrafas.AsNoTracking()
+            join e in _context.EstadosGarrafa.AsNoTracking()
+                on g.EstadoGarrafaId equals e.Id
+            where g.Id == garrafaId
+            select e.Codigo
+        ).FirstOrDefaultAsync(ct);
+
+        if (string.IsNullOrEmpty(estadoCodigo))
+            return Array.Empty<EstadoGarrafaDto>();
+
+        var codigosPermitidos = GarrafaTransiciones.DestinosPermitidos(estadoCodigo);
+        if (codigosPermitidos.Count == 0)
+            return Array.Empty<EstadoGarrafaDto>();
+
+        // Filtra el catálogo por los códigos permitidos y mantiene el orden
+        // alfabético que usa GetEstadosAsync para que la UI sea consistente.
+        var destinos = await _context.EstadosGarrafa
+            .AsNoTracking()
+            .Where(e => codigosPermitidos.Contains(e.Codigo))
+            .OrderBy(e => e.Nombre)
+            .ToListAsync(ct);
+
+        return _mapper.Map<IEnumerable<EstadoGarrafaDto>>(destinos);
     }
 
     public async Task<bool> DeleteAsync(ulong id, CancellationToken ct = default)

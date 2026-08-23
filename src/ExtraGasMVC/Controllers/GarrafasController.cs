@@ -151,7 +151,10 @@ public class GarrafasController : Controller
         var garrafa = await _garrafaService.GetByIdAsync(id, ct);
         if (garrafa is null) return NotFound();
 
-        ViewBag.Estados = await _garrafaService.GetEstadosAsync(ct);
+        // Issue #40: el dropdown muestra sólo los destinos válidos para el estado
+        // actual de la garrafa, según GarrafaTransiciones. La validación real
+        // (incluido requests hand-crafted) la hace CambiarEstadoAsync en el service.
+        ViewBag.Estados = await _garrafaService.GetTransicionesDisponiblesAsync(id, ct);
         ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
 
         var dto = new CambiarEstadoGarrafaDto
@@ -171,13 +174,13 @@ public class GarrafasController : Controller
         var garrafa = await _garrafaService.GetByIdAsync(id, ct);
         if (garrafa is null) return NotFound();
 
+        // Re-poblar ViewBags antes de cualquier re-render (Valid o error).
+        ViewBag.Estados = await _garrafaService.GetTransicionesDisponiblesAsync(id, ct);
+        ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+        ViewBag.Garrafa = garrafa;
+
         if (!ModelState.IsValid)
-        {
-            ViewBag.Estados = await _garrafaService.GetEstadosAsync(ct);
-            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-            ViewBag.Garrafa = garrafa;
             return View(dto);
-        }
 
         try
         {
@@ -188,18 +191,14 @@ public class GarrafasController : Controller
         }
         catch (InvalidOperationException ex)
         {
+            // Incluye: transición inválida, estado destino inexistente,
+            // estado destino que requiere cliente, etc.
             ModelState.AddModelError(string.Empty, ex.Message);
-            ViewBag.Estados = await _garrafaService.GetEstadosAsync(ct);
-            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-            ViewBag.Garrafa = garrafa;
             return View(dto);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo cambiar el estado: {ex.Message}");
-            ViewBag.Estados = await _garrafaService.GetEstadosAsync(ct);
-            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-            ViewBag.Garrafa = garrafa;
             return View(dto);
         }
     }

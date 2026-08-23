@@ -156,6 +156,45 @@ Documento de decisiones (ADR-style) y supuestos del sistema **ExtraGas**.
 
 ---
 
+## 16. Máquina de estados de garrafa — matriz de transiciones
+
+**Decisión:** las transiciones válidas entre estados de garrafa cuando se hacen manualmente desde la UI (`GarrafaService.CambiarEstadoAsync`) están definidas en una matriz hard-coded en C# (`Services/GarrafaTransiciones.cs`), no en una tabla lookup.
+
+**Por qué:**
+
+1. Las transiciones describen restricciones del dominio físico (una garrafa dañada no se puede entregar, una retirada del sistema no vuelve a estar disponible). Son un contrato invariante, no un catálogo administrativo.
+2. Al estar en C# viajan con el código del servicio, las versiones y el PR — un cambio se revisa, no se aplica por una corrida SQL.
+3. El compilador detecta referencias inválidas a estados. La matriz es trivialmente testeable sin necesidad de fixtures de BD.
+4. El catálogo `estados_garrafa` (los **estados mismos**) sigue siendo una tabla en BD para mantener el principio #4. Sólo las transiciones, que son lógica de negocio, son código.
+
+**Matriz vigente:**
+
+| Origen ↓ → Destino | LLENA_DEPOSITO | VACIA_DEPOSITO | EN_TRANSITO | EN_CLIENTE | DAÑADA | FUERA_SERVICIO |
+|---|---|---|---|---|---|---|
+| **LLENA_DEPOSITO**  | — | ✓ | ✓ | ✓ | ✓ | — |
+| **VACIA_DEPOSITO**  | ✓ | — | — | ✓ | ✓ | ✓ |
+| **EN_TRANSITO**     | ✓ | ✓ | — | ✓ | ✓ | — |
+| **EN_CLIENTE**      | ✓ | ✓ | — | — | ✓ | ✓ |
+| **DAÑADA**          | — | ✓ | — | — | — | ✓ |
+| **FUERA_SERVICIO**  | — | — | — | — | — | — |
+
+Notas operativas:
+
+- **`FUERA_SERVICIO` es estado terminal**: una garrafa retirada del sistema no vuelve a entrar al inventario activo. Esto es el ejemplo del issue #40.
+- **`EN_TRANSITO → EN_CLIENTE`** es la confirmación de una entrega que estaba en reparto.
+- **`EN_CLIENTE → VACIA_DEPOSITO`** es la devolución por canje (escenario habitual).
+- Las transiciones por flujo de negocio (`COMPRA`, `ENTREGA_CLIENTE`, `DEVOLUCION_CLIENTE`, `BAJA`, `REPARACION`) **no pasan por esta matriz** — son registradas directamente por los servicios de `Recepciones` y `Pedidos` con su `tipo_movimiento` correspondiente.
+- Auto-transiciones (`X → X`) son rechazadas como no-ops.
+
+**Implicancia para la UI:**
+
+- El dropdown del formulario "Cambiar estado" sólo muestra los destinos válidos para el estado actual de la garrafa (`IGarrafaService.GetTransicionesDisponiblesAsync`).
+- Si el estado es terminal, el dropdown queda deshabilitado y el formulario avisa con un `alert-warning` — la operación es efectivamente bloqueada del lado UI.
+- `CambiarEstadoAsync` rechaza toda transición no listada con `InvalidOperationException` ("Transición inválida: ORIGEN → DESTINO. Consulte la matriz…"). La validación pasa también por requests hand-crafted, no sólo por la UI.
+- Si el destino requiere cliente (`requiere_cliente = TRUE` en `estados_garrafa`, p.ej. `EN_CLIENTE`), la app exige `ClienteId` en el DTO. El trigger `trg_garrafas_bi_validate` sólo cubre `INSERT` directos, no cambios por `CAMBIO_ESTADO`.
+
+---
+
 ## Supuestos explícitos (no validados con el usuario)
 
 1. No hay delivery con zonas / tarifas distintas. Un pedido = una dirección.
