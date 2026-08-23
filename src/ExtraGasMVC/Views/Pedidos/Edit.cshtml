@@ -1,4 +1,4 @@
-@model ExtraGasMVC.DTOs.UpdatePedidoDto
+@model ExtraGasMVC.Models.ViewModels.PedidoEditViewModel
 @using ExtraGasMVC.Constants
 @using ExtraGasMVC.DTOs
 @using ExtraGasMVC.Extensions
@@ -9,17 +9,9 @@
         new() { Label = "Pedidos", Controller = "Pedidos", Action = "Index" },
         new() { Label = "Editar" }
     };
-    var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.DTOs.ClienteDto> ?? Array.Empty<ExtraGasMVC.DTOs.ClienteDto>();
-    var empleados = ViewBag.Empleados as IEnumerable<ExtraGasMVC.DTOs.EmpleadoDto> ?? Array.Empty<ExtraGasMVC.DTOs.EmpleadoDto>();
-    var canales = ViewBag.Canales as IEnumerable<ExtraGasMVC.DTOs.CanalVentaDto> ?? Array.Empty<ExtraGasMVC.DTOs.CanalVentaDto>();
-    var medios = ViewBag.MediosContacto as IEnumerable<ExtraGasMVC.DTOs.MedioContactoPedidoDto> ?? Array.Empty<ExtraGasMVC.DTOs.MedioContactoPedidoDto>();
-    var productos = ViewBag.Productos as IEnumerable<ExtraGasMVC.DTOs.ProductoDto> ?? Array.Empty<ExtraGasMVC.DTOs.ProductoDto>();
-    var items = ViewBag.Items as IEnumerable<ExtraGasMVC.DTOs.PedidoItemDto> ?? Array.Empty<ExtraGasMVC.DTOs.PedidoItemDto>();
-    var transiciones = ViewBag.Transiciones as List<ExtraGasMVC.DTOs.EstadoPedidoDto> ?? new List<ExtraGasMVC.DTOs.EstadoPedidoDto>();
-    dynamic estadoActual = ViewBag.EstadoActual;
-    var estadoCodigo = (string?)estadoActual?.Codigo;
-    var estadoColor = (string?)estadoActual?.Color ?? "#6c757d";
-    var estadoNombre = (string?)estadoActual?.Nombre ?? "-";
+    var estadoCodigo = Model.EstadoActual.Codigo;
+    var estadoColor = Model.EstadoActual.Color ?? "#6c757d";
+    var estadoNombre = Model.EstadoActual.Nombre ?? "-";
     var esFinal = PedidoEstados.EstadosFinales.Contains(estadoCodigo ?? "");
     var soloObservaciones = PedidoEstados.EstadosSoloLecturaParcial.Contains(estadoCodigo ?? "");
     var editable = !esFinal && !soloObservaciones;
@@ -33,54 +25,54 @@
 }
 <div class="card">
     <div class="card-header"><h3 class="card-title">Datos del pedido</h3></div>
-    <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
+    <form asp-action="Edit" asp-route-id="@Model.Pedido.Id" method="post">
         @Html.AntiForgeryToken()
-        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="Pedido.Id" />
         <div class="card-body">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
             <div class="small text-secondary mb-3"><span class="text-danger">*</span> Campos obligatorios</div>
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label asp-for="Fecha" class="form-label"></label> <span class="text-danger">*</span>
-                    <input asp-for="Fecha" type="datetime-local" class="form-control" required disabled="@(!editable)" />
-                    <span asp-validation-for="Fecha" class="text-danger small"></span>
+                    <label asp-for="Pedido.Fecha" class="form-label"></label> <span class="text-danger">*</span>
+                    <input asp-for="Pedido.Fecha" type="datetime-local" class="form-control" required disabled="@(!editable)" />
+                    <span asp-validation-for="Pedido.Fecha" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="FechaEntrega" class="form-label"></label>
-                    <input asp-for="FechaEntrega" type="date" class="form-control" disabled="@(esFinal || soloObservaciones)" />
+                    <label asp-for="Pedido.FechaEntrega" class="form-label"></label>
+                    <input asp-for="Pedido.FechaEntrega" type="date" class="form-control" disabled="@(esFinal || soloObservaciones)" />
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="CanalVentaId" class="form-label"></label> <span class="text-danger">*</span>
-                    <select asp-for="CanalVentaId" class="form-select" required disabled="@(!editable)">
+                    <label asp-for="Pedido.CanalVentaId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="Pedido.CanalVentaId" class="form-select" required disabled="@(!editable)">
                         <option value="">-- Seleccione canal --</option>
-                        @foreach (var c in canales)
+                        @foreach (var c in Model.Canales)
                         {
-                            <option value="@c.Id" selected="@(Model.CanalVentaId == c.Id)">@c.Nombre</option>
+                            <option value="@c.Id" selected="@(Model.Pedido.CanalVentaId == c.Id)">@c.Nombre</option>
                         }
                     </select>
-                    <span asp-validation-for="CanalVentaId" class="text-danger small"></span>
+                    <span asp-validation-for="Pedido.CanalVentaId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="ClienteId" class="form-label"></label> <span class="text-danger">*</span>
-                    <select asp-for="ClienteId" class="form-select" required disabled="@(!editable)">
+                    <label asp-for="Pedido.ClienteId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="Pedido.ClienteId" class="form-select" required disabled="@(!editable)">
                         <option value="">-- Seleccione cliente --</option>
-                        @foreach (var c in clientes)
+                        @foreach (var c in Model.Clientes)
                         {
-                            <option value="@c.Id" selected="@(Model.ClienteId == c.Id)">@c.Apellido, @c.Nombre @(string.IsNullOrEmpty(c.Dni) ? "" : $"({c.Dni})")</option>
+                            <option value="@c.Id" selected="@(Model.Pedido.ClienteId == c.Id)">@c.Apellido, @c.Nombre @(string.IsNullOrEmpty(c.Dni) ? "" : $"({c.Dni})")</option>
                         }
                     </select>
-                    <span asp-validation-for="ClienteId" class="text-danger small"></span>
+                    <span asp-validation-for="Pedido.ClienteId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="EmpleadoId" class="form-label"></label> <span class="text-danger">*</span>
-                    <select asp-for="EmpleadoId" class="form-select" required disabled="@(!editable)">
+                    <label asp-for="Pedido.EmpleadoId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="Pedido.EmpleadoId" class="form-select" required disabled="@(!editable)">
                         <option value="">-- Seleccione empleado --</option>
-                        @foreach (var e in empleados)
+                        @foreach (var e in Model.Empleados)
                         {
-                            <option value="@e.Id" selected="@(Model.EmpleadoId == e.Id)">@e.Apellido, @e.Nombre</option>
+                            <option value="@e.Id" selected="@(Model.Pedido.EmpleadoId == e.Id)">@e.Apellido, @e.Nombre</option>
                         }
                     </select>
-                    <span asp-validation-for="EmpleadoId" class="text-danger small"></span>
+                    <span asp-validation-for="Pedido.EmpleadoId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Estado</label>
@@ -89,20 +81,20 @@
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="MedioContactoId" class="form-label"></label>
-                    <select asp-for="MedioContactoId" class="form-select" disabled="@(!editable)">
+                    <label asp-for="Pedido.MedioContactoId" class="form-label"></label>
+                    <select asp-for="Pedido.MedioContactoId" class="form-select" disabled="@(!editable)">
                         <option value="">-- Seleccione medio --</option>
-                        @foreach (var m in medios)
+                        @foreach (var m in Model.MediosContacto)
                         {
-                            <option value="@m.Id" selected="@(Model.MedioContactoId == m.Id)">@m.Nombre</option>
+                            <option value="@m.Id" selected="@(Model.Pedido.MedioContactoId == m.Id)">@m.Nombre</option>
                         }
                     </select>
                 </div>
             </div>
-            @if (estadoCodigo == PedidoEstados.Cancelado && !string.IsNullOrEmpty(ViewBag.MotivoCancelacion as string))
+            @if (estadoCodigo == PedidoEstados.Cancelado && !string.IsNullOrEmpty(Model.MotivoCancelacion))
             {
                 <div class="alert alert-danger mt-3 mb-0">
-                    <strong>Motivo de cancelación:</strong> @ViewBag.MotivoCancelacion
+                    <strong>Motivo de cancelación:</strong> @Model.MotivoCancelacion
                 </div>
             }
             <h5 class="mt-4">Totales</h5>
@@ -111,23 +103,23 @@
                     <label class="form-label">Subtotal</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
-                        <input type="text" class="form-control bg-light" value="@(((decimal)ViewBag.Subtotal).ToArs())" readonly tabindex="-1" />
+                        <input type="text" class="form-control bg-light" value="@Model.Subtotal.ToArs()" readonly tabindex="-1" />
                     </div>
                     <small class="text-secondary">Calculado automáticamente a partir de los items.</small>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="Descuento" class="form-label"></label>
+                    <label asp-for="Pedido.Descuento" class="form-label"></label>
                     <div class="input-group">
-                        <input asp-for="Descuento" id="js-descuento" type="number" step="0.01" min="0" max="100" class="form-control" disabled="@(esFinal || soloObservaciones)" />
+                        <input asp-for="Pedido.Descuento" id="js-descuento" type="number" step="0.01" min="0" max="100" class="form-control" disabled="@(esFinal || soloObservaciones)" />
                         <span class="input-group-text"><i class="bi bi-percent"></i></span>
                     </div>
-                    <span asp-validation-for="Descuento" class="text-danger small"></span>
+                    <span asp-validation-for="Pedido.Descuento" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Total</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
-                        <input type="text" id="js-total" class="form-control bg-light" value="@(((decimal)ViewBag.Total).ToArs())" readonly tabindex="-1" />
+                        <input type="text" id="js-total" class="form-control bg-light" value="@Model.Total.ToArs()" readonly tabindex="-1" />
                     </div>
                     <small class="text-secondary">Calculado: Subtotal − Descuento.</small>
                 </div>
@@ -135,14 +127,14 @@
             <h5 class="mt-4">Entrega y observaciones</h5>
             <div class="row g-3">
                 <div class="col-12">
-                    <label asp-for="DireccionEntrega" class="form-label"></label>
-                    <input asp-for="DireccionEntrega" class="form-control" placeholder="Calle, número, piso, depto., ciudad" disabled="@esFinal" />
-                    <span asp-validation-for="DireccionEntrega" class="text-danger small"></span>
+                    <label asp-for="Pedido.DireccionEntrega" class="form-label"></label>
+                    <input asp-for="Pedido.DireccionEntrega" class="form-control" placeholder="Calle, número, piso, depto., ciudad" disabled="@esFinal" />
+                    <span asp-validation-for="Pedido.DireccionEntrega" class="text-danger small"></span>
                 </div>
                 <div class="col-12">
-                    <label asp-for="Observaciones" class="form-label"></label>
-                    <textarea asp-for="Observaciones" class="form-control" rows="3" disabled="@(esFinal)"></textarea>
-                    <span asp-validation-for="Observaciones" class="text-danger small"></span>
+                    <label asp-for="Pedido.Observaciones" class="form-label"></label>
+                    <textarea asp-for="Pedido.Observaciones" class="form-control" rows="3" disabled="@(esFinal)"></textarea>
+                    <span asp-validation-for="Pedido.Observaciones" class="text-danger small"></span>
                 </div>
             </div>
         </div>
@@ -153,16 +145,16 @@
                     <i class="bi bi-save me-1"></i> Guardar cambios
                 </button>
             }
-            @if (transiciones.Any())
+            @if (Model.Transiciones.Any())
             {
                 <div class="vr"></div>
-                @foreach (var t in transiciones)
+                @foreach (var t in Model.Transiciones)
                 {
                     if (t.Codigo == "ENTREGADO")
                     {
                         <button type="button" class="btn btn-success js-entregar-btn"
                                 data-action="@Url.Action("CambiarEstado")"
-                                data-pedido-id="@Model.Id"
+                                data-pedido-id="@Model.Pedido.Id"
                                 data-nuevo-estado-id="@t.Id">
                             <i class="bi bi-check-circle me-1"></i> @t.Nombre
                         </button>
@@ -171,7 +163,7 @@
                     {
                         <button type="button" class="btn btn-danger js-cancelar-btn"
                                 data-action="@Url.Action("CambiarEstado")"
-                                data-pedido-id="@Model.Id"
+                                data-pedido-id="@Model.Pedido.Id"
                                 data-nuevo-estado-id="@t.Id">
                             <i class="bi bi-x-circle me-1"></i> @t.Nombre
                         </button>
@@ -179,9 +171,9 @@
                     else if (t.Codigo == "CONFIRMADO")
                     {
                         <button type="button" class="btn btn-outline-primary js-confirmar-btn"
-                                data-tiene-items="@items.Any().ToString().ToLower()"
+                                data-tiene-items="@Model.Items.Any().ToString().ToLower()"
                                 data-action="@Url.Action("CambiarEstado")"
-                                data-pedido-id="@Model.Id"
+                                data-pedido-id="@Model.Pedido.Id"
                                 data-nuevo-estado-id="@t.Id">
                             <i class="bi bi-arrow-right-circle me-1"></i> @t.Nombre
                         </button>
@@ -191,7 +183,7 @@
                         <button type="button" class="btn btn-outline-primary js-preparacion-btn"
                                 data-estado-nombre="@t.Nombre"
                                 data-action="@Url.Action("CambiarEstado")"
-                                data-pedido-id="@Model.Id"
+                                data-pedido-id="@Model.Pedido.Id"
                                 data-nuevo-estado-id="@t.Id">
                             <i class="bi bi-arrow-right-circle me-1"></i> @t.Nombre
                         </button>
@@ -221,13 +213,13 @@
                 <div class="card-body border-bottom bg-light">
                     <form asp-action="AddItem" method="post" id="js-add-item-form">
                         @Html.AntiForgeryToken()
-                        <input type="hidden" name="PedidoId" value="@Model.Id" />
+                        <input type="hidden" name="PedidoId" value="@Model.Pedido.Id" />
                         <div class="row g-3 align-items-end">
                             <div class="col-md-5">
                                 <label class="form-label">Producto <span class="text-danger">*</span></label>
                                 <select name="ProductoId" class="form-select" required>
                                     <option value="">-- Seleccione producto --</option>
-                                    @foreach (var p in productos)
+                                    @foreach (var p in Model.Productos)
                                     {
                                         <option value="@p.Id">@p.Nombre (@p.Codigo) - @p.PrecioActual.ToArs()</option>
                                     }
@@ -271,11 +263,11 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @if (!items.Any())
+                    @if (!Model.Items.Any())
                     {
                         <tr><td colspan="@(soloObservaciones ? 5 : 6)" class="text-center py-3 text-secondary">No hay items cargados.</td></tr>
                     }
-                    @foreach (var item in items)
+                    @foreach (var item in Model.Items)
                     {
                         <tr>
                             <td>
@@ -309,7 +301,7 @@
                                 <td class="text-end">
                                     <button type="button" class="btn btn-sm btn-danger js-remove-item-btn"
                                             data-item-id="@item.Id"
-                                            data-pedido-id="@Model.Id"
+                                            data-pedido-id="@Model.Pedido.Id"
                                             data-producto="@(item.ProductoNombre ?? "-")"
                                             title="Eliminar item">
                                         <i class="bi bi-trash"></i>
@@ -325,7 +317,7 @@
 }
 
 @{
-    var itemsExistentes = items
+    var itemsExistentes = Model.Items
         .Select(i => new
         {
             productoId = i.ProductoId,
@@ -657,7 +649,7 @@
         (function () {
             var descuento = document.getElementById('js-descuento');
             var totalDisplay = document.getElementById('js-total');
-            var subtotalValue = @((ViewBag.Subtotal ?? 0m).ToString(System.Globalization.CultureInfo.InvariantCulture));
+            var subtotalValue = @(Model.Subtotal.ToString(System.Globalization.CultureInfo.InvariantCulture));
             if (!descuento || !totalDisplay) return;
 
             function recalcularTotal() {

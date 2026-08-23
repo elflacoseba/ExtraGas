@@ -1,4 +1,4 @@
-@model ExtraGasMVC.DTOs.CreatePedidoDto
+@model ExtraGasMVC.Models.ViewModels.PedidoCreateViewModel
 @{
     ViewData["Title"] = "Nuevo pedido";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -6,10 +6,6 @@
         new() { Label = "Pedidos", Controller = "Pedidos", Action = "Index" },
         new() { Label = "Nuevo" }
     };
-    var clientes = ViewBag.Clientes as IEnumerable<ExtraGasMVC.DTOs.ClienteDto> ?? Array.Empty<ExtraGasMVC.DTOs.ClienteDto>();
-    var empleados = ViewBag.Empleados as IEnumerable<ExtraGasMVC.DTOs.EmpleadoDto> ?? Array.Empty<ExtraGasMVC.DTOs.EmpleadoDto>();
-    var canales = ViewBag.Canales as IEnumerable<ExtraGasMVC.DTOs.CanalVentaDto> ?? Array.Empty<ExtraGasMVC.DTOs.CanalVentaDto>();
-    var medios = ViewBag.MediosContacto as IEnumerable<ExtraGasMVC.DTOs.MedioContactoPedidoDto> ?? Array.Empty<ExtraGasMVC.DTOs.MedioContactoPedidoDto>();
 }
 @section PageHeader {
     <div class="mb-3">
@@ -27,52 +23,52 @@
             <div class="small text-secondary mb-3"><span class="text-danger">*</span> Campos obligatorios</div>
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label asp-for="Fecha" class="form-label"></label> <span class="text-danger">*</span>
-                    <input asp-for="Fecha" type="datetime-local" class="form-control" required />
-                    <span asp-validation-for="Fecha" class="text-danger small"></span>
+                    <label asp-for="Pedido.Fecha" class="form-label"></label> <span class="text-danger">*</span>
+                    <input asp-for="Pedido.Fecha" type="datetime-local" class="form-control" required />
+                    <span asp-validation-for="Pedido.Fecha" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="FechaEntrega" class="form-label"></label>
-                    <input asp-for="FechaEntrega" type="date" class="form-control" />
+                    <label asp-for="Pedido.FechaEntrega" class="form-label"></label>
+                    <input asp-for="Pedido.FechaEntrega" type="date" class="form-control" />
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="CanalVentaId" class="form-label"></label> <span class="text-danger">*</span>
-                    <select asp-for="CanalVentaId" class="form-select" required>
+                    <label asp-for="Pedido.CanalVentaId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="Pedido.CanalVentaId" class="form-select" required>
                         <option value="">-- Seleccione canal --</option>
-                        @foreach (var c in canales)
+                        @foreach (var c in Model.Canales)
                         {
                             <option value="@c.Id">@c.Nombre</option>
                         }
                     </select>
-                    <span asp-validation-for="CanalVentaId" class="text-danger small"></span>
+                    <span asp-validation-for="Pedido.CanalVentaId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="ClienteId" class="form-label"></label> <span class="text-danger">*</span>
-                    <select asp-for="ClienteId" class="form-select" required>
+                    <label asp-for="Pedido.ClienteId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="Pedido.ClienteId" class="form-select" required>
                         <option value="">-- Seleccione cliente --</option>
-                        @foreach (var c in clientes)
+                        @foreach (var c in Model.Clientes)
                         {
                             <option value="@c.Id">@c.Apellido, @c.Nombre @(string.IsNullOrEmpty(c.Dni) ? "" : $"({c.Dni})")</option>
                         }
                     </select>
-                    <span asp-validation-for="ClienteId" class="text-danger small"></span>
+                    <span asp-validation-for="Pedido.ClienteId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="EmpleadoId" class="form-label"></label> <span class="text-danger">*</span>
-                    <select asp-for="EmpleadoId" class="form-select" required>
+                    <label asp-for="Pedido.EmpleadoId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="Pedido.EmpleadoId" class="form-select" required>
                         <option value="">-- Seleccione empleado --</option>
-                        @foreach (var e in empleados)
+                        @foreach (var e in Model.Empleados)
                         {
                             <option value="@e.Id">@e.Apellido, @e.Nombre</option>
                         }
                     </select>
-                    <span asp-validation-for="EmpleadoId" class="text-danger small"></span>
+                    <span asp-validation-for="Pedido.EmpleadoId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="MedioContactoId" class="form-label"></label>
-                    <select asp-for="MedioContactoId" class="form-select">
+                    <label asp-for="Pedido.MedioContactoId" class="form-label"></label>
+                    <select asp-for="Pedido.MedioContactoId" class="form-select">
                         <option value="">-- Seleccione medio --</option>
-                        @foreach (var m in medios)
+                        @foreach (var m in Model.MediosContacto)
                         {
                             <option value="@m.Id">@m.Nombre</option>
                         }
@@ -82,14 +78,14 @@
             <h5 class="mt-4">Entrega y observaciones</h5>
             <div class="row g-3">
                 <div class="col-12">
-                    <label asp-for="DireccionEntrega" class="form-label"></label>
-                    <input asp-for="DireccionEntrega" class="form-control" placeholder="Calle, número, piso, depto., ciudad" />
-                    <span asp-validation-for="DireccionEntrega" class="text-danger small"></span>
+                    <label asp-for="Pedido.DireccionEntrega" class="form-label"></label>
+                    <input asp-for="Pedido.DireccionEntrega" class="form-control" placeholder="Calle, número, piso, depto., ciudad" />
+                    <span asp-validation-for="Pedido.DireccionEntrega" class="text-danger small"></span>
                 </div>
                 <div class="col-12">
-                    <label asp-for="Observaciones" class="form-label"></label>
-                    <textarea asp-for="Observaciones" class="form-control" rows="3"></textarea>
-                    <span asp-validation-for="Observaciones" class="text-danger small"></span>
+                    <label asp-for="Pedido.Observaciones" class="form-label"></label>
+                    <textarea asp-for="Pedido.Observaciones" class="form-control" rows="3"></textarea>
+                    <span asp-validation-for="Pedido.Observaciones" class="text-danger small"></span>
                 </div>
             </div>
         </div>
