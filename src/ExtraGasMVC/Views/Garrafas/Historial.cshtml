@@ -1,0 +1,101 @@
+@model IEnumerable<ExtraGasMVC.DTOs.MovimientoGarrafaDto>
+@{
+    var garrafa = ViewBag.Garrafa as ExtraGasMVC.DTOs.GarrafaDto;
+    var movimientos = Model?.ToList() ?? new List<ExtraGasMVC.DTOs.MovimientoGarrafaDto>();
+    ViewData["Title"] = "Historial de movimientos";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Garrafas", Controller = "Garrafas", Action = "Index" },
+        new() { Label = garrafa?.Codigo ?? "Detalle" },
+        new() { Label = "Historial" }
+    };
+}
+@section PageHeader {
+    <div class="mb-3 d-flex gap-2">
+        <a asp-action="Details" asp-route-id="@garrafa?.Id" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Volver al detalle
+        </a>
+    </div>
+}
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Historial — Garrafa @garrafa?.Codigo</h3>
+    </div>
+    @if (garrafa is not null)
+    {
+        <div class="card-body border-bottom">
+            <dl class="row mb-0">
+                <dt class="col-sm-2">Capacidad</dt><dd class="col-sm-4">@garrafa.CapacidadKg kg</dd>
+                <dt class="col-sm-2">Estado actual</dt>
+                <dd class="col-sm-4">
+                    <span class="badge text-bg-secondary">@garrafa.EstadoGarrafaId</span>
+                </dd>
+            </dl>
+        </div>
+    }
+    <div class="card-body">
+        @if (movimientos.Count == 0)
+        {
+            <div class="alert alert-info mb-0" role="alert">
+                <i class="bi bi-info-circle me-1"></i>
+                Esta garrafa no tiene movimientos registrados todavía.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Estado origen</th>
+                            <th>Estado destino</th>
+                            <th>Empleado</th>
+                            <th>Observaciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in movimientos)
+                        {
+                            <tr>
+                                <td>@m.Fecha.ToShortDateTime()</td>
+                                <td>
+                                    <span class="badge text-bg-secondary">@m.TipoMovimientoCodigo</span>
+                                    <small class="text-secondary d-block">@m.TipoMovimientoNombre</small>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(m.EstadoOrigenCodigo))
+                                    {
+                                        <span class="badge text-bg-light">@m.EstadoOrigenCodigo</span>
+                                        <small class="text-secondary d-block">@m.EstadoOrigenNombre</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-secondary">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge text-bg-light">@m.EstadoDestinoCodigo</span>
+                                    <small class="text-secondary d-block">@m.EstadoDestinoNombre</small>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(m.EmpleadoNombreCompleto))
+                                    {
+                                        @m.EmpleadoNombreCompleto
+                                    }
+                                    else
+                                    {
+                                        <span class="text-secondary">—</span>
+                                    }
+                                </td>
+                                <td>@(string.IsNullOrWhiteSpace(m.Observaciones) ? "—" : m.Observaciones)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

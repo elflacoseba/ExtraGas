@@ -83,6 +83,23 @@ public class MappingProfile : Profile
         CreateMap<CreateGarrafaDto, Garrafa>();
         CreateMap<UpdateGarrafaDto, Garrafa>();
 
+        // MovimientoGarrafa mappings
+        CreateMap<MovimientoGarrafa, MovimientoGarrafaDto>()
+            .ForMember(d => d.TipoMovimientoCodigo, o => o.MapFrom(s =>
+                s.TipoMovimiento != null ? s.TipoMovimiento.Codigo : null))
+            .ForMember(d => d.TipoMovimientoNombre, o => o.MapFrom(s =>
+                s.TipoMovimiento != null ? s.TipoMovimiento.Nombre : null))
+            .ForMember(d => d.EstadoOrigenCodigo, o => o.MapFrom(s =>
+                s.EstadoOrigen != null ? s.EstadoOrigen.Codigo : null))
+            .ForMember(d => d.EstadoOrigenNombre, o => o.MapFrom(s =>
+                s.EstadoOrigen != null ? s.EstadoOrigen.Nombre : null))
+            .ForMember(d => d.EstadoDestinoCodigo, o => o.MapFrom(s =>
+                s.EstadoDestino != null ? s.EstadoDestino.Codigo : null))
+            .ForMember(d => d.EstadoDestinoNombre, o => o.MapFrom(s =>
+                s.EstadoDestino != null ? s.EstadoDestino.Nombre : null))
+            .ForMember(d => d.EmpleadoNombreCompleto, o => o.MapFrom(s =>
+                s.Empleado != null ? s.Empleado.Apellido + ", " + s.Empleado.Nombre : null));
+
         // Usuario mappings
         CreateMap<Usuario, UsuarioDto>()
             .ForMember(d => d.RolCodigo, o => o.MapFrom(s => s.Rol != null ? s.Rol.Codigo : null))
