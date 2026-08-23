@@ -76,7 +76,10 @@ public class MappingProfile : Profile
         CreateMap<UpdatePagoDto, Pago>();
 
         // Garrafa mappings
-        CreateMap<Garrafa, GarrafaDto>().ReverseMap();
+        CreateMap<Garrafa, GarrafaDto>()
+            .ForMember(d => d.EstadoCodigo, o => o.MapFrom(s =>
+                s.EstadoGarrafa != null ? s.EstadoGarrafa.Codigo : null))
+            .ReverseMap();
         CreateMap<CreateGarrafaDto, Garrafa>();
         CreateMap<UpdateGarrafaDto, Garrafa>();
 

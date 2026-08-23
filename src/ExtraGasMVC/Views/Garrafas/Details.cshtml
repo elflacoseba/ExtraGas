@@ -10,7 +10,13 @@
 @section PageHeader {
     <div class="mb-3 d-flex gap-2">
         <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Volver</a>
-        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-primary"><i class="bi bi-pencil me-1"></i> Editar</a>
+        @* Issue #41: una garrafa en estado final (FUERA_SERVICIO) es inmutable.
+            El botón Editar se oculta en la UI; el controller también rechaza
+            GET/POST a Edit por defensa en profundidad. *@
+        @if (Model.EstadoCodigo != "FUERA_SERVICIO")
+        {
+            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-primary"><i class="bi bi-pencil me-1"></i> Editar</a>
+        }
         <a asp-action="CambiarEstado" asp-route-id="@Model.Id" class="btn btn-warning"><i class="bi bi-arrow-repeat me-1"></i> Cambiar estado</a>
     </div>
 }

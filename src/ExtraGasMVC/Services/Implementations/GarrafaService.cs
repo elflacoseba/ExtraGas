@@ -24,8 +24,9 @@ public class GarrafaService : IGarrafaService
     {
         var garrafa = await _context.Garrafas
             .AsNoTracking()
+            .Include(g => g.EstadoGarrafa)
             .FirstOrDefaultAsync(g => g.Id == id, ct);
-        
+
         return garrafa is null ? null : _mapper.Map<GarrafaDto>(garrafa);
     }
 
@@ -33,8 +34,9 @@ public class GarrafaService : IGarrafaService
     {
         var garrafa = await _context.Garrafas
             .AsNoTracking()
+            .Include(g => g.EstadoGarrafa)
             .FirstOrDefaultAsync(g => g.Codigo == codigo, ct);
-        
+
         return garrafa is null ? null : _mapper.Map<GarrafaDto>(garrafa);
     }
 
@@ -42,9 +44,10 @@ public class GarrafaService : IGarrafaService
     {
         var garrafas = await _context.Garrafas
             .AsNoTracking()
+            .Include(g => g.EstadoGarrafa)
             .OrderBy(g => g.Codigo)
             .ToListAsync(ct);
-        
+
         return _mapper.Map<IEnumerable<GarrafaDto>>(garrafas);
     }
 
@@ -52,10 +55,11 @@ public class GarrafaService : IGarrafaService
     {
         var garrafas = await _context.Garrafas
             .AsNoTracking()
+            .Include(g => g.EstadoGarrafa)
             .Where(g => g.ClienteId == clienteId)
             .OrderBy(g => g.Codigo)
             .ToListAsync(ct);
-        
+
         return _mapper.Map<IEnumerable<GarrafaDto>>(garrafas);
     }
 
@@ -63,6 +67,7 @@ public class GarrafaService : IGarrafaService
     {
         var garrafas = await _context.Garrafas
             .AsNoTracking()
+            .Include(g => g.EstadoGarrafa)
             .Where(g => g.EstadoGarrafaId == estadoId)
             .OrderBy(g => g.Codigo)
             .ToListAsync(ct);

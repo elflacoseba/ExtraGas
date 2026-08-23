@@ -1,3 +1,4 @@
+using ExtraGasMVC.Constants;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
@@ -16,6 +17,28 @@ public class GarrafasController : Controller
     {
         _garrafaService = garrafaService;
         _clienteService = clienteService;
+    }
+
+    /// <summary>
+    /// Devuelve el código del estado actual de la garrafa leyendo directamente
+    /// de la base de datos. Se usa en Edit (GET y POST) para validar contra la
+    /// máquina de estados sin depender del valor que el cliente envío en el form.
+    /// </summary>
+    private async Task<string?> GetEstadoCodigoActualAsync(ulong id, CancellationToken ct)
+    {
+        var garrafa = await _garrafaService.GetByIdAsync(id, ct);
+        return garrafa?.EstadoCodigo;
+    }
+
+    /// <summary>
+    /// Construye el redirect estándar a Details con un mensaje de error en
+    /// TempData para los casos en los que se intenta editar una garrafa en
+    /// un estado que lo prohíbe (ver issue #41).
+    /// </summary>
+    private IActionResult RedirectBloqueadoPorEstado(ulong id)
+    {
+        TempData["Error"] = "No se puede editar una garrafa dada de baja.";
+        return RedirectToAction(nameof(Details), new { id });
     }
 
     public async Task<IActionResult> Index(string? codigo, byte? capacidad, CancellationToken ct = default)
@@ -67,8 +90,15 @@ public class GarrafasController : Controller
     {
         var garrafa = await _garrafaService.GetByIdAsync(id, ct);
         if (garrafa is null) return NotFound();
+
+        // Issue #41: una garrafa en FUERA_SERVICIO es inmutable. Si alguien
+        // llega por URL directa, lo mandamos a Details con el mismo mensaje
+        // de error que vería si la UI tuviera el botón oculto.
+        if (garrafa.EstadoCodigo == GarrafaEstados.FueraServicio)
+            return RedirectBloqueadoPorEstado(id);
+
         ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-        
+
         var updateDto = new UpdateGarrafaDto
         {
             Id = garrafa.Id,
@@ -82,7 +112,7 @@ public class GarrafasController : Controller
             Activo = garrafa.Activo,
             Observaciones = garrafa.Observaciones
         };
-        
+
         return View(updateDto);
     }
 
@@ -91,6 +121,15 @@ public class GarrafasController : Controller
     public async Task<IActionResult> Edit(ulong id, UpdateGarrafaDto garrafa, CancellationToken ct = default)
     {
         if (id != garrafa.Id) return BadRequest();
+
+        // Issue #41: validar contra el estado actual en BD (no contra el
+        // valor que envía el form) para que un POST hand-crafted con un
+        // EstadoGarrafaId != FUERA_SERVICIO no sirva para esquivar la regla.
+        var estadoCodigo = await GetEstadoCodigoActualAsync(id, ct);
+        if (estadoCodigo == null) return NotFound();
+        if (estadoCodigo == GarrafaEstados.FueraServicio)
+            return RedirectBloqueadoPorEstado(id);
+
         if (!ModelState.IsValid)
         {
             ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);

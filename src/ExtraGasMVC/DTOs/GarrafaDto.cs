@@ -13,6 +13,13 @@ public class GarrafaDto
     public bool Activo { get; set; }
     public DateTime? FechaUltimoMovimiento { get; set; }
     public string? Observaciones { get; set; }
+
+    /// <summary>
+    /// Código canónico del estado actual (ej. <c>FUERA_SERVICIO</c>). Se usa
+    /// en la UI para condicionar acciones (editar, cambiar estado) según la
+    /// máquina de estados del módulo Garrafas.
+    /// </summary>
+    public string? EstadoCodigo { get; set; }
 }
 
 public class CreateGarrafaDto
