@@ -7,6 +7,7 @@ using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MySqlConnector;
 
 namespace ExtraGasMVC.Services.Implementations;
@@ -15,11 +16,13 @@ public class GarrafaService : IGarrafaService
 {
     private readonly ExtraGasDbContext _context;
     private readonly IMapper _mapper;
+    private readonly ILogger<GarrafaService> _logger;
 
-    public GarrafaService(ExtraGasDbContext context, IMapper mapper)
+    public GarrafaService(ExtraGasDbContext context, IMapper mapper, ILogger<GarrafaService> logger)
     {
         _context = context;
         _mapper = mapper;
+        _logger = logger;
     }
 
     public async Task<GarrafaDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
@@ -330,8 +333,15 @@ public class GarrafaService : IGarrafaService
 
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            // Issue #56: registrar el error antes del rollback para auditoría
+            // y diagnóstico — sin este log, un fallo transaccional queda invisible
+            // porque la excepción se re-lanza pero la causa queda enterrada en
+            // logs internos de MySQL/EF que no llegan al operador.
+            _logger.LogError(ex,
+                "Error al cambiar estado de la garrafa {GarrafaId} (origen={EstadoOrigenId}, destino={EstadoDestinoId}). Se realiza rollback de la transacción.",
+                id, estadoOrigen, dto.NuevoEstadoId);
             await transaction.RollbackAsync(ct);
             throw;
         }
