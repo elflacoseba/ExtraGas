@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ExtraGasMVC.Controllers;
 
 [Authorize(Policy = "OperadorOrAdmin")]
-public class GarrafasController : Controller
+public class GarrafasController : BaseController
 {
     private readonly IGarrafaService _garrafaService;
     private readonly IClienteService _clienteService;
@@ -80,7 +80,7 @@ public class GarrafasController : Controller
         if (!ModelState.IsValid) return View(garrafa);
         try
         {
-            await _garrafaService.CreateAsync(garrafa, ct);
+            await _garrafaService.CreateAsync(garrafa, GetCurrentUserId(), ct);
             TempData["Success"] = $"Garrafa {garrafa.Codigo} creada.";
             return RedirectToAction(nameof(Index));
         }
@@ -147,7 +147,7 @@ public class GarrafasController : Controller
         }
         try
         {
-            await _garrafaService.UpdateAsync(garrafa, ct);
+            await _garrafaService.UpdateAsync(garrafa, GetCurrentUserId(), ct);
             TempData["Success"] = $"Garrafa {garrafa.Codigo} actualizada.";
             return RedirectToAction(nameof(Index));
         }
