@@ -4,6 +4,8 @@ using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace ExtraGasMVC.Controllers;
 
@@ -12,17 +14,20 @@ public class GarrafasController : BaseController
 {
     private const int RecepcionesDropdownCantidad = 100;
 
+    private readonly ILogger<GarrafasController> _logger;
     private readonly IGarrafaService _garrafaService;
     private readonly IClienteService _clienteService;
     private readonly IProveedorService _proveedorService;
     private readonly IRecepcionService _recepcionService;
 
     public GarrafasController(
+        ILogger<GarrafasController> logger,
         IGarrafaService garrafaService,
         IClienteService clienteService,
         IProveedorService proveedorService,
         IRecepcionService recepcionService)
     {
+        _logger = logger;
         _garrafaService = garrafaService;
         _clienteService = clienteService;
         _proveedorService = proveedorService;
@@ -138,13 +143,38 @@ public class GarrafasController : BaseController
         }
         catch (InvalidOperationException ex)
         {
+            // Validaciones de negocio: código duplicado (validación previa del
+            // service), estado inexistente, etc. Mensaje del service es seguro
+            // para mostrar al usuario.
+            _logger.LogWarning(ex, "Validación de negocio al crear garrafa {Codigo}", garrafa.Codigo);
             ModelState.AddModelError(string.Empty, ex.Message);
+            await CargarDropdownsFormularioAsync(ct);
+            return View(garrafa);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            // FK inexistente (cliente / proveedor / estado / recepción) detectada
+            // en el service o por la BD. El mensaje del service es seguro.
+            _logger.LogWarning(ex, "Entidad relacionada inexistente al crear garrafa {Codigo}", garrafa.Codigo);
+            ModelState.AddModelError(string.Empty, ex.Message);
+            await CargarDropdownsFormularioAsync(ct);
+            return View(garrafa);
+        }
+        catch (DbUpdateException ex)
+        {
+            // Cualquier error de BD no contemplado por el service (FK huérfana,
+            // timeout, etc.). NO mostramos el mensaje técnico al usuario.
+            _logger.LogError(ex, "Error de base de datos al crear garrafa {Codigo}", garrafa.Codigo);
+            ModelState.AddModelError(string.Empty,
+                "No se pudo guardar la información. Si el problema persiste, contacte al administrador.");
             await CargarDropdownsFormularioAsync(ct);
             return View(garrafa);
         }
         catch (Exception ex)
         {
-            ModelState.AddModelError(string.Empty, $"No se pudo crear la garrafa: {ex.Message}");
+            _logger.LogError(ex, "Error inesperado al crear garrafa {Codigo}", garrafa.Codigo);
+            ModelState.AddModelError(string.Empty,
+                "Ocurrió un error inesperado al procesar la operación. Intente nuevamente.");
             await CargarDropdownsFormularioAsync(ct);
             return View(garrafa);
         }
@@ -207,13 +237,37 @@ public class GarrafasController : BaseController
         }
         catch (InvalidOperationException ex)
         {
+            // Validaciones de negocio: código duplicado (excluyendo la propia
+            // garrafa), transiciones inválidas en reglas que el service chequea
+            // antes de SaveChanges, etc.
+            _logger.LogWarning(ex, "Validación de negocio al actualizar garrafa {Id}", garrafa.Id);
             ModelState.AddModelError(string.Empty, ex.Message);
+            await CargarDropdownsFormularioAsync(ct);
+            return View(garrafa);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            // La garrafa no existe al momento de SaveChanges (race condition:
+            // alguien la borró en otra pestaña / sesión entre el GET y el POST).
+            // Redirigimos a Index con mensaje claro en TempData porque re-renderizar
+            // el form sobre una entidad inexistente confunde más que ayuda.
+            _logger.LogWarning(ex, "Garrafa {Id} no encontrada al actualizar", garrafa.Id);
+            TempData["Error"] = "La garrafa ya no existe. Puede haber sido eliminada en otra sesión.";
+            return RedirectToAction(nameof(Index));
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Error de base de datos al actualizar garrafa {Id}", garrafa.Id);
+            ModelState.AddModelError(string.Empty,
+                "No se pudo guardar la información. Si el problema persiste, contacte al administrador.");
             await CargarDropdownsFormularioAsync(ct);
             return View(garrafa);
         }
         catch (Exception ex)
         {
-            ModelState.AddModelError(string.Empty, $"No se pudo actualizar la garrafa: {ex.Message}");
+            _logger.LogError(ex, "Error inesperado al actualizar garrafa {Id}", garrafa.Id);
+            ModelState.AddModelError(string.Empty,
+                "Ocurrió un error inesperado al procesar la operación. Intente nuevamente.");
             await CargarDropdownsFormularioAsync(ct);
             return View(garrafa);
         }
@@ -287,14 +341,33 @@ public class GarrafasController : BaseController
         }
         catch (InvalidOperationException ex)
         {
-            // Incluye: transición inválida, estado destino inexistente,
-            // estado destino que requiere cliente, etc.
+            // Incluye: transición inválida (matriz GarrafaTransiciones), estado
+            // destino inexistente en catálogo, estado destino que requiere
+            // cliente, tipo de movimiento CAMBIO_ESTADO no encontrado, etc.
+            _logger.LogWarning(ex, "Validación de negocio al cambiar estado de garrafa {Id}", id);
             ModelState.AddModelError(string.Empty, ex.Message);
+            return View(dto);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _logger.LogWarning(ex, "Garrafa {Id} no encontrada al cambiar estado", id);
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return View(dto);
+        }
+        catch (DbUpdateException ex)
+        {
+            // El trigger trg_mov_garrafa_ai puede levantar violaciones si el
+            // estado o el tipo de movimiento desaparecen entre el GET y el POST.
+            _logger.LogError(ex, "Error de base de datos al cambiar estado de garrafa {Id}", id);
+            ModelState.AddModelError(string.Empty,
+                "No se pudo registrar el cambio de estado. Si el problema persiste, contacte al administrador.");
             return View(dto);
         }
         catch (Exception ex)
         {
-            ModelState.AddModelError(string.Empty, $"No se pudo cambiar el estado: {ex.Message}");
+            _logger.LogError(ex, "Error inesperado al cambiar estado de garrafa {Id}", id);
+            ModelState.AddModelError(string.Empty,
+                "Ocurrió un error inesperado al procesar la operación. Intente nuevamente.");
             return View(dto);
         }
     }
@@ -325,12 +398,33 @@ public class GarrafasController : BaseController
         }
         catch (InvalidOperationException ex)
         {
+            // Estado bloqueado (EN_CLIENTE / EN_TRANSITO) o cualquier otra regla
+            // de negocio que el service decida proteger. El mensaje del service
+            // es seguro y accionable para el usuario.
+            _logger.LogWarning(ex, "Validación de negocio al eliminar garrafa {Id}", id);
             TempData["Error"] = ex.Message;
+            return RedirectToAction(nameof(Index));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            // La garrafa no existe al momento del soft-delete (ya borrada por
+            // otro usuario). Informamos sin exponer detalles.
+            _logger.LogWarning(ex, "Garrafa {Id} no encontrada al eliminar", id);
+            TempData["Error"] = "La garrafa ya no existe.";
+            return RedirectToAction(nameof(Index));
+        }
+        catch (DbUpdateException ex)
+        {
+            // Puede pasar si hay FKs que aún referencian la garrafa (poco probable
+            // con soft-delete pero posible con hard-delete futuro).
+            _logger.LogError(ex, "Error de base de datos al eliminar garrafa {Id}", id);
+            TempData["Error"] = "No se pudo eliminar la garrafa. Si el problema persiste, contacte al administrador.";
             return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
         {
-            TempData["Error"] = $"No se pudo eliminar la garrafa: {ex.Message}";
+            _logger.LogError(ex, "Error inesperado al eliminar garrafa {Id}", id);
+            TempData["Error"] = "Ocurrió un error inesperado al procesar la operación. Intente nuevamente.";
             return RedirectToAction(nameof(Index));
         }
     }
