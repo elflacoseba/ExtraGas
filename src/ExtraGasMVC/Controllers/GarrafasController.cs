@@ -311,9 +311,14 @@ public class GarrafasController : BaseController
     [ActionName("Delete")]
     public async Task<IActionResult> DeleteConfirmed(ulong id, CancellationToken ct = default)
     {
+        // Issue #54: confirmación se hace en Index vía SweetAlert2 (helper
+        // confirmarAccion), por eso el flujo siempre vuelve a Index. Si la
+        // garrafa está en estado bloqueado (EN_CLIENTE / EN_TRANSITO) el
+        // service tira InvalidOperationException y mostramos el motivo en
+        // TempData para que el usuario sepa por qué no se eliminó.
         try
         {
-            var ok = await _garrafaService.DeleteAsync(id, ct);
+            var ok = await _garrafaService.DeleteAsync(id, GetCurrentUserId(), ct);
             if (!ok) return NotFound();
             TempData["Success"] = "Garrafa eliminada correctamente.";
             return RedirectToAction(nameof(Index));
@@ -321,12 +326,12 @@ public class GarrafasController : BaseController
         catch (InvalidOperationException ex)
         {
             TempData["Error"] = ex.Message;
-            return RedirectToAction(nameof(Delete), new { id });
+            return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
         {
             TempData["Error"] = $"No se pudo eliminar la garrafa: {ex.Message}";
-            return RedirectToAction(nameof(Delete), new { id });
+            return RedirectToAction(nameof(Index));
         }
     }
 }
