@@ -267,6 +267,36 @@ public class GarrafaService : IGarrafaService
         return true;
     }
 
+    public async Task<IEnumerable<MovimientoGarrafaDto>> GetHistorialAsync(ulong garrafaId, CancellationToken ct = default)
+    {
+        // Primero verificamos que la garrafa exista (incluso soft-deleted) para
+        // devolver 404 coherente desde el controller. Si no existe, enumerable vacío.
+        var garrafaExiste = await _context.Garrafas
+            .IgnoreQueryFilters()
+            .AnyAsync(g => g.Id == garrafaId, ct);
+
+        if (!garrafaExiste)
+            return Array.Empty<MovimientoGarrafaDto>();
+
+        // Joins manuales a las tablas de lookup para traer los nombres legibles.
+        // Sigue el mismo patrón que GetTransicionesDisponiblesAsync (no hay navigation
+        // properties confiables en la entidad, así que se hace el join a mano).
+        // Pero como en este caso sí agregamos navigation properties a MovimientoGarrafa,
+        // usamos Include para mantener la consistencia con GetByIdAsync/GetAllAsync.
+        var movimientos = await _context.MovimientosGarrafa
+            .AsNoTracking()
+            .Include(m => m.TipoMovimiento)
+            .Include(m => m.EstadoOrigen)
+            .Include(m => m.EstadoDestino)
+            .Include(m => m.Empleado)
+            .Where(m => m.GarrafaId == garrafaId)
+            .OrderByDescending(m => m.Fecha)
+            .ThenByDescending(m => m.Id)
+            .ToListAsync(ct);
+
+        return _mapper.Map<IEnumerable<MovimientoGarrafaDto>>(movimientos);
+    }
+
     private async Task SaveOrThrowDuplicateAsync(string codigo, CancellationToken ct)
     {
         try

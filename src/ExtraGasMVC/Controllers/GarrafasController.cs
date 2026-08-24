@@ -61,6 +61,16 @@ public class GarrafasController : Controller
         return View(garrafa);
     }
 
+    public async Task<IActionResult> Historial(ulong id, CancellationToken ct = default)
+    {
+        var garrafa = await _garrafaService.GetByIdAsync(id, ct);
+        if (garrafa is null) return NotFound();
+
+        var movimientos = await _garrafaService.GetHistorialAsync(id, ct);
+        ViewBag.Garrafa = garrafa;
+        return View(movimientos);
+    }
+
     public IActionResult Create() => View(new CreateGarrafaDto { EstadoGarrafaId = 1, Activo = true, FechaCompra = DateOnly.FromDateTime(DateTime.UtcNow) });
 
     [HttpPost]

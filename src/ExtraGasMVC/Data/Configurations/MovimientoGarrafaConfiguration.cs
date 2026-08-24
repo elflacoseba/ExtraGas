@@ -40,55 +40,55 @@ public class MovimientoGarrafaConfiguration : IEntityTypeConfiguration<Movimient
 
         builder.Property(m => m.CreatedBy).HasColumnName("created_by");
 
-        builder.HasOne<Garrafa>()
+        builder.HasOne(m => m.Garrafa)
             .WithMany()
             .HasForeignKey(m => m.GarrafaId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_mov_garrafa_garrafa");
 
-        builder.HasOne<TipoMovimientoGarrafa>()
+        builder.HasOne(m => m.TipoMovimiento)
             .WithMany()
             .HasForeignKey(m => m.TipoMovimientoId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_mov_garrafa_tipo");
 
-        builder.HasOne<Pedido>()
+        builder.HasOne(m => m.Pedido)
             .WithMany()
             .HasForeignKey(m => m.PedidoId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_mov_garrafa_pedido");
 
-        builder.HasOne<RecepcionProveedor>()
+        builder.HasOne(m => m.Recepcion)
             .WithMany()
             .HasForeignKey(m => m.RecepcionId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_mov_garrafa_recepcion");
 
-        builder.HasOne<Cliente>()
+        builder.HasOne(m => m.Cliente)
             .WithMany()
             .HasForeignKey(m => m.ClienteId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_mov_garrafa_cliente");
 
-        builder.HasOne<EstadoGarrafa>()
+        builder.HasOne(m => m.EstadoOrigen)
             .WithMany()
             .HasForeignKey(m => m.EstadoOrigenId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_mov_garrafa_estado_origen");
 
-        builder.HasOne<EstadoGarrafa>()
+        builder.HasOne(m => m.EstadoDestino)
             .WithMany()
             .HasForeignKey(m => m.EstadoDestinoId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_mov_garrafa_estado_destino");
 
-        builder.HasOne<Empleado>()
+        builder.HasOne(m => m.Empleado)
             .WithMany()
             .HasForeignKey(m => m.EmpleadoId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_mov_garrafa_empleado");
 
-        builder.HasOne<Usuario>()
+        builder.HasOne(m => m.CreatedByUsuario)
             .WithMany()
             .HasForeignKey(m => m.CreatedBy)
             .OnDelete(DeleteBehavior.Restrict)

@@ -80,7 +80,7 @@ public class GarrafaConfiguration : IEntityTypeConfiguration<Garrafa>
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_garrafas_recepcion");
 
-        builder.HasOne<EstadoGarrafa>()
+        builder.HasOne(g => g.EstadoGarrafa)
             .WithMany()
             .HasForeignKey(g => g.EstadoGarrafaId)
             .OnDelete(DeleteBehavior.Restrict)

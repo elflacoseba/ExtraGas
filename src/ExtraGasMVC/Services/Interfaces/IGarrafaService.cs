@@ -26,4 +26,12 @@ public interface IGarrafaService
     /// current state code is not present in the transition matrix.
     /// </returns>
     Task<IEnumerable<EstadoGarrafaDto>> GetTransicionesDisponiblesAsync(ulong garrafaId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Devuelve todos los movimientos registrados para una garrafa específica,
+    /// ordenados por fecha descendente. Cada movimiento trae los nombres
+    /// legibles del tipo, los estados origen/destino y el empleado.
+    /// Devuelve enumerable vacío si la garrafa no existe o no tiene movimientos.
+    /// </summary>
+    Task<IEnumerable<MovimientoGarrafaDto>> GetHistorialAsync(ulong garrafaId, CancellationToken ct = default);
 }
