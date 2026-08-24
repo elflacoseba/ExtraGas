@@ -2,7 +2,7 @@ schema: spec-driven
 
 context: |
   Stack: ASP.NET Core MVC (.NET 10.0) + EF Core 9.0.16 + Pomelo MySQL 9.0.0
-  DB: MySQL 9.6.0 (Homebrew), InnoDB, utf8mb4, tz America/Argentina/Buenos_Aires
+  DB: MySQL 8.4 LTS supported (homelab prod), MySQL 9.x compatible, InnoDB, utf8mb4, tz America/Argentina/Buenos_Aires
   Schema: managed via raw SQL in db/migrations/ (NO EF Core migrations)
   Auth: Cookie auth + role policies (AdminOnly, OperadorOrAdmin) — no Identity
   Frontend: AdminLTE 4 + SweetAlert2 (npm), Razor views

@@ -171,6 +171,56 @@ Documento de decisiones (ADR-style) y supuestos del sistema **ExtraGas**.
 
 ---
 
+## 11. MySQL 8.4 LTS como target soportado
+
+**Decisión:** el proyecto soporta y se valida contra MySQL 8.4 LTS (además de 9.x). La versión de runtime del homelab es 8.4.11.
+
+**Por qué:** 8.4 es el branch LTS estable de MySQL Community; 9.x es el de innovación. Para un sistema de gestión interno que va a correr años sin migrar de versión, LTS es la elección correcta. La sintaxis SQL usada en el proyecto (CTEs, `JSON_TABLE`, CHECK constraints, generated columns, ENUM, triggers) está disponible desde 8.0, así que la portabilidad está garantizada.
+
+**Implicancia:**
+- Las migraciones se prueban contra 8.4. Si se agrega SQL específico de 9.x, hay que documentarlo acá.
+- El archivo `AGENTS.md` menciona "MySQL 9.6" porque esa era la versión original del dev local. **No implica que 9.x esté roto**, solo refleja la versión del entorno de desarrollo.
+- Para homelab/dev: grants adicionales requeridos por 8.x con binlog activo (`SYSTEM_VARIABLES_ADMIN`, `log_bin_trust_function_creators=1`) — ver [`db/scripts/install.sh`](../../db/scripts/install.sh).
+
+---
+
+## 12. `pedido_items.unique_hash` como columna generada VIRTUAL (no STORED)
+
+**Decisión:** la columna `unique_hash` usada para prevenir duplicados de `(pedido_id, producto_id, tipo_linea)` entre items activos se implementa como `GENERATED ALWAYS AS (...) VIRTUAL`, no `STORED`.
+
+**Por qué:** la migración original usaba `STORED` pero falla con `ERROR 1215: Cannot add foreign key constraint` en MySQL 8.4 cuando la tabla tiene FKs. Es un bug conocido del path de validación de InnoDB para `STORED generated columns` en ALTER TABLE — el error es engañoso (no hay FK involucrada en el ALTER). `VIRTUAL` toma otro code path y funciona. MySQL 8.0.16+ permite `UNIQUE INDEX` sobre columnas `VIRTUAL` generadas, así que el contrato original se preserva.
+
+**Implicancia:**
+- Funcionalmente equivalente: el `UNIQUE INDEX uk_pedido_items_pedido_producto_tipo` sobre `unique_hash` sigue funcionando.
+- Trade-off: `VIRTUAL` se recalcula en cada lectura en lugar de almacenarse. Para esta tabla (volumen bajo-medio, lecturas frecuentes) el costo es despreciable.
+- Si en el futuro queremos `STORED` (por ejemplo para índices secundarios sobre el hash), hay que aplicar el ALTER antes de crear las FKs de `pedido_items` — workaround: tabla sin FKs, ADD COLUMN STORED, luego ADD CONSTRAINT.
+
+---
+
+## 13. Estrategia de idempotencia para migraciones incrementales
+
+**Decisión:** las migraciones incrementales (las posteriores a la creación inicial del schema) deben ser idempotentes — re-ejecutables sin fallar contra una BD que ya las tiene aplicadas.
+
+**Por qué:** `db/scripts/install.sh` declara ser idempotente. Las migraciones iniciales (CREATE TABLE, CREATE VIEW) usan `IF NOT EXISTS` y son naturalmente idempotentes. Las incrementales no lo son por defecto:
+- `ALTER TABLE ADD COLUMN` falla si la columna ya existe.
+- `ALTER TABLE DROP COLUMN` falla si la columna no existe.
+- `INSERT INTO lookup` falla con duplicate key.
+
+Esto bloquea re-correr el script después de un `DROP DATABASE` parcial, o si se quiere re-aplicar una migración puntual.
+
+**Cómo se logra:**
+- **ADD/DROP COLUMN**: MySQL 8.x no soporta `IF [NOT] EXISTS` para columnas en `ALTER TABLE`. Se usa el patrón `information_schema` + `PREPARE`/`EXECUTE` para ejecutar condicionalmente.
+- **INSERT en lookup**: `INSERT IGNORE` (descarta solo el error de duplicate-key, no otros errores).
+- **CREATE/DROP VIEW, CREATE TRIGGER**: ya idempotentes con `IF NOT EXISTS` / `DROP IF EXISTS`.
+- **CREATE TABLE**: ya idempotente con `IF NOT EXISTS`.
+- **CREATE INDEX UNIQUE**: requiere `DROP INDEX` previo si el índice ya existe con el mismo nombre (ver migración 20260606_000001).
+
+**Implicancia:**
+- Las migraciones nuevas deben seguir este patrón. Code review debe verificar idempotencia antes de aceptar una migración nueva.
+- La solución definitiva (más robusta) sería una tabla `schema_migrations` con hashes de archivos aplicados y el script consultarla antes de ejecutar. No se implementa acá por costo/beneficio (un solo dev, homelab), pero queda como evolución futura si el proyecto pasa a multi-dev o CI/CD.
+
+---
+
 ## Supuestos explícitos (no validados con el usuario)
 
 1. No hay delivery con zonas / tarifas distintas. Un pedido = una dirección.
