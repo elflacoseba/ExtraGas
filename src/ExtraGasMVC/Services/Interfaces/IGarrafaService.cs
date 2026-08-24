@@ -1,5 +1,6 @@
 using ExtraGasMVC.Data.Entities.Views;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 
 namespace ExtraGasMVC.Services.Interfaces;
 
@@ -10,6 +11,26 @@ public interface IGarrafaService
     Task<IEnumerable<GarrafaDto>> GetAllAsync(CancellationToken ct = default);
     Task<IEnumerable<GarrafaDto>> GetByClienteAsync(ulong clienteId, CancellationToken ct = default);
     Task<IEnumerable<GarrafaDto>> GetByEstadoAsync(ulong estadoId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Devuelve una página de garrafas filtrando en SQL (no en memoria) y
+    /// contando el total de filas que satisfacen los filtros para alimentar
+    /// los controles de paginación. Usado por <c>GarrafasController.Index</c>
+    /// (issue #52). Los filtros <paramref name="codigo"/> y
+    /// <paramref name="capacidad"/> son opcionales; cuando ambos son null,
+    /// equivale a contar todas las garrafas activas (soft-deleted excluidas
+    /// por el filtro global del DbContext).
+    /// </summary>
+    /// <param name="page">Número de página 1-based. Valores &lt; 1 se
+    /// normalizan a 1.</param>
+    /// <param name="pageSize">Tamaño de página. Default 20. Se aplica un
+    /// tope máximo de 100 para evitar queries enormes accidentales.</param>
+    Task<PagedResult<GarrafaDto>> GetPagedAsync(
+        string? codigo,
+        byte? capacidad,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken ct = default);
     Task<IEnumerable<EstadoGarrafaDto>> GetEstadosAsync(CancellationToken ct = default);
     Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafa, ulong? usuarioId, CancellationToken ct = default);
     Task<GarrafaDto> UpdateAsync(UpdateGarrafaDto garrafa, ulong? usuarioId, CancellationToken ct = default);
