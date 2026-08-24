@@ -193,6 +193,53 @@ public class RecepcionService : IRecepcionService
     public Task<IEnumerable<ProductoDto>> GetProductosActivosAsync(CancellationToken ct = default)
         => _productoService.GetActivosAsync(ct);
 
+    public async Task<IEnumerable<RecepcionDto>> GetRecientesAsync(int cantidad, CancellationToken ct = default)
+    {
+        // Issue #48: dropdown de Recepción en formularios de Garrafa. Filtramos
+        // soft-deleted (una recepción reversada ya no debe ser elegible) y
+        // ordenamos por fecha desc para que el operador vea primero lo más
+        // reciente. Sin items: el selector solo necesita número + proveedor.
+        if (cantidad <= 0) return Array.Empty<RecepcionDto>();
+
+        var headers = await _context.RecepcionesProveedor.AsNoTracking()
+            .Where(r => r.DeletedAt == null)
+            .OrderByDescending(r => r.Fecha)
+            .Take(cantidad)
+            .ToListAsync(ct);
+
+        if (headers.Count == 0) return Array.Empty<RecepcionDto>();
+
+        var proveedorIds = headers.Select(h => h.ProveedorId).Distinct().ToList();
+        var empleadoIds = headers.Select(h => h.EmpleadoId).Distinct().ToList();
+
+        var proveedoresById = await _context.Proveedores.AsNoTracking()
+            .Where(p => proveedorIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => p.RazonSocial, ct);
+
+        var empleadosById = await _context.Empleados.AsNoTracking()
+            .Where(e => empleadoIds.Contains(e.Id))
+            .ToDictionaryAsync(e => e.Id, e => $"{e.Apellido}, {e.Nombre}", ct);
+
+        return headers.Select(h => new RecepcionDto
+        {
+            Id = h.Id,
+            Numero = h.Numero,
+            Fecha = h.Fecha,
+            ProveedorId = h.ProveedorId,
+            ProveedorNombre = proveedoresById.TryGetValue(h.ProveedorId, out var pn) ? pn : null,
+            EmpleadoId = h.EmpleadoId,
+            EmpleadoNombre = empleadosById.TryGetValue(h.EmpleadoId, out var en) ? en : null,
+            NumeroFacturaProveedor = h.NumeroFacturaProveedor,
+            Subtotal = h.Subtotal,
+            Descuento = h.Descuento,
+            Total = h.Total,
+            MontoPagado = h.MontoPagado,
+            Saldo = h.Saldo,
+            Observaciones = h.Observaciones,
+            Items = new List<RecepcionItemDto>(),
+        }).ToList();
+    }
+
     private async Task<ulong?> ResolverEmpleadoIdAsync(ulong? usuarioId, CancellationToken ct)
     {
         if (!usuarioId.HasValue) return null;

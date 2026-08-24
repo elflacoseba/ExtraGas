@@ -10,13 +10,23 @@ namespace ExtraGasMVC.Controllers;
 [Authorize(Policy = "OperadorOrAdmin")]
 public class GarrafasController : BaseController
 {
+    private const int RecepcionesDropdownCantidad = 100;
+
     private readonly IGarrafaService _garrafaService;
     private readonly IClienteService _clienteService;
+    private readonly IProveedorService _proveedorService;
+    private readonly IRecepcionService _recepcionService;
 
-    public GarrafasController(IGarrafaService garrafaService, IClienteService clienteService)
+    public GarrafasController(
+        IGarrafaService garrafaService,
+        IClienteService clienteService,
+        IProveedorService proveedorService,
+        IRecepcionService recepcionService)
     {
         _garrafaService = garrafaService;
         _clienteService = clienteService;
+        _proveedorService = proveedorService;
+        _recepcionService = recepcionService;
     }
 
     /// <summary>
@@ -39,6 +49,27 @@ public class GarrafasController : BaseController
     {
         TempData["Error"] = "No se puede editar una garrafa dada de baja.";
         return RedirectToAction(nameof(Details), new { id });
+    }
+
+    /// <summary>
+    /// Puebla los 4 ViewBags que alimentan los dropdowns de los formularios
+    /// Create/Edit de garrafas (issue #48): Clientes, Estados, Proveedores y
+    /// Recepciones. Lookups SECUENCIALES: los 4 servicios comparten el mismo
+    /// DbContext Scoped dentro del request, y EF no permite operaciones
+    /// concurrentes sobre un único DbContext (mismo motivo que en
+    /// <c>RecepcionesController.BuildCreateViewModelAsync</c>).
+    /// </summary>
+    private async Task CargarDropdownsFormularioAsync(CancellationToken ct)
+    {
+        ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+        ViewBag.Estados = await _garrafaService.GetEstadosAsync(ct);
+
+        var proveedoresResult = await _proveedorService.SearchAsync(
+            null, soloActivos: true, pagina: 1, tamanio: 1000, ct);
+        ViewBag.Proveedores = proveedoresResult.Items;
+
+        ViewBag.Recepciones = await _recepcionService.GetRecientesAsync(
+            RecepcionesDropdownCantidad, ct);
     }
 
     public async Task<IActionResult> Index(string? codigo, byte? capacidad, CancellationToken ct = default)
@@ -71,13 +102,26 @@ public class GarrafasController : BaseController
         return View(movimientos);
     }
 
-    public IActionResult Create() => View(new CreateGarrafaDto { EstadoGarrafaId = 1, Activo = true, FechaCompra = DateOnly.FromDateTime(DateTime.UtcNow) });
+    public async Task<IActionResult> Create(CancellationToken ct = default)
+    {
+        await CargarDropdownsFormularioAsync(ct);
+        return View(new CreateGarrafaDto
+        {
+            EstadoGarrafaId = 1,
+            Activo = true,
+            FechaCompra = DateOnly.FromDateTime(DateTime.UtcNow)
+        });
+    }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(CreateGarrafaDto garrafa, CancellationToken ct = default)
     {
-        if (!ModelState.IsValid) return View(garrafa);
+        if (!ModelState.IsValid)
+        {
+            await CargarDropdownsFormularioAsync(ct);
+            return View(garrafa);
+        }
         try
         {
             await _garrafaService.CreateAsync(garrafa, GetCurrentUserId(), ct);
@@ -87,11 +131,13 @@ public class GarrafasController : BaseController
         catch (InvalidOperationException ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
+            await CargarDropdownsFormularioAsync(ct);
             return View(garrafa);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear la garrafa: {ex.Message}");
+            await CargarDropdownsFormularioAsync(ct);
             return View(garrafa);
         }
     }
@@ -107,7 +153,7 @@ public class GarrafasController : BaseController
         if (garrafa.EstadoCodigo == GarrafaEstados.FueraServicio)
             return RedirectBloqueadoPorEstado(id);
 
-        ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+        await CargarDropdownsFormularioAsync(ct);
 
         var updateDto = new UpdateGarrafaDto
         {
@@ -142,7 +188,7 @@ public class GarrafasController : BaseController
 
         if (!ModelState.IsValid)
         {
-            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+            await CargarDropdownsFormularioAsync(ct);
             return View(garrafa);
         }
         try
@@ -154,13 +200,13 @@ public class GarrafasController : BaseController
         catch (InvalidOperationException ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+            await CargarDropdownsFormularioAsync(ct);
             return View(garrafa);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar la garrafa: {ex.Message}");
-            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+            await CargarDropdownsFormularioAsync(ct);
             return View(garrafa);
         }
     }

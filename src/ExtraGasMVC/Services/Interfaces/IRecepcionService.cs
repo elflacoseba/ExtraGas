@@ -40,4 +40,13 @@ public interface IRecepcionService
     /// mantiene el contrato cohesivo del servicio de recepciones.
     /// </summary>
     Task<IEnumerable<ProductoDto>> GetProductosActivosAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Devuelve las recepciones activas (no soft-deleted) ordenadas por fecha
+    /// descendente, limitadas a <paramref name="cantidad"/>. Usado para poblar
+    /// el dropdown de Recepción en formularios de Garrafa (issue #48). Cada
+    /// <see cref="RecepcionDto"/> trae el nombre del proveedor y del empleado,
+    /// pero no los items (no se necesitan para un selector).
+    /// </summary>
+    Task<IEnumerable<RecepcionDto>> GetRecientesAsync(int cantidad, CancellationToken ct = default);
 }
