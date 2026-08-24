@@ -120,7 +120,7 @@ public class GarrafaService : IGarrafaService
         return _mapper.Map<GarrafaDto>(garrafa);
     }
 
-    public async Task<bool> CambiarEstadoAsync(ulong id, CambiarEstadoGarrafaDto dto, CancellationToken ct = default)
+    public async Task<bool> CambiarEstadoAsync(ulong id, CambiarEstadoGarrafaDto dto, ulong? currentUserId = null, CancellationToken ct = default)
     {
         var garrafa = await _context.Garrafas.FindAsync(new object[] { id }, ct);
         if (garrafa == null)
@@ -174,6 +174,20 @@ public class GarrafaService : IGarrafaService
 
         var estadoOrigen = garrafa.EstadoGarrafaId;
 
+        // Resolver el empleado asociado al usuario autenticado (issue #43 -
+        // auditoría completa de CambiarEstadoAsync). Si el usuario no tiene
+        // empleado activo vinculado, el movimiento queda con EmpleadoId null
+        // pero igual registra CreatedBy.
+        ulong? empleadoId = null;
+        if (currentUserId.HasValue)
+        {
+            empleadoId = await _context.Empleados
+                .AsNoTracking()
+                .Where(e => e.UsuarioId == currentUserId.Value && e.Activo)
+                .Select(e => (ulong?)e.Id)
+                .FirstOrDefaultAsync(ct);
+        }
+
         await using var transaction = await _context.Database.BeginTransactionAsync(ct);
 
         try
@@ -193,6 +207,8 @@ public class GarrafaService : IGarrafaService
                 ClienteId = dto.ClienteId,
                 EstadoOrigenId = estadoOrigen,
                 EstadoDestinoId = dto.NuevoEstadoId,
+                EmpleadoId = empleadoId,
+                CreatedBy = currentUserId,
                 Observaciones = dto.Observaciones
             };
 
