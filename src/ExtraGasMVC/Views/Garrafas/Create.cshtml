@@ -6,6 +6,9 @@
         new() { Label = "Garrafas", Controller = "Garrafas", Action = "Index" },
         new() { Label = "Nueva" }
     };
+    var estados = ViewBag.Estados as IEnumerable<ExtraGasMVC.DTOs.EstadoGarrafaDto> ?? Array.Empty<ExtraGasMVC.DTOs.EstadoGarrafaDto>();
+    var proveedores = ViewBag.Proveedores as IEnumerable<ExtraGasMVC.DTOs.ProveedorDto> ?? Array.Empty<ExtraGasMVC.DTOs.ProveedorDto>();
+    var recepciones = ViewBag.Recepciones as IEnumerable<ExtraGasMVC.DTOs.RecepcionDto> ?? Array.Empty<ExtraGasMVC.DTOs.RecepcionDto>();
 }
 @section PageHeader {
     <div class="mb-3">
@@ -29,7 +32,13 @@
                 </div>
                 <div class="col-md-3">
                     <label asp-for="EstadoGarrafaId" class="form-label"></label>
-                    <input asp-for="EstadoGarrafaId" type="number" class="form-control" value="@Model.EstadoGarrafaId" />
+                    <select asp-for="EstadoGarrafaId" class="form-select" required>
+                        <option value="">-- Seleccionar estado --</option>
+                        @foreach (var e in estados)
+                        {
+                            <option value="@e.Id">@e.Nombre</option>
+                        }
+                    </select>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="FechaCompra" class="form-label"></label>
@@ -37,11 +46,23 @@
                 </div>
                 <div class="col-md-6">
                     <label asp-for="ProveedorId" class="form-label"></label>
-                    <input asp-for="ProveedorId" type="number" class="form-control" />
+                    <select asp-for="ProveedorId" class="form-select">
+                        <option value="">-- Sin proveedor --</option>
+                        @foreach (var p in proveedores)
+                        {
+                            <option value="@p.Id">@p.RazonSocial</option>
+                        }
+                    </select>
                 </div>
                 <div class="col-md-6">
                     <label asp-for="RecepcionId" class="form-label"></label>
-                    <input asp-for="RecepcionId" type="number" class="form-control" />
+                    <select asp-for="RecepcionId" class="form-select">
+                        <option value="">-- Sin recepción --</option>
+                        @foreach (var r in recepciones)
+                        {
+                            <option value="@r.Id">@((r.Numero ?? $"#{r.Id}")) — @r.Fecha.ToShortDateString() — @(r.ProveedorNombre ?? "?")</option>
+                        }
+                    </select>
                 </div>
                 <div class="col-md-12 d-flex align-items-end">
                     <div class="form-check">
