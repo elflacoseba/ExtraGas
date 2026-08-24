@@ -2,6 +2,7 @@ using AutoMapper;
 using ExtraGasMVC.Constants;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.Data.Entities.Views;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -446,5 +447,35 @@ public class GarrafaService : IGarrafaService
         {
             throw new InvalidOperationException($"Ya existe una garrafa con el código {codigo}.");
         }
+    }
+
+    public async Task<IEnumerable<VStockGarrafa>> GetStockAsync(CancellationToken ct = default)
+    {
+        // Issue #51: leemos la vista v_stock_garrafas en vez de agrupar en
+        // memoria. La vista ya excluye soft-deleted, agrupa por capacidad y
+        // estado, y proyecta los nombres/colores del catálogo estados_garrafa,
+        // por lo que el Controller puede renderizar badges sin joins extra.
+        var query = _context.VStockGarrafas.AsNoTracking();
+
+        var rows = await query.ToListAsync(ct);
+        // La vista ordena por capacidad / estado_nombre, pero asegurar el orden
+        // en la app para que la UI sea estable si la vista se redefine.
+        return rows
+            .OrderBy(r => r.CapacidadKg)
+            .ThenBy(r => r.EstadoNombre);
+    }
+
+    public async Task<IEnumerable<VGarrafaEnCliente>> GetEnClientesAsync(ulong? clienteId, CancellationToken ct = default)
+    {
+        // Issue #51: leemos v_garrafas_en_clientes (que ya filtra por estado
+        // EN_CLIENTE y calcula dias_en_cliente en SQL). Pasamos el filtro
+        // opcional de cliente al WHERE para respetar el comportamiento previo
+        // del Controller (sin parámetro = todos; con parámetro = uno).
+        var query = _context.VGarrafasEnClientes.AsNoTracking();
+
+        if (clienteId.HasValue)
+            query = query.Where(v => v.ClienteId == clienteId.Value);
+
+        return await query.ToListAsync(ct);
     }
 }

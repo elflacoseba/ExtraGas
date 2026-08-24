@@ -1,4 +1,4 @@
-@model IEnumerable<ExtraGasMVC.Models.ViewModels.StockGroup>
+@model IEnumerable<ExtraGasMVC.Data.Entities.Views.VStockGarrafa>
 @{
     ViewData["Title"] = "Stock de garrafas por estado";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -34,7 +34,11 @@
                 {
                     <tr>
                         <td class="text-end"><strong>@s.CapacidadKg</strong> kg</td>
-                        <td><span class="badge text-bg-secondary">Estado #@s.EstadoId</span></td>
+                        <td>
+                            @* Issue #51: badge con color y nombre del estado desde la vista v_stock_garrafas *@
+                            <span class="badge" style="background-color: @(s.EstadoColor ?? "#6c757d"); color: #fff;">@s.EstadoNombre</span>
+                            <small class="text-secondary ms-1">@s.EstadoCodigo</small>
+                        </td>
                         <td class="text-end fw-semibold">@s.Cantidad</td>
                     </tr>
                 }
@@ -49,6 +53,5 @@
     </div>
 </div>
 <p class="text-secondary small mt-3">
-    Datos en vivo computados a partir de la tabla <code>garrafas</code>. Los nombres de estado se resolveran
-    con la vista <code>v_stock_garrafas</code> en la base de datos.
+    Datos en vivo desde la vista <code>v_stock_garrafas</code> de la base de datos (issue #51).
 </p>
