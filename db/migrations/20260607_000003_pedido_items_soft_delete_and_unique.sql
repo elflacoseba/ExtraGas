@@ -1,4 +1,4 @@
--- 20260607_000002_pedido_items_soft_delete_and_unique.sql
+-- 20260607_000003_pedido_items_soft_delete_and_unique.sql
 -- Adds soft-delete column to pedido_items and unique constraint for duplicate prevention.
 -- Issue #17: Soft-delete convention compliance.
 -- Issue #19: Race condition prevention via unique constraint.
