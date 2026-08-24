@@ -26,6 +26,7 @@
                 <div class="col-md-3">
                     <label asp-for="Codigo" class="form-label"></label> <span class="text-danger">*</span>
                     <input asp-for="Codigo" class="form-control" required />
+                    <span asp-validation-for="Codigo" class="text-danger small"></span>
                 </div>
                 <div class="col-md-2">
                     <label asp-for="CapacidadKg" class="form-label"></label> <span class="text-danger">*</span>
@@ -35,6 +36,7 @@
                         <option value="15">15 kg</option>
                         <option value="45">45 kg</option>
                     </select>
+                    <span asp-validation-for="CapacidadKg" class="text-danger small"></span>
                 </div>
                 <div class="col-md-3">
                     <label asp-for="EstadoGarrafaId" class="form-label"></label> <span class="text-danger">*</span>
@@ -45,10 +47,12 @@
                             <option value="@e.Id">@e.Nombre</option>
                         }
                     </select>
+                    <span asp-validation-for="EstadoGarrafaId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="FechaCompra" class="form-label"></label> <span class="text-danger">*</span>
                     <input asp-for="FechaCompra" type="date" class="form-control" required />
+                    <span asp-validation-for="FechaCompra" class="text-danger small"></span>
                 </div>
                 <div class="col-md-6">
                     <label asp-for="ProveedorId" class="form-label"></label>
