@@ -72,15 +72,24 @@ public class GarrafasController : BaseController
             RecepcionesDropdownCantidad, ct);
     }
 
-    public async Task<IActionResult> Index(string? codigo, byte? capacidad, int page = 1, int pageSize = 20, CancellationToken ct = default)
+    public async Task<IActionResult> Index(
+        string? codigo, byte? capacidad,
+        int page = 1, int pageSize = 20,
+        string sortBy = "codigo", string sortDir = "asc",
+        CancellationToken ct = default)
     {
         // Issue #52: el service pagina y filtra en SQL. ViewBag expone los
         // filtros actuales para que la vista los mantenga en los links de
         // paginación y en el form.
-        var resultado = await _garrafaService.GetPagedAsync(codigo, capacidad, page, pageSize, ct);
+        // Issue #53: sortBy/sortDir viajan del query string al service y se
+        // exponen a la vista para los headers clickeables.
+        var resultado = await _garrafaService.GetPagedAsync(
+            codigo, capacidad, page, pageSize, sortBy, sortDir, ct);
 
         ViewBag.Codigo = codigo;
         ViewBag.Capacidad = capacidad;
+        ViewBag.SortBy = sortBy;
+        ViewBag.SortDir = sortDir;
         return View(resultado);
     }
 
