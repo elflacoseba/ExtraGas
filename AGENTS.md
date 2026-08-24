@@ -66,8 +66,13 @@ mysql -uroot                           # cliente root
 mysql -uroot extragas < db/migrations/<archivo>.sql  # migración puntual
 
 # BD — scripts
-./db/scripts/install.sh                # crear BD + migraciones + seed (idempotente)
-./db/scripts/reset.sh                  # drop + recreate (solo dev)
+./db/scripts/install.sh                       # crear BD + migraciones + seed (idempotente, skip-by-checksum)
+./db/scripts/setup_migrator_user.sh           # crear user extragas_migrator (idempotente, una vez como root)
+./db/scripts/reset.sh                         # drop + recreate (solo dev)
+
+# install.sh con migrator user (recomendado para homelab)
+MYSQL_USER=root MYSQL_MIGRATOR_PASS='xxx' ./db/scripts/setup_migrator_user.sh   # una vez
+MYSQL_MIGRATOR_USER=extragas_migrator MYSQL_MIGRATOR_PASS='xxx' ./db/scripts/install.sh
 
 # .NET
 dotnet restore                         # restore de paquetes
@@ -160,10 +165,10 @@ src/ExtraGasMVC/                    proyecto ASP.NET Core MVC (.NET 10.0)
 
 - El entorno actual apunta a un **homelab** (`192.168.0.216`) con MySQL 8.4.11, no a un server local. El cliente MySQL (`brew install mysql-client`) está en keg-only y requiere agregar `/opt/homebrew/opt/mysql-client/bin` al PATH.
 - Si `mysqladmin ping` (sin env vars) tira "Can't connect to local MySQL server through socket", es porque no pasaste `MYSQL_HOST` — el default es `localhost`. Exportá `MYSQL_HOST=tu_server` antes de correr el script.
-- El user `extragas` en el homelab requiere grants especiales para que `install.sh` corra: `GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO 'extragas'@'192.168.0.%'` y `SET GLOBAL log_bin_trust_function_creators = 1` (binlog activo en MySQL 8.x con replicación).
+- El user `extragas` en el homelab es el user de la app. NO debe tener `SYSTEM_VARIABLES_ADMIN` (privilegio global) — para instalar/migrar se usa un user separado `extragas_migrator` con privilegios completos sobre `extragas.*` + `SYSTEM_VARIABLES_ADMIN`. Crear/rotar con `./db/scripts/setup_migrator_user.sh` (idempotente, requiere MYSQL_USER=root). El binlog de MySQL 8.x con replicación exige `SET GLOBAL log_bin_trust_function_creators = 1` para crear triggers — eso lo hace el migrator user (con SYSTEM_VARIABLES_ADMIN), no la app.
 - Si el cliente está en Apple Silicon y Homebrew no está, instalalo con `brew install mysql-client` (sin server).
 - El socket queda en `/tmp/mysql.sock` (no en `/var/mysql/`). Si una app cliente se queja, exportar `TMPDIR=/tmp`.
-- `install.sh` es **idempotente** sobre la estructura inicial (CREATE TABLE/VIEW/TRIGGER con IF NOT EXISTS) y sobre las migraciones incrementales que usan el patrón `information_schema` + `PREPARE`/`EXECUTE` o `INSERT IGNORE`. Si una migración nueva no es idempotente, falla en re-run con "Table/Column already exists" o "Duplicate key". Ver ADR #13 en `db/docs/DECISIONES.md` para el patrón correcto.
+- `install.sh` es **idempotente** sobre la estructura inicial (CREATE TABLE/VIEW/TRIGGER con IF NOT EXISTS), sobre las migraciones incrementales (patrón `information_schema` + `PREPARE`/`EXECUTE` o `INSERT IGNORE`), y mantiene además una tabla `schema_migrations` (filename PK + checksum SHA256) que skipea migraciones ya aplicadas y detecta drift (checksum cambió en archivo ya aplicado → abort con error explícito). Ver ADR #13 en `db/docs/DECISIONES.md`.
 - La migración de seed (`20260102_000009_seed_data.sql`) inlina las 24 provincias argentinas. El archivo `db/seed/provincias_argentina.sql` se conserva como referencia documental.
 - Los triggers usan `SIGNAL SQLSTATE` para validar; si la app recibe un error, traducirlo desde la capa de UI.
 - En passwords de BD, evitá caracteres que bash expanda (`$`, `*`, `!`, espacios). Si los necesitás, exportá con comillas simples: `MYSQL_PASS='Pa$$W0rd'`.
