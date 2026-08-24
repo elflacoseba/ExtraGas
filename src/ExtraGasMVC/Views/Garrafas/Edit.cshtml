@@ -23,13 +23,14 @@
         <input type="hidden" asp-for="Id" />
         <div class="card-body">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <div class="small text-secondary mb-3"><span class="text-danger">*</span> Campos obligatorios</div>
             <div class="row g-3">
                 <div class="col-md-3">
-                    <label asp-for="Codigo" class="form-label"></label>
+                    <label asp-for="Codigo" class="form-label"></label> <span class="text-danger">*</span>
                     <input asp-for="Codigo" class="form-control" required />
                 </div>
                 <div class="col-md-2">
-                    <label asp-for="CapacidadKg" class="form-label"></label>
+                    <label asp-for="CapacidadKg" class="form-label"></label> <span class="text-danger">*</span>
                     <select asp-for="CapacidadKg" class="form-select" required>
                         <option value="">-- Seleccionar --</option>
                         <option value="10">10 kg</option>
@@ -38,7 +39,7 @@
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label asp-for="EstadoGarrafaId" class="form-label"></label>
+                    <label asp-for="EstadoGarrafaId" class="form-label"></label> <span class="text-danger">*</span>
                     <select asp-for="EstadoGarrafaId" class="form-select" required>
                         <option value="">-- Seleccionar estado --</option>
                         @foreach (var e in estados)
@@ -48,7 +49,7 @@
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="FechaCompra" class="form-label"></label>
+                    <label asp-for="FechaCompra" class="form-label"></label> <span class="text-danger">*</span>
                     <input asp-for="FechaCompra" type="date" class="form-control" required />
                 </div>
                 <div class="col-md-6">
