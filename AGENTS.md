@@ -9,7 +9,7 @@ Sistema de gestión para una empresa familiar de **venta de gas envasado (garraf
 ## Stack
 
 ### Base de datos
-- **MySQL 9.6.0** (Homebrew, servicio `homebrew.mxcl.mysql`).
+- **MySQL 8.4 LTS** soportado como target (dev actual en homelab). MySQL 9.x sigue siendo compatible (sintaxis portable). Ver ADR #11 en `db/docs/DECISIONES.md`.
 - **InnoDB** en todas las tablas, `utf8mb4` / `utf8mb4_unicode_ci`.
 - **Time zone**: `America/Argentina/Buenos_Aires` (-03:00).
 
@@ -158,12 +158,15 @@ src/ExtraGasMVC/                    proyecto ASP.NET Core MVC (.NET 10.0)
 
 ## Gotchas
 
-- MySQL 9.6 está instalado vía Homebrew pero el servicio **no arranca automáticamente** después de reiniciar la Mac. Si `mysqladmin -uroot ping` falla, correr `brew services start mysql`.
+- El entorno actual apunta a un **homelab** (`192.168.0.216`) con MySQL 8.4.11, no a un server local. El cliente MySQL (`brew install mysql-client`) está en keg-only y requiere agregar `/opt/homebrew/opt/mysql-client/bin` al PATH.
+- Si `mysqladmin ping` (sin env vars) tira "Can't connect to local MySQL server through socket", es porque no pasaste `MYSQL_HOST` — el default es `localhost`. Exportá `MYSQL_HOST=tu_server` antes de correr el script.
+- El user `extragas` en el homelab requiere grants especiales para que `install.sh` corra: `GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO 'extragas'@'192.168.0.%'` y `SET GLOBAL log_bin_trust_function_creators = 1` (binlog activo en MySQL 8.x con replicación).
+- Si el cliente está en Apple Silicon y Homebrew no está, instalalo con `brew install mysql-client` (sin server).
 - El socket queda en `/tmp/mysql.sock` (no en `/var/mysql/`). Si una app cliente se queja, exportar `TMPDIR=/tmp`.
-- `mysql_upgrade` no es necesario: BD recién creada en 9.6.
-- `install.sh` es **idempotente** (no borra datos). Para empezar de cero en dev, usar `db/scripts/reset.sh`, que sí hace `DROP DATABASE` y vuelve a correr todo.
+- `install.sh` es **idempotente** sobre la estructura inicial (CREATE TABLE/VIEW/TRIGGER con IF NOT EXISTS) y sobre las migraciones incrementales que usan el patrón `information_schema` + `PREPARE`/`EXECUTE` o `INSERT IGNORE`. Si una migración nueva no es idempotente, falla en re-run con "Table/Column already exists" o "Duplicate key". Ver ADR #13 en `db/docs/DECISIONES.md` para el patrón correcto.
 - La migración de seed (`20260102_000009_seed_data.sql`) inlina las 24 provincias argentinas. El archivo `db/seed/provincias_argentina.sql` se conserva como referencia documental.
 - Los triggers usan `SIGNAL SQLSTATE` para validar; si la app recibe un error, traducirlo desde la capa de UI.
+- En passwords de BD, evitá caracteres que bash expanda (`$`, `*`, `!`, espacios). Si los necesitás, exportá con comillas simples: `MYSQL_PASS='Pa$$W0rd'`.
 
 ## Consultas frecuentes (smoke test)
 

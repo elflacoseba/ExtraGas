@@ -11,7 +11,7 @@ USE extragas;
 --   - CAR-3/5/10/25: bolsas de carbón
 --   - LEN-25: bolsa de leña
 -- -----------------------------------------------------------------------------
-CREATE TABLE productos (
+CREATE TABLE IF NOT EXISTS productos (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(30) NOT NULL,
   nombre VARCHAR(150) NOT NULL,

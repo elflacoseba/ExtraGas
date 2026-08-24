@@ -9,8 +9,9 @@
 # Pre-requisito: MySQL corriendo (`brew services start mysql`)
 #
 # Idempotente: si la BD ya existe, conserva los datos y reaplica las
-# migraciones (los CREATE usan IF NOT EXISTS, los INSERT de seed pueden
-# fallar por UNIQUE — eso es esperable).
+# migraciones. Las migraciones estructurales usan IF NOT EXISTS / IF EXISTS /
+# CREATE OR REPLACE / INSERT IGNORE / DROP IF EXISTS, según corresponda.
+# Si una migración nueva no sigue este patrón, falla en re-run.
 # =============================================================================
 
 set -euo pipefail
@@ -33,9 +34,22 @@ MIGRATIONS_DIR="${PROJECT_ROOT}/db/migrations"
 
 # --- Pre-checks --------------------------------------------------------------
 echo "==> Verificando conexión a MySQL..."
-if ! ${MYSQL_CMD} -e "SELECT VERSION();" >/dev/null 2>&1; then
-  echo "    ERROR: no se puede conectar a MySQL. ¿Está corriendo el servicio?" >&2
-  echo "    Probá: brew services start mysql" >&2
+ERROR_OUTPUT=$(${MYSQL_CMD} -e "SELECT VERSION();" 2>&1 >/dev/null)
+EXIT_CODE=$?
+if [ "${EXIT_CODE}" -ne 0 ]; then
+  echo "    ERROR: no se puede conectar a MySQL." >&2
+  if echo "${ERROR_OUTPUT}" | grep -qi "Access denied"; then
+    echo "    Autenticación rechazada. Verificá MYSQL_USER y MYSQL_PASS." >&2
+  elif echo "${ERROR_OUTPUT}" | grep -qi "Can't connect to MySQL server"; then
+    echo "    El servicio MySQL no responde en ${MYSQL_HOST}:3306." >&2
+    if [ "${MYSQL_HOST}" = "localhost" ] || [ "${MYSQL_HOST}" = "127.0.0.1" ]; then
+      echo "    Si es local: brew services start mysql" >&2
+    else
+      echo "    Verificá conectividad de red y que el server escuche en TCP." >&2
+    fi
+  else
+    echo "    Detalle: ${ERROR_OUTPUT}" >&2
+  fi
   exit 1
 fi
 ${MYSQL_CMD} -e "SELECT VERSION();" 2>/dev/null
@@ -69,4 +83,5 @@ echo "  Vistas:            ${VIEW_COUNT}"
 echo "  Triggers:          ${TRIGGER_COUNT}"
 echo "================================================================"
 echo ""
-echo "Para conectarte: ${MYSQL_CMD} ${DB_NAME}"
+# Mostramos el comando sin el password (queda -p solo, así el shell lo pide).
+echo "Para conectarte: ${MYSQL_CMD%${MYSQL_PASS}} ${DB_NAME}"

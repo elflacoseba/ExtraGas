@@ -12,7 +12,7 @@ USE extragas;
 --   - estado_garrafa_id: estado actual
 --   - cliente_id: solo cuando el estado es EN_CLIENTE
 -- -----------------------------------------------------------------------------
-CREATE TABLE garrafas (
+CREATE TABLE IF NOT EXISTS garrafas (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(50) NOT NULL,
   capacidad_kg TINYINT UNSIGNED NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE garrafas (
 --   - recepcion_id: NULL si no está asociado a una recepción
 --   - estado_origen_id, estado_destino_id: para trazabilidad
 -- -----------------------------------------------------------------------------
-CREATE TABLE movimientos_garrafa (
+CREATE TABLE IF NOT EXISTS movimientos_garrafa (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   garrafa_id BIGINT UNSIGNED NOT NULL,
   fecha DATETIME NOT NULL,

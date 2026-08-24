@@ -54,7 +54,7 @@ Los pedidos, recibos de pago e informes generados por el sistema podrán emitirs
 
 ## Stack técnico
 
-- **MySQL 9.6.0** (InnoDB, `utf8mb4` / `utf8mb4_unicode_ci`)
+- **MySQL 8.4 LTS** soportado como target (homelab en producción), MySQL 9.x compatible (sintaxis portable). Ver ADR #11 en `db/docs/DECISIONES.md`.
 - Time zone: `America/Argentina/Buenos_Aires`
 - **.NET 10** (ASP.NET Core MVC)
 - **EF Core 9** + **Pomelo 9** (database-first, sin migraciones EF)

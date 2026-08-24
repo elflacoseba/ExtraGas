@@ -9,10 +9,22 @@
 USE extragas;
 
 -- -----------------------------------------------------------------------------
--- 1) DROP de la columna en `pedidos`
+-- 1) DROP de la columna en `pedidos` (idempotente: solo si existe)
+--    MySQL no soporta DROP COLUMN IF EXISTS, usamos information_schema.
 -- -----------------------------------------------------------------------------
-ALTER TABLE `pedidos`
-  DROP COLUMN `entregado`;
+SET @col_exists = (
+  SELECT COUNT(*) FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'pedidos'
+    AND column_name = 'entregado'
+);
+SET @sql = IF(@col_exists > 0,
+  'ALTER TABLE `pedidos` DROP COLUMN `entregado`',
+  'SELECT "Column entregado ya eliminada, skipping" AS status'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- -----------------------------------------------------------------------------
 -- 2) DROP del campo en la vista `v_pedidos_resumen`

@@ -12,7 +12,7 @@ USE extragas;
 --   - monto_pagado: lo mantiene trigger AFTER pagos
 --   - saldo: columna generada = total - monto_pagado
 -- -----------------------------------------------------------------------------
-CREATE TABLE pedidos (
+CREATE TABLE IF NOT EXISTS pedidos (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   numero VARCHAR(20) NULL,
   fecha DATETIME NOT NULL,
@@ -61,7 +61,7 @@ CREATE TABLE pedidos (
 --   - subtotal: columna generada = cantidad * precio_unitario
 --   - precio_unitario se congela al momento de crear el pedido (histórico)
 -- -----------------------------------------------------------------------------
-CREATE TABLE pedido_items (
+CREATE TABLE IF NOT EXISTS pedido_items (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   pedido_id BIGINT UNSIGNED NOT NULL,
   producto_id BIGINT UNSIGNED NOT NULL,
@@ -87,7 +87,7 @@ CREATE TABLE pedido_items (
 --   - pedido_id: NULL permitido = "pago a cuenta" (se aplica al pedido más antiguo con saldo del cliente)
 --   - referencia: para transferencias, número de operación
 -- -----------------------------------------------------------------------------
-CREATE TABLE pagos (
+CREATE TABLE IF NOT EXISTS pagos (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   numero_recibo VARCHAR(20) NULL,
   fecha DATETIME NOT NULL,

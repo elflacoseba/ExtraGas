@@ -8,7 +8,7 @@ USE extragas;
 -- -----------------------------------------------------------------------------
 -- usuarios: credenciales del sistema
 -- -----------------------------------------------------------------------------
-CREATE TABLE usuarios (
+CREATE TABLE IF NOT EXISTS usuarios (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   username VARCHAR(50) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE usuarios (
 -- -----------------------------------------------------------------------------
 -- empleados: personas que trabajan en la empresa (incluye al dueño)
 -- -----------------------------------------------------------------------------
-CREATE TABLE empleados (
+CREATE TABLE IF NOT EXISTS empleados (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   nombre VARCHAR(100) NOT NULL,
   apellido VARCHAR(100) NOT NULL,
@@ -69,7 +69,7 @@ CREATE TABLE empleados (
 -- -----------------------------------------------------------------------------
 -- clientes: compradores de la empresa
 -- -----------------------------------------------------------------------------
-CREATE TABLE clientes (
+CREATE TABLE IF NOT EXISTS clientes (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(20) NULL,
   nombre VARCHAR(100) NOT NULL,
@@ -108,7 +108,7 @@ CREATE TABLE clientes (
 -- -----------------------------------------------------------------------------
 -- cliente_contactos: medios de contacto adicionales por cliente
 -- -----------------------------------------------------------------------------
-CREATE TABLE cliente_contactos (
+CREATE TABLE IF NOT EXISTS cliente_contactos (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   cliente_id BIGINT UNSIGNED NOT NULL,
   tipo_contacto_id BIGINT UNSIGNED NOT NULL,
@@ -126,7 +126,7 @@ CREATE TABLE cliente_contactos (
 -- -----------------------------------------------------------------------------
 -- proveedores: quienes abastecen a la empresa
 -- -----------------------------------------------------------------------------
-CREATE TABLE proveedores (
+CREATE TABLE IF NOT EXISTS proveedores (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(20) NULL,
   razon_social VARCHAR(150) NOT NULL,

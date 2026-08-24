@@ -9,7 +9,7 @@ USE extragas;
 -- -----------------------------------------------------------------------------
 -- roles: roles de usuario del sistema
 -- -----------------------------------------------------------------------------
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(30) NOT NULL,
   nombre VARCHAR(100) NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE roles (
 -- -----------------------------------------------------------------------------
 -- tipos_producto: GAS, CARBON, LENA
 -- -----------------------------------------------------------------------------
-CREATE TABLE tipos_producto (
+CREATE TABLE IF NOT EXISTS tipos_producto (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(30) NOT NULL,
   nombre VARCHAR(100) NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE tipos_producto (
 -- -----------------------------------------------------------------------------
 -- formas_pago: EFECTIVO, TRANSFERENCIA, MERCADO_PAGO, CHEQUE
 -- -----------------------------------------------------------------------------
-CREATE TABLE formas_pago (
+CREATE TABLE IF NOT EXISTS formas_pago (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(30) NOT NULL,
   nombre VARCHAR(100) NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE formas_pago (
 -- -----------------------------------------------------------------------------
 -- estados_pedido: ciclo de vida del pedido
 -- -----------------------------------------------------------------------------
-CREATE TABLE estados_pedido (
+CREATE TABLE IF NOT EXISTS estados_pedido (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(30) NOT NULL,
   nombre VARCHAR(100) NOT NULL,
@@ -65,7 +65,7 @@ CREATE TABLE estados_pedido (
 -- -----------------------------------------------------------------------------
 -- estados_garrafa: estado actual de una garrafa física
 -- -----------------------------------------------------------------------------
-CREATE TABLE estados_garrafa (
+CREATE TABLE IF NOT EXISTS estados_garrafa (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(30) NOT NULL,
   nombre VARCHAR(100) NOT NULL,
@@ -81,7 +81,7 @@ CREATE TABLE estados_garrafa (
 -- -----------------------------------------------------------------------------
 -- tipos_movimiento_garrafa: motivo de un cambio de estado de garrafa
 -- -----------------------------------------------------------------------------
-CREATE TABLE tipos_movimiento_garrafa (
+CREATE TABLE IF NOT EXISTS tipos_movimiento_garrafa (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(30) NOT NULL,
   nombre VARCHAR(100) NOT NULL,
@@ -94,7 +94,7 @@ CREATE TABLE tipos_movimiento_garrafa (
 -- -----------------------------------------------------------------------------
 -- canales_venta: TELEFONO, WHATSAPP, PRESENCIAL
 -- -----------------------------------------------------------------------------
-CREATE TABLE canales_venta (
+CREATE TABLE IF NOT EXISTS canales_venta (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(30) NOT NULL,
   nombre VARCHAR(100) NOT NULL,
@@ -107,7 +107,7 @@ CREATE TABLE canales_venta (
 -- -----------------------------------------------------------------------------
 -- medios_contacto_pedido: cómo se contactó al cliente para tomar el pedido
 -- -----------------------------------------------------------------------------
-CREATE TABLE medios_contacto_pedido (
+CREATE TABLE IF NOT EXISTS medios_contacto_pedido (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(30) NOT NULL,
   nombre VARCHAR(100) NOT NULL,
@@ -120,7 +120,7 @@ CREATE TABLE medios_contacto_pedido (
 -- -----------------------------------------------------------------------------
 -- tipos_contacto_cliente: TELEFONO, WHATSAPP, EMAIL, OTRO
 -- -----------------------------------------------------------------------------
-CREATE TABLE tipos_contacto_cliente (
+CREATE TABLE IF NOT EXISTS tipos_contacto_cliente (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(30) NOT NULL,
   nombre VARCHAR(100) NOT NULL,
@@ -132,7 +132,7 @@ CREATE TABLE tipos_contacto_cliente (
 -- -----------------------------------------------------------------------------
 -- provincias: 24 provincias argentinas
 -- -----------------------------------------------------------------------------
-CREATE TABLE provincias (
+CREATE TABLE IF NOT EXISTS provincias (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   codigo VARCHAR(4) NOT NULL,
   nombre VARCHAR(100) NOT NULL,
@@ -146,7 +146,7 @@ CREATE TABLE provincias (
 -- secuencias: control de correlativos por año y prefijo
 -- Formato generado: PREFIX-YYYY-NNNNN
 -- -----------------------------------------------------------------------------
-CREATE TABLE secuencias (
+CREATE TABLE IF NOT EXISTS secuencias (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   nombre VARCHAR(50) NOT NULL,
   prefijo VARCHAR(20) NOT NULL,

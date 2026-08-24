@@ -5,5 +5,6 @@
 
 USE extragas;
 
-INSERT INTO tipos_movimiento_garrafa (codigo, nombre, descripcion) VALUES
+-- Idempotente: INSERT IGNORE evita el duplicate-key si ya fue aplicado.
+INSERT IGNORE INTO tipos_movimiento_garrafa (codigo, nombre, descripcion) VALUES
   ('CAMBIO_ESTADO', 'Cambio manual de estado', 'Cambio de estado realizado manualmente desde la UI');

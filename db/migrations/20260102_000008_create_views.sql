@@ -15,7 +15,6 @@ SELECT
   p.numero,
   p.fecha,
   p.fecha_entrega,
-  p.entregado,
   p.cliente_id,
   CONCAT(c.apellido, ', ', c.nombre) AS cliente,
   c.telefono_principal AS cliente_telefono,
