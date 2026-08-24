@@ -213,32 +213,24 @@ public class GarrafasController : BaseController
 
     public async Task<IActionResult> Stock(CancellationToken ct = default)
     {
-        var garrafas = await _garrafaService.GetAllAsync(ct);
-        var agrupado = garrafas
-            .GroupBy(g => new { g.CapacidadKg, g.EstadoGarrafaId })
-            .Select(g => new StockGroup
-            {
-                CapacidadKg = g.Key.CapacidadKg,
-                EstadoId = g.Key.EstadoGarrafaId,
-                Cantidad = g.Count()
-            })
-            .OrderBy(s => s.CapacidadKg)
-            .ThenBy(s => s.EstadoId)
-            .ToList();
-        return View(agrupado);
+        // Issue #51: ahora consulta la vista v_stock_garrafas (nombres y
+        // colores de estado incluidos), eliminando el agrupamiento manual
+        // en memoria.
+        var stock = await _garrafaService.GetStockAsync(ct);
+        return View(stock);
     }
 
     public async Task<IActionResult> EnClientes(ulong? clienteId, CancellationToken ct = default)
     {
+        // Issue #51: la vista v_garrafas_en_clientes ya excluye las que no
+        // están en estado EN_CLIENTE, aplica soft-delete y calcula días; el
+        // Controller ya no necesita pedir el listado completo y filtrar acá.
+        var enClientes = await _garrafaService.GetEnClientesAsync(clienteId, ct);
+
         if (clienteId.HasValue)
-        {
-            var garrafas = await _garrafaService.GetByClienteAsync(clienteId.Value, ct);
             ViewBag.Cliente = await _clienteService.GetByIdAsync(clienteId.Value, ct);
-            return View("EnClientes", garrafas);
-        }
-        var todas = await _garrafaService.GetAllAsync(ct);
-        var enClientes = todas.Where(g => g.ClienteId.HasValue);
-        return View(enClientes);
+
+        return View("EnClientes", enClientes);
     }
 
     public async Task<IActionResult> CambiarEstado(ulong id, CancellationToken ct = default)

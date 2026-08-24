@@ -1,3 +1,4 @@
+using ExtraGasMVC.Data.Entities.Views;
 using ExtraGasMVC.DTOs;
 
 namespace ExtraGasMVC.Services.Interfaces;
@@ -67,4 +68,22 @@ public interface IGarrafaService
         string tipoMovimientoCodigo,
         ulong? usuarioId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Devuelve el stock agrupado por capacidad y estado, leyendo directamente
+    /// de la vista <c>v_stock_garrafas</c> para evitar el agrupamiento manual
+    /// que antes se hacía en memoria en el Controller (issue #51). Cada fila
+    /// ya trae los nombres y colores del catálogo <c>estados_garrafa</c>,
+    /// por lo que la UI puede renderizar badges sin joins adicionales.
+    /// </summary>
+    Task<IEnumerable<VStockGarrafa>> GetStockAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Devuelve las garrafas que están en poder de un cliente, leyendo de la
+    /// vista <c>v_garrafas_en_clientes</c> (issue #51). La vista ya filtra
+    /// por estado <c>EN_CLIENTE</c> y calcula <c>dias_en_cliente</c>. Cuando
+    /// <paramref name="clienteId"/> es null devuelve todas las garrafas en
+    /// cliente; cuando se especifica, filtra a ese cliente.
+    /// </summary>
+    Task<IEnumerable<VGarrafaEnCliente>> GetEnClientesAsync(ulong? clienteId, CancellationToken ct = default);
 }

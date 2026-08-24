@@ -1,4 +1,4 @@
-@model IEnumerable<ExtraGasMVC.DTOs.GarrafaDto>
+@model IEnumerable<ExtraGasMVC.Data.Entities.Views.VGarrafaEnCliente>
 @{
     ViewData["Title"] = "Garrafas en poder del cliente";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -29,9 +29,9 @@
                 <tr>
                     <th>Codigo</th>
                     <th class="text-end">Capacidad (kg)</th>
-                    <th>Estado</th>
                     <th>Cliente</th>
                     <th>F. ultimo mov.</th>
+                    <th class="text-end">Días en cliente</th>
                 </tr>
             </thead>
             <tbody>
@@ -45,21 +45,24 @@
                         <td><code>@g.Codigo</code></td>
                         <td class="text-end">@g.CapacidadKg</td>
                         <td>
-                            @* Issue #47: badge con color del catálogo estados_garrafa y nombre legible *@
-                            <span class="badge" style="background-color: @(g.EstadoColor ?? "#6c757d"); color: #fff;">@(g.EstadoNombre ?? $"#{g.EstadoGarrafaId}")</span>
-                        </td>
-                        <td>
-                            @if (g.ClienteId.HasValue && !string.IsNullOrWhiteSpace(g.ClienteNombre))
-                            { <a asp-controller="Clientes" asp-action="Details" asp-route-id="@g.ClienteId">@g.ClienteNombre</a> }
+                            @if (g.ClienteId > 0 && !string.IsNullOrWhiteSpace(g.Cliente))
+                            {
+                                <a asp-controller="Clientes" asp-action="Details" asp-route-id="@g.ClienteId">@g.Cliente</a>
+                            }
                             else if (cliente is not null)
                             {
                                 <span>@cliente.Apellido, @cliente.Nombre</span>
                             }
                         </td>
-                        <td>@g.FechaUltimoMovimiento.ToShortDate()</td>
+                        <td>@g.FechaUltimoMovimiento?.ToShortDateString()</td>
+                        @* Issue #51: dias_en_cliente calculado en v_garrafas_en_clientes. *@
+                        <td class="text-end">@(g.DiasEnCliente?.ToString() ?? "—")</td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
 </div>
+<p class="text-secondary small mt-3">
+    Datos en vivo desde la vista <code>v_garrafas_en_clientes</code> de la base de datos (issue #51).
+</p>

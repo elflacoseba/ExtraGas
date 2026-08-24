@@ -19,10 +19,3 @@ public class TopProducto
     public string Tipo { get; set; } = string.Empty;
     public decimal Cantidad { get; set; }
 }
-
-public class StockGroup
-{
-    public byte CapacidadKg { get; set; }
-    public ulong EstadoId { get; set; }
-    public int Cantidad { get; set; }
-}
