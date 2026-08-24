@@ -233,7 +233,8 @@ public class GarrafasController : BaseController
 
         try
         {
-            var ok = await _garrafaService.CambiarEstadoAsync(id, dto, ct);
+            var currentUserId = GetCurrentUserId();
+            var ok = await _garrafaService.CambiarEstadoAsync(id, dto, currentUserId, ct);
             if (!ok) return NotFound();
             TempData["Success"] = $"Estado de la garrafa {garrafa.Codigo} actualizado correctamente.";
             return RedirectToAction(nameof(Details), new { id });
