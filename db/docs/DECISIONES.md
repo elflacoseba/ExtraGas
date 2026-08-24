@@ -167,31 +167,7 @@ Documento de decisiones (ADR-style) y supuestos del sistema **ExtraGas**.
 3. El compilador detecta referencias inválidas a estados. La matriz es trivialmente testeable sin necesidad de fixtures de BD.
 4. El catálogo `estados_garrafa` (los **estados mismos**) sigue siendo una tabla en BD para mantener el principio #4. Sólo las transiciones, que son lógica de negocio, son código.
 
-**Matriz vigente:**
-
-| Origen ↓ → Destino | LLENA_DEPOSITO | VACIA_DEPOSITO | EN_TRANSITO | EN_CLIENTE | DAÑADA | FUERA_SERVICIO |
-|---|---|---|---|---|---|---|
-| **LLENA_DEPOSITO**  | — | ✓ | ✓ | ✓ | ✓ | — |
-| **VACIA_DEPOSITO**  | ✓ | — | — | ✓ | ✓ | ✓ |
-| **EN_TRANSITO**     | ✓ | ✓ | — | ✓ | ✓ | — |
-| **EN_CLIENTE**      | ✓ | ✓ | — | — | ✓ | ✓ |
-| **DAÑADA**          | — | ✓ | — | — | — | ✓ |
-| **FUERA_SERVICIO**  | — | — | — | — | — | — |
-
-Notas operativas:
-
-- **`FUERA_SERVICIO` es estado terminal**: una garrafa retirada del sistema no vuelve a entrar al inventario activo. Esto es el ejemplo del issue #40.
-- **`EN_TRANSITO → EN_CLIENTE`** es la confirmación de una entrega que estaba en reparto.
-- **`EN_CLIENTE → VACIA_DEPOSITO`** es la devolución por canje (escenario habitual).
-- Las transiciones por flujo de negocio (`COMPRA`, `ENTREGA_CLIENTE`, `DEVOLUCION_CLIENTE`, `BAJA`, `REPARACION`) **no pasan por esta matriz** — son registradas directamente por los servicios de `Recepciones` y `Pedidos` con su `tipo_movimiento` correspondiente.
-- Auto-transiciones (`X → X`) son rechazadas como no-ops.
-
-**Implicancia para la UI:**
-
-- El dropdown del formulario "Cambiar estado" sólo muestra los destinos válidos para el estado actual de la garrafa (`IGarrafaService.GetTransicionesDisponiblesAsync`).
-- Si el estado es terminal, el dropdown queda deshabilitado y el formulario avisa con un `alert-warning` — la operación es efectivamente bloqueada del lado UI.
-- `CambiarEstadoAsync` rechaza toda transición no listada con `InvalidOperationException` ("Transición inválida: ORIGEN → DESTINO. Consulte la matriz…"). La validación pasa también por requests hand-crafted, no sólo por la UI.
-- Si el destino requiere cliente (`requiere_cliente = TRUE` en `estados_garrafa`, p.ej. `EN_CLIENTE`), la app exige `ClienteId` en el DTO. El trigger `trg_garrafas_bi_validate` sólo cubre `INSERT` directos, no cambios por `CAMBIO_ESTADO`.
+**Documentación operativa:** la matriz vigente, las notas operativas (estado terminal, flujos de negocio que la esquivan, implicancias para la UI), las validaciones, las integraciones con Pedidos/Recepciones y el ciclo de vida completo están documentados en [`db/docs/GARRAFAS.md`](./GARRAFAS.md). Este ADR queda con la **decisión y su porqué**; el detalle de implementación vive en el documento del módulo.
 
 ---
 
