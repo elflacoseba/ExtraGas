@@ -121,6 +121,19 @@ public class PedidoItemDto
     public decimal PrecioUnitario { get; set; }
     public decimal Subtotal { get; set; }
     public string? Observaciones { get; set; }
+
+    /// <summary>
+    /// Copiado de <c>Producto.ManejaGarrafaIndividual</c>. Cuando es
+    /// <c>true</c> y el item es ENTREGA/DEVOLUCION, la app exige un código
+    /// físico por unidad en el canje (issue #44).
+    /// </summary>
+    public bool ManejaGarrafaIndividual { get; set; }
+
+    /// <summary>
+    /// Copiado de <c>Producto.CapacidadKg</c> para que la UI de canje
+    /// muestre la capacidad sin un join extra (issue #44).
+    /// </summary>
+    public decimal? CapacidadKg { get; set; }
 }
 
 public class CreatePedidoItemDto

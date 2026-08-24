@@ -1,0 +1,80 @@
+schema: spec-driven
+
+context: |
+  Stack: ASP.NET Core MVC (.NET 10.0) + EF Core 9.0.16 + Pomelo MySQL 9.0.0
+  DB: MySQL 9.6.0 (Homebrew), InnoDB, utf8mb4, tz America/Argentina/Buenos_Aires
+  Schema: managed via raw SQL in db/migrations/ (NO EF Core migrations)
+  Auth: Cookie auth + role policies (AdminOnly, OperadorOrAdmin) — no Identity
+  Frontend: AdminLTE 4 + SweetAlert2 (npm), Razor views
+  Architecture: Services (Interface + Implementation, Scoped) + DTOs + AutoMapper
+  Conventions: snake_case DB; soft delete via deleted_at; lookup tables not ENUMs
+  Conventions: branches feature/issue-XX-<slug>; PRs against develop; commits in Spanish (conventional commits)
+
+strict_tdd: false
+
+testing:
+  strict_tdd: false
+  reason: "No test runner detected — no tests/*.csproj, no xunit/nunit/mstest references, no dotnet test target, no .editorconfig, no coverage config. Project has no automated test infrastructure."
+  runner:
+    available: false
+    command: ""
+    framework: ""
+  layers:
+    unit:
+      available: false
+      tool: ""
+    integration:
+      available: false
+      tool: ""
+    e2e:
+      available: false
+      tool: ""
+  coverage:
+    available: false
+    command: ""
+  quality:
+    linter:
+      available: false
+      command: ""
+    type_checker:
+      available: false
+      command: ""
+    formatter:
+      available: false
+      command: ""
+
+rules:
+  proposal:
+    - "Include rollback plan for any migration touching db/migrations/"
+    - "Honor garrafa tracking model: every pedido_item ENTREGA/DEVOLUCION must create matching movimiento_garrafa in the same transaction"
+    - "Honor trigger-maintained columns: never update pedidos.monto_pagado directly (maintained by trigger on pagos)"
+    - "Prefer lookup tables over ENUMs for any new status/category column"
+  specs:
+    - "Use Given/When/Then for scenarios"
+    - "Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)"
+    - "Delta specs use ADDED / MODIFIED / REMOVED / RENAMED sections"
+  design:
+    - "Include sequence diagrams for cross-service flows (Pedidos ↔ Garrafas ↔ Pagos)"
+    - "Document every architecture decision with rationale and rejected alternatives"
+    - "Reference existing AGENTS.md invariants — do not break tracking-by-garrafa, soft-delete, or trigger-maintained columns"
+  tasks:
+    - "Group by phase (DB → Service → Controller → View), use hierarchical numbering"
+    - "Keep each task completable in one session"
+    - "DB tasks MUST name the migration file to create and the order relative to existing migrations"
+  apply:
+    guidelines:
+      - "Follow existing patterns in Services/Implementations (Scoped registration in Program.cs)"
+      - "Reuse BaseController helpers for CreatedBy/UpdatedBy and antiforgery"
+      - "Mirror existing DTO/Mapping patterns in DTOs/ and Mappings/"
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: "dotnet build src/ExtraGasMVC"
+    coverage_threshold: 0
+    smoke_queries:
+      - "SELECT * FROM v_pedidos_resumen WHERE saldo > 0 ORDER BY fecha DESC LIMIT 5"
+      - "SELECT capacidad_kg, eg.codigo AS estado, COUNT(*) AS cantidad FROM garrafas g JOIN estados_garrafa eg ON eg.id = g.estado_garrafa_id WHERE g.deleted_at IS NULL GROUP BY capacidad_kg, estado"
+  archive:
+    - "Warn before merging destructive deltas (REMOVED requirements)"
+    - "Sync delta specs into openspec/specs/{domain}/spec.md on archive"

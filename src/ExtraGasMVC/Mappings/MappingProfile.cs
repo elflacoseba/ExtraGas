@@ -40,6 +40,10 @@ public class MappingProfile : Profile
                 s.Producto != null ? s.Producto.Nombre : null))
             .ForMember(d => d.ProductoCodigo, o => o.MapFrom(s =>
                 s.Producto != null ? s.Producto.Codigo : null))
+            .ForMember(d => d.ManejaGarrafaIndividual, o => o.MapFrom(s =>
+                s.Producto != null && s.Producto.ManejaGarrafaIndividual))
+            .ForMember(d => d.CapacidadKg, o => o.MapFrom(s =>
+                s.Producto != null ? s.Producto.CapacidadKg : (decimal?)null))
             .ForMember(d => d.TipoLinea, o => o.MapFrom(s => s.TipoLinea.ToString()));
         CreateMap<CreatePedidoItemDto, PedidoItem>()
             .ForMember(d => d.TipoLinea, o => o.MapFrom(s =>
@@ -98,7 +102,9 @@ public class MappingProfile : Profile
             .ForMember(d => d.EstadoDestinoNombre, o => o.MapFrom(s =>
                 s.EstadoDestino != null ? s.EstadoDestino.Nombre : null))
             .ForMember(d => d.EmpleadoNombreCompleto, o => o.MapFrom(s =>
-                s.Empleado != null ? s.Empleado.Apellido + ", " + s.Empleado.Nombre : null));
+                s.Empleado != null ? s.Empleado.Apellido + ", " + s.Empleado.Nombre : null))
+            .ForMember(d => d.GarrafaCodigo, o => o.MapFrom(s =>
+                s.Garrafa != null ? s.Garrafa.Codigo : null));
 
         // Usuario mappings
         CreateMap<Usuario, UsuarioDto>()

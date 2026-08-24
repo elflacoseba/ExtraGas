@@ -41,4 +41,30 @@ public interface IPedidoService
     Task<List<CanalVentaDto>> GetCanalesVentaAsync(CancellationToken ct = default);
     Task<List<MedioContactoPedidoDto>> GetMediosContactoAsync(CancellationToken ct = default);
     Task<IEnumerable<EmpleadoDto>> GetEmpleadosActivosAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Ejecuta el canje físico de garrafas en la transición a CONFIRMADO.
+    /// Pre-valida cada código (existencia, estado origen, cliente en DEVOLUCION),
+    /// valida idempotencia (rechaza si ya hay movimientos para el pedido),
+    /// abre una transacción ambiente y delega en
+    /// <c>IGarrafaService.RegistrarMovimientoPorCanjeAsync</c>. Finalmente
+    /// actualiza el estado del pedido a CONFIRMADO dentro de la misma
+    /// transacción. Cualquier falla rollbackea todo.
+    /// </summary>
+    /// <param name="codigosPorItem">
+    /// Diccionario <c>itemId → códigos físicos</c>. Solo incluye items GARRAFA
+    /// con tipo de línea ENTREGA o DEVOLUCION — el resto se ignora (un pedido
+    /// con solo items VENTA pasa <c>null</c> o un diccionario vacío).
+    /// </param>
+    /// <returns>
+    /// <c>true</c> cuando la transición se aplicó; <c>false</c> cuando el pedido
+    /// no existe. Lanza <see cref="InvalidOperationException"/> ante cualquier
+    /// error de validación (código inexistente, estado incorrecto, cantidad
+    /// no coincide, re-CONFIRMADO, etc.).
+    /// </returns>
+    Task<bool> RegistrarCanjePedidoAsync(
+        ulong pedidoId,
+        Dictionary<ulong, List<string>> codigosPorItem,
+        ulong? usuarioId,
+        CancellationToken ct = default);
 }

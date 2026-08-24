@@ -172,6 +172,7 @@
                     {
                         <button type="button" class="btn btn-outline-primary js-confirmar-btn"
                                 data-tiene-items="@Model.Items.Any().ToString().ToLower()"
+                                data-tiene-items-canje="@Model.ItemsGarrafaCanje.Any().ToString().ToLower()"
                                 data-action="@Url.Action("CambiarEstado")"
                                 data-pedido-id="@Model.Pedido.Id"
                                 data-nuevo-estado-id="@t.Id">
@@ -325,6 +326,62 @@
             tipoLinea = i.TipoLinea
         })
         .ToArray();
+}
+
+@* Issue #44: modal de carga de códigos de garrafas para CONFIRMADO. Solo se *@
+@* renderiza cuando hay items GARRAFA-capaces con ENTREGA/DEVOLUCION. *@
+@if (Model.ItemsGarrafaCanje.Any())
+{
+    <div class="modal fade" id="js-canje-garrafas-modal" tabindex="-1" aria-labelledby="js-canje-garrafas-modal-title" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="js-canje-garrafas-modal-title">
+                        <i class="bi bi-upc-scan me-1"></i> Códigos de garrafas
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-secondary small mb-3">
+                        Ingrese un código de garrafa por línea para cada item. La cantidad de códigos debe coincidir exactamente con la cantidad esperada.
+                    </p>
+                    @foreach (var ig in Model.ItemsGarrafaCanje)
+                    {
+                        var tipoLabel = ig.TipoLinea switch
+                        {
+                            "ENTREGA" => "Entrega",
+                            "DEVOLUCION" => "Devolución",
+                            _ => ig.TipoLinea
+                        };
+                        var capacidadLabel = ig.CapacidadKg.HasValue
+                            ? $" {ig.CapacidadKg:0.##}kg"
+                            : string.Empty;
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                @(ig.ProductoNombre)@capacidadLabel
+                                <span class="badge text-bg-@(ig.TipoLinea == "ENTREGA" ? "primary" : "warning") ms-1">@tipoLabel</span>
+                                <span class="text-secondary small ms-2">Cantidad esperada: @ig.CantidadEsperada</span>
+                            </label>
+                            <textarea class="form-control js-canje-textarea"
+                                      data-item-id="@ig.ItemId"
+                                      data-esperada="@ig.CantidadEsperada"
+                                      rows="@Math.Max(2, ig.CantidadEsperada)"
+                                      placeholder="Un código por línea"></textarea>
+                            <div class="invalid-feedback js-canje-feedback">
+                                La cantidad de códigos no coincide con la cantidad esperada.
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary js-canje-confirmar">
+                        <i class="bi bi-check2-circle me-1"></i> Confirmar pedido
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 }
 
 @section Scripts {
@@ -577,6 +634,7 @@
             btn.addEventListener('click', function (e) {
                 e.preventDefault();
                 var tieneItems = btn.getAttribute('data-tiene-items') === 'true';
+                var tieneItemsCanje = btn.getAttribute('data-tiene-items-canje') === 'true';
 
                 if (!tieneItems) {
                     Swal.fire({
@@ -591,49 +649,161 @@
                     return;
                 }
 
-                Swal.fire({
-                    title: '¿Pasar a Confirmado?',
-                    text: 'El pedido cambiará a estado Confirmado.',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#0d6efd',
-                    cancelButtonColor: '#6c757d',
-                    confirmButtonText: 'Sí, confirmar',
-                    cancelButtonText: 'Cancelar',
-                    reverseButtons: true
-                }).then(function (result) {
-                    if (result.isConfirmed) {
-                        var form = document.createElement('form');
-                        form.method = 'post';
-                        form.action = btn.getAttribute('data-action');
-
-                        var tokenSrc = document.querySelector('input[name="__RequestVerificationToken"]');
-                        if (tokenSrc) {
-                            var token = document.createElement('input');
-                            token.type = 'hidden';
-                            token.name = '__RequestVerificationToken';
-                            token.value = tokenSrc.value;
-                            form.appendChild(token);
-                        }
-
-                        var idInput = document.createElement('input');
-                        idInput.type = 'hidden';
-                        idInput.name = 'id';
-                        idInput.value = btn.getAttribute('data-pedido-id');
-                        form.appendChild(idInput);
-
-                        var estadoInput = document.createElement('input');
-                        estadoInput.type = 'hidden';
-                        estadoInput.name = 'nuevoEstadoId';
-                        estadoInput.value = btn.getAttribute('data-nuevo-estado-id');
-                        form.appendChild(estadoInput);
-
-                        document.body.appendChild(form);
-                        form.submit();
+                // Si hay items GARRAFA-capaces con ENTREGA/DEVOLUCION, abrimos
+                // el modal de carga de códigos antes de confirmar. El modal
+                // hace su propia validación y, al confirmar, serializa los
+                // códigos a JSON y dispara el submit.
+                if (tieneItemsCanje) {
+                    var modalEl = document.getElementById('js-canje-garrafas-modal');
+                    if (modalEl && window.bootstrap) {
+                        // Limpiar textareas de intentos previos antes de mostrar.
+                        modalEl.querySelectorAll('.js-canje-textarea').forEach(function (ta) {
+                            ta.value = '';
+                            ta.classList.remove('is-invalid');
+                        });
+                        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                        modal.show();
+                    } else {
+                        // Fallback defensivo: si el modal no existe por algún
+                        // motivo, seguimos el flujo legacy.
+                        enviarCambioEstado(btn, null);
                     }
-                });
+                    return;
+                }
+
+                // Pedido solo con items no-canje (VENTA / carbón / leña): flujo directo.
+                enviarCambioEstado(btn, null);
             });
         });
+
+        // Helper compartido: arma el form POST a CambiarEstado y lo envía.
+        // Si codigosPorItem es null, omite el campo codigosGarrafaJson (caso legacy).
+        function enviarCambioEstado(btn, codigosPorItem) {
+            Swal.fire({
+                title: '¿Pasar a Confirmado?',
+                text: 'El pedido cambiará a estado Confirmado.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#0d6efd',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, confirmar',
+                cancelButtonText: 'Cancelar',
+                reverseButtons: true
+            }).then(function (result) {
+                if (!result.isConfirmed) return;
+                var form = document.createElement('form');
+                form.method = 'post';
+                form.action = btn.getAttribute('data-action');
+
+                var tokenSrc = document.querySelector('input[name="__RequestVerificationToken"]');
+                if (tokenSrc) {
+                    var token = document.createElement('input');
+                    token.type = 'hidden';
+                    token.name = '__RequestVerificationToken';
+                    token.value = tokenSrc.value;
+                    form.appendChild(token);
+                }
+
+                var idInput = document.createElement('input');
+                idInput.type = 'hidden';
+                idInput.name = 'id';
+                idInput.value = btn.getAttribute('data-pedido-id');
+                form.appendChild(idInput);
+
+                var estadoInput = document.createElement('input');
+                estadoInput.type = 'hidden';
+                estadoInput.name = 'nuevoEstadoId';
+                estadoInput.value = btn.getAttribute('data-nuevo-estado-id');
+                form.appendChild(estadoInput);
+
+                if (codigosPorItem) {
+                    var codigosInput = document.createElement('input');
+                    codigosInput.type = 'hidden';
+                    codigosInput.name = 'codigosGarrafaJson';
+                    codigosInput.value = JSON.stringify(codigosPorItem);
+                    form.appendChild(codigosInput);
+                }
+
+                document.body.appendChild(form);
+                form.submit();
+            });
+        }
+
+        (function () {
+            var modalConfirmar = document.querySelector('.js-canje-confirmar');
+            if (!modalConfirmar) return;
+
+            modalConfirmar.addEventListener('click', function () {
+                var textareas = document.querySelectorAll('.js-canje-textarea');
+                var invalidos = [];
+                var codigosPorItem = {};
+
+                textareas.forEach(function (ta) {
+                    var itemId = ta.getAttribute('data-item-id');
+                    var esperada = parseInt(ta.getAttribute('data-esperada'), 10);
+                    var codigos = (ta.value || '')
+                        .split(/\r?\n/)
+                        .map(function (s) { return s.trim(); })
+                        .filter(function (s) { return s.length > 0; });
+
+                    // Dedupe preservando orden, case-sensitive (los códigos son literales).
+                    var seen = {};
+                    var unicos = [];
+                    codigos.forEach(function (c) {
+                        if (!seen[c]) { seen[c] = true; unicos.push(c); }
+                    });
+
+                    if (unicos.length !== esperada) {
+                        ta.classList.add('is-invalid');
+                        invalidos.push({
+                            itemId: itemId,
+                            esperada: esperada,
+                            recibida: unicos.length
+                        });
+                    } else {
+                        ta.classList.remove('is-invalid');
+                        codigosPorItem[itemId] = unicos;
+                    }
+                });
+
+                if (invalidos.length > 0) {
+                    var detalle = invalidos.map(function (i) {
+                        return 'Item ' + i.itemId + ': esperaba ' + i.esperada + ', recibí ' + i.recibida + '.';
+                    }).join('<br>');
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Códigos incompletos',
+                        html: detalle,
+                        confirmButtonText: 'Revisar',
+                        confirmButtonColor: '#0d6efd',
+                        allowOutsideClick: true,
+                        allowEscapeKey: true
+                    });
+                    return;
+                }
+
+                // Serializar a JSON y cerrar modal. El submit lo dispara el
+                // botón Confirmar (con SweetAlert) desde el handler de la card.
+                var modalEl = document.getElementById('js-canje-garrafas-modal');
+                if (modalEl && window.bootstrap) {
+                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                }
+
+                // Disparar el submit. Usamos el primer botón confirmar de la
+                // página (solo hay uno en Edit.cshtml).
+                var btn = document.querySelector('.js-confirmar-btn');
+                if (btn) {
+                    enviarCambioEstado(btn, codigosPorItem);
+                }
+            });
+
+            // Limpiar el feedback de invalid al editar.
+            document.querySelectorAll('.js-canje-textarea').forEach(function (ta) {
+                ta.addEventListener('input', function () {
+                    ta.classList.remove('is-invalid');
+                });
+            });
+        })();
 
         (function () {
             var target = document.getElementById('itemsTable');

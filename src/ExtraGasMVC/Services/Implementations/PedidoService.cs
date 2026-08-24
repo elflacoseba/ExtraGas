@@ -16,9 +16,13 @@ public class PedidoService : IPedidoService
     private const string CanalesCacheKey = "canales_venta_all";
     private const string MediosCacheKey = "medios_contacto_all";
 
+    private const string TipoMovimientoEntregaCliente = "ENTREGA_CLIENTE";
+    private const string TipoMovimientoDevolucionCliente = "DEVOLUCION_CLIENTE";
+
     private readonly ExtraGasDbContext _context;
     private readonly IMapper _mapper;
     private readonly IMemoryCache _cache;
+    private readonly IGarrafaService _garrafaService;
 
     /// <summary>
     /// Valid state transitions for pedidos, keyed by current state code.
@@ -34,11 +38,16 @@ public class PedidoService : IPedidoService
         [PedidoEstados.EnPreparacion]  = new[] { PedidoEstados.Confirmado, PedidoEstados.Entregado, PedidoEstados.Cancelado },
     };
 
-    public PedidoService(ExtraGasDbContext context, IMapper mapper, IMemoryCache cache)
+    public PedidoService(
+        ExtraGasDbContext context,
+        IMapper mapper,
+        IMemoryCache cache,
+        IGarrafaService garrafaService)
     {
         _context = context;
         _mapper = mapper;
         _cache = cache;
+        _garrafaService = garrafaService;
     }
 
     #region Queries
@@ -456,6 +465,269 @@ public class PedidoService : IPedidoService
         }
 
         return true;
+    }
+
+    public async Task<bool> RegistrarCanjePedidoAsync(
+        ulong pedidoId,
+        Dictionary<ulong, List<string>> codigosPorItem,
+        ulong? usuarioId,
+        CancellationToken ct = default)
+    {
+        // 1) El pedido debe existir y estar en un estado que permita pasar a CONFIRMADO.
+        var pedido = await _context.Pedidos
+            .FirstOrDefaultAsync(p => p.Id == pedidoId, ct);
+
+        if (pedido is null)
+            return false;
+
+        if (pedido.EstadoPedidoId != 0)
+        {
+            var estadoActualCodigo = await _context.EstadosPedido
+                .AsNoTracking()
+                .Where(e => e.Id == pedido.EstadoPedidoId)
+                .Select(e => e.Codigo)
+                .FirstOrDefaultAsync(ct);
+
+            if (estadoActualCodigo == PedidoEstados.Confirmado)
+                throw new InvalidOperationException(
+                    "El pedido ya se encuentra en estado CONFIRMADO. No se puede confirmar dos veces.");
+        }
+
+        // 2) Idempotencia: si ya hay movimientos de garrafa para este pedido,
+        // rechazar (el pedido ya pasó por canje y fue revertido a PENDIENTE — requiere
+        // un nuevo pedido, no re-confirmar el mismo). El check se hace antes de la
+        // transacción para que el rechazo sea barato.
+        var yaCanjeado = await _context.MovimientosGarrafa
+            .AsNoTracking()
+            .AnyAsync(m => m.PedidoId == pedidoId, ct);
+
+        if (yaCanjeado)
+            throw new InvalidOperationException(
+                "Este pedido ya tiene movimientos de canje registrados. " +
+                "No se puede confirmar dos veces.");
+
+        // 3) Resolver los IDs de los lookups que vamos a usar varias veces en un
+        // solo viaje a la BD (estados de garrafa, tipo de movimiento, estado CONFIRMADO).
+        var lookupCodigos = new[]
+        {
+            GarrafaEstados.LlenaDeposito,
+            GarrafaEstados.EnCliente,
+            TipoMovimientoEntregaCliente,
+            TipoMovimientoDevolucionCliente,
+            PedidoEstados.Confirmado
+        };
+
+        var catalogos = await _context.EstadosGarrafa
+            .AsNoTracking()
+            .Where(e => lookupCodigos.Contains(e.Codigo))
+            .Select(e => new { e.Id, e.Codigo })
+            .ToListAsync(ct);
+
+        var estadoIdByCodigo = catalogos.ToDictionary(e => e.Codigo, e => e.Id);
+
+        var tiposMovimiento = await _context.TiposMovimientoGarrafa
+            .AsNoTracking()
+            .Where(t => t.Codigo == TipoMovimientoEntregaCliente
+                     || t.Codigo == TipoMovimientoDevolucionCliente)
+            .Select(t => new { t.Id, t.Codigo })
+            .ToListAsync(ct);
+
+        var tipoMovimientoIdByCodigo = tiposMovimiento.ToDictionary(t => t.Codigo, t => t.Id);
+
+        if (!tipoMovimientoIdByCodigo.ContainsKey(TipoMovimientoEntregaCliente)
+            || !tipoMovimientoIdByCodigo.ContainsKey(TipoMovimientoDevolucionCliente))
+        {
+            throw new InvalidOperationException(
+                "Faltan tipos de movimiento ENTREGA_CLIENTE / DEVOLUCION_CLIENTE en la base de datos.");
+        }
+
+        var estadoConfirmadoId = await _context.EstadosPedido
+            .AsNoTracking()
+            .Where(e => e.Codigo == PedidoEstados.Confirmado)
+            .Select(e => e.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if (estadoConfirmadoId == 0)
+            throw new InvalidOperationException(
+                "No se encontró el estado CONFIRMADO en el catálogo estados_pedido.");
+
+        // 4) Si no hay items a canjear (pedido solo VENTA / carbón / leña), el
+        // método degenera en un simple cambio de estado. La transición y la
+        // auditoría se aplican igual; no abrimos transacción porque no hay
+        // escrituras múltiples.
+        if (codigosPorItem is null || codigosPorItem.Count == 0)
+        {
+            pedido.EstadoPedidoId = estadoConfirmadoId;
+            pedido.UpdatedAt = DateTime.UtcNow;
+            pedido.UpdatedBy = usuarioId;
+            await _context.SaveChangesAsync(ct);
+            return true;
+        }
+
+        // 5) Cargar los items solicitados con su producto. Esto valida que el
+        // item existe, pertenece al pedido, y su producto requiere tracking.
+        var itemIds = codigosPorItem.Keys.ToList();
+
+        var items = await _context.PedidoItems
+            .AsNoTracking()
+            .Include(i => i.Producto)
+            .Where(i => i.PedidoId == pedidoId && itemIds.Contains(i.Id))
+            .ToListAsync(ct);
+
+        if (items.Count != itemIds.Count)
+        {
+            var encontrados = items.Select(i => i.Id).ToHashSet();
+            var faltantes = itemIds.Where(id => !encontrados.Contains(id)).ToList();
+            throw new InvalidOperationException(
+                $"Los siguientes items no pertenecen al pedido {pedidoId}: {string.Join(", ", faltantes)}.");
+        }
+
+        // 6) Defensa en profundidad: el controller solo debería enviar items
+        // GARRAFA-capaces con tipo ENTREGA/DEVOLUCION. Rechequearlo acá
+        // protege contra requests hand-crafted.
+        foreach (var item in items)
+        {
+            if (item.Producto is null || !item.Producto.ManejaGarrafaIndividual)
+                throw new InvalidOperationException(
+                    $"El item {item.Id} ({item.Producto?.Nombre ?? "sin producto"}) no requiere tracking de garrafas y no puede participar en un canje.");
+
+            if (item.TipoLinea is not (TipoLinea.ENTREGA or TipoLinea.DEVOLUCION))
+                throw new InvalidOperationException(
+                    $"El item {item.Id} tiene tipo de línea {item.TipoLinea}; solo ENTREGA o DEVOLUCION participan en el canje.");
+        }
+
+        // 7) Pre-validar TODOS los códigos antes de escribir nada. Cualquier
+        // falla hace throw sin tocar la BD. El primer código que falle aborta.
+        // Agrupamos por item para una sola lectura de garrafas por item.
+        var codigosPorItemLimpios = new Dictionary<ulong, List<string>>(codigosPorItem.Count);
+
+        foreach (var item in items)
+        {
+            if (!codigosPorItem.TryGetValue(item.Id, out var codigos) || codigos is null)
+                throw new InvalidOperationException(
+                    $"Faltan los códigos físicos para el item {item.Id} ({item.Producto!.Nombre}).");
+
+            // Normalizar: trim + descartar vacíos + dedupe preservando orden.
+            var limpios = codigos
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Select(c => c.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (item.Cantidad != Math.Truncate(item.Cantidad))
+                throw new InvalidOperationException(
+                    $"La cantidad del item {item.Id} ({item.Producto!.Nombre}) debe ser entera para productos con tracking de garrafas.");
+
+            var cantidadEsperada = (int)item.Cantidad;
+            if (limpios.Count != cantidadEsperada)
+            {
+                throw new InvalidOperationException(
+                    $"El item {item.Id} ({item.Producto!.Nombre}) esperaba {cantidadEsperada} código(s) y recibió {limpios.Count}.");
+            }
+
+            codigosPorItemLimpios[item.Id] = limpios;
+        }
+
+        // 8) Segunda pasada: validar cada código contra existencia, estado y
+        // cliente (en DEVOLUCION). Cargamos todas las garrafas en una sola query
+        // por item para no hacer N+1.
+        foreach (var item in items)
+        {
+            var codigos = codigosPorItemLimpios[item.Id];
+            var garrafas = await _context.Garrafas
+                .AsNoTracking()
+                .Include(g => g.EstadoGarrafa)
+                .Where(g => codigos.Contains(g.Codigo))
+                .Select(g => new { g.Id, g.Codigo, g.EstadoGarrafaId, g.ClienteId, EstadoCodigo = g.EstadoGarrafa!.Codigo })
+                .ToListAsync(ct);
+
+            var encontrados = garrafas.ToDictionary(g => g.Codigo, g => g, StringComparer.Ordinal);
+
+            foreach (var codigo in codigos)
+            {
+                if (!encontrados.TryGetValue(codigo, out var garrafa))
+                    throw new InvalidOperationException(
+                        $"El código '{codigo}' (item {item.Id}, {item.Producto!.Nombre}) no existe en el inventario de garrafas.");
+
+                if (item.TipoLinea == TipoLinea.ENTREGA)
+                {
+                    if (garrafa.EstadoCodigo != GarrafaEstados.LlenaDeposito)
+                        throw new InvalidOperationException(
+                            $"El código '{codigo}' no se puede entregar: está en estado {garrafa.EstadoCodigo}, se requiere {GarrafaEstados.LlenaDeposito}.");
+                }
+                else // DEVOLUCION
+                {
+                    if (garrafa.EstadoCodigo != GarrafaEstados.EnCliente)
+                        throw new InvalidOperationException(
+                            $"El código '{codigo}' no se puede devolver: está en estado {garrafa.EstadoCodigo}, se requiere {GarrafaEstados.EnCliente}.");
+
+                    if (garrafa.ClienteId != pedido.ClienteId)
+                        throw new InvalidOperationException(
+                            $"El código '{codigo}' no se puede devolver a este pedido: pertenece al cliente {garrafa.ClienteId}, no al cliente del pedido ({pedido.ClienteId}).");
+                }
+            }
+        }
+
+        // 9) Todo validado. Transacción ambiente: o entran todos los
+        // movimientos + el cambio de estado del pedido, o no entra nada.
+        await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+
+        try
+        {
+            foreach (var item in items)
+            {
+                var codigos = codigosPorItemLimpios[item.Id];
+                var tipoMovimientoCodigo = item.TipoLinea == TipoLinea.ENTREGA
+                    ? TipoMovimientoEntregaCliente
+                    : TipoMovimientoDevolucionCliente;
+
+                var estadoDestinoCodigo = item.TipoLinea == TipoLinea.ENTREGA
+                    ? GarrafaEstados.EnCliente
+                    : GarrafaEstados.LlenaDeposito;
+
+                var estadoDestinoId = estadoIdByCodigo[estadoDestinoCodigo];
+                var clienteIdParaCanje = item.TipoLinea == TipoLinea.ENTREGA
+                    ? (ulong?)pedido.ClienteId
+                    : null;
+
+                // Volvemos a buscar la garrafa SIN AsNoTracking porque
+                // GarrafaService.RegistrarMovimientoPorCanjeAsync la va a mutar
+                // (ClienteId). La query anterior usó AsNoTracking solo para
+                // validar; acá la hacemos con tracking porque la mutación es
+                // nuestra.
+                var codigoAGarrafaId = new Dictionary<string, ulong>(StringComparer.Ordinal);
+                var garrafasTracking = await _context.Garrafas
+                    .Where(g => codigos.Contains(g.Codigo))
+                    .ToDictionaryAsync(g => g.Codigo, g => g.Id, StringComparer.Ordinal, ct);
+
+                foreach (var codigo in codigos)
+                {
+                    var garrafaId = garrafasTracking[codigo];
+                    await _garrafaService.RegistrarMovimientoPorCanjeAsync(
+                        garrafaId,
+                        estadoDestinoId,
+                        clienteIdParaCanje,
+                        pedidoId,
+                        tipoMovimientoCodigo,
+                        usuarioId,
+                        ct);
+                }
+            }
+
+            pedido.EstadoPedidoId = estadoConfirmadoId;
+            pedido.UpdatedAt = DateTime.UtcNow;
+            pedido.UpdatedBy = usuarioId;
+
+            await _context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
     }
 
     #endregion
