@@ -64,4 +64,15 @@ JOIN estados_pedido ep ON ep.id = p.estado_pedido_id
 JOIN canales_venta cv ON cv.id = p.canal_venta_id
 WHERE p.deleted_at IS NULL;
 
-SELECT 'Columna entregado eliminada y vista v_pedidos_resumen actualizada' AS status;
+-- -----------------------------------------------------------------------------
+-- Status final unificado: el SELECT original era engañoso porque se ejecutaba
+-- siempre (incluso en re-run donde la columna ya no existía). Ahora refleja
+-- el estado real: OK si el DROP ocurrió, noop si ya estaba eliminada.
+-- -----------------------------------------------------------------------------
+SET @sql = IF(@col_exists > 0,
+  'SELECT "OK: columna entregada eliminada; vista v_pedidos_resumen recreada" AS status',
+  'SELECT "noop: columna entregada ya estaba eliminada; vista v_pedidos_resumen recreada (idempotente)" AS status'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
