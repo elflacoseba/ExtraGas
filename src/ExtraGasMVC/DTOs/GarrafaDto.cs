@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace ExtraGasMVC.DTOs;
 
 public class GarrafaDto
@@ -48,28 +50,67 @@ public class GarrafaDto
 
 public class CreateGarrafaDto
 {
+    [Display(Name = "Código")]
+    [Required(ErrorMessage = "El código es obligatorio.")]
+    [MaxLength(50, ErrorMessage = "El código no puede superar 50 caracteres.")]
     public string Codigo { get; set; } = null!;
+
+    [Display(Name = "Capacidad (kg)")]
+    [Required(ErrorMessage = "La capacidad es obligatoria.")]
+    [Range(10, 45, ErrorMessage = "La capacidad debe estar entre 10 y 45 kg.")]
     public byte CapacidadKg { get; set; }
+
     public ulong? ProveedorId { get; set; }
+
     public ulong? RecepcionId { get; set; }
+
+    [Display(Name = "Fecha de compra")]
+    [Required(ErrorMessage = "La fecha de compra es obligatoria.")]
     public DateOnly FechaCompra { get; set; }
+
+    [Display(Name = "Estado")]
+    [Required(ErrorMessage = "El estado de la garrafa es obligatorio.")]
+    [Range(1, ulong.MaxValue, ErrorMessage = "Seleccione un estado válido.")]
     public ulong EstadoGarrafaId { get; set; }
+
     public ulong? ClienteId { get; set; }
+
     public bool Activo { get; set; }
+
     public string? Observaciones { get; set; }
 }
 
 public class UpdateGarrafaDto
 {
     public ulong Id { get; set; }
+
+    [Display(Name = "Código")]
+    [Required(ErrorMessage = "El código es obligatorio.")]
+    [MaxLength(50, ErrorMessage = "El código no puede superar 50 caracteres.")]
     public string Codigo { get; set; } = null!;
+
+    [Display(Name = "Capacidad (kg)")]
+    [Required(ErrorMessage = "La capacidad es obligatoria.")]
+    [Range(10, 45, ErrorMessage = "La capacidad debe estar entre 10 y 45 kg.")]
     public byte CapacidadKg { get; set; }
+
     public ulong? ProveedorId { get; set; }
+
     public ulong? RecepcionId { get; set; }
+
+    [Display(Name = "Fecha de compra")]
+    [Required(ErrorMessage = "La fecha de compra es obligatoria.")]
     public DateOnly FechaCompra { get; set; }
+
+    [Display(Name = "Estado")]
+    [Required(ErrorMessage = "El estado de la garrafa es obligatorio.")]
+    [Range(1, ulong.MaxValue, ErrorMessage = "Seleccione un estado válido.")]
     public ulong EstadoGarrafaId { get; set; }
+
     public ulong? ClienteId { get; set; }
+
     public bool Activo { get; set; }
+
     public string? Observaciones { get; set; }
 }
 
