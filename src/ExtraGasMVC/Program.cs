@@ -54,6 +54,7 @@ builder.Services.AddScoped<IPagoService, PagoService>();
 builder.Services.AddScoped<IGarrafaService, GarrafaService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<IEmpleadoService, EmpleadoService>();
+builder.Services.AddScoped<IRecepcionService, RecepcionService>();
 
 var app = builder.Build();
 
