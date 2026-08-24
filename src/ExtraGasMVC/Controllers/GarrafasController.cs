@@ -135,6 +135,9 @@ public class GarrafasController : BaseController
             await CargarDropdownsFormularioAsync(ct);
             return View(garrafa);
         }
+
+        var codigoParaLog = SanitizeForLog(garrafa.Codigo);
+
         try
         {
             await _garrafaService.CreateAsync(garrafa, GetCurrentUserId(), ct);
@@ -146,7 +149,7 @@ public class GarrafasController : BaseController
             // Validaciones de negocio: código duplicado (validación previa del
             // service), estado inexistente, etc. Mensaje del service es seguro
             // para mostrar al usuario.
-            _logger.LogWarning(ex, "Validación de negocio al crear garrafa {Codigo}", garrafa.Codigo);
+            _logger.LogWarning(ex, "Validación de negocio al crear garrafa {Codigo}", codigoParaLog);
             ModelState.AddModelError(string.Empty, ex.Message);
             await CargarDropdownsFormularioAsync(ct);
             return View(garrafa);
@@ -155,7 +158,7 @@ public class GarrafasController : BaseController
         {
             // FK inexistente (cliente / proveedor / estado / recepción) detectada
             // en el service o por la BD. El mensaje del service es seguro.
-            _logger.LogWarning(ex, "Entidad relacionada inexistente al crear garrafa {Codigo}", garrafa.Codigo);
+            _logger.LogWarning(ex, "Entidad relacionada inexistente al crear garrafa {Codigo}", codigoParaLog);
             ModelState.AddModelError(string.Empty, ex.Message);
             await CargarDropdownsFormularioAsync(ct);
             return View(garrafa);
@@ -164,7 +167,7 @@ public class GarrafasController : BaseController
         {
             // Cualquier error de BD no contemplado por el service (FK huérfana,
             // timeout, etc.). NO mostramos el mensaje técnico al usuario.
-            _logger.LogError(ex, "Error de base de datos al crear garrafa {Codigo}", garrafa.Codigo);
+            _logger.LogError(ex, "Error de base de datos al crear garrafa {Codigo}", codigoParaLog);
             ModelState.AddModelError(string.Empty,
                 "No se pudo guardar la información. Si el problema persiste, contacte al administrador.");
             await CargarDropdownsFormularioAsync(ct);
@@ -172,7 +175,7 @@ public class GarrafasController : BaseController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error inesperado al crear garrafa {Codigo}", garrafa.Codigo);
+            _logger.LogError(ex, "Error inesperado al crear garrafa {Codigo}", codigoParaLog);
             ModelState.AddModelError(string.Empty,
                 "Ocurrió un error inesperado al procesar la operación. Intente nuevamente.");
             await CargarDropdownsFormularioAsync(ct);
@@ -427,5 +430,14 @@ public class GarrafasController : BaseController
             TempData["Error"] = "Ocurrió un error inesperado al procesar la operación. Intente nuevamente.";
             return RedirectToAction(nameof(Index));
         }
+    }
+    private static string SanitizeForLog(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Replace("\r", string.Empty).Replace("\n", string.Empty);
     }
 }
