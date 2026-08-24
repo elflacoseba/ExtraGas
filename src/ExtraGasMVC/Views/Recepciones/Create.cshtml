@@ -1,4 +1,6 @@
 @model ExtraGasMVC.Models.ViewModels.CrearRecepcionViewModel
+@using ExtraGasMVC.DTOs
+@using ExtraGasMVC.Extensions
 @{
     ViewData["Title"] = "Nueva recepcion";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -6,53 +8,199 @@
         new() { Label = "Recepciones", Controller = "Recepciones", Action = "Index" },
         new() { Label = "Nueva" }
     };
+
+    // JSON de productos activos para que el JS alimente el dropdown por fila
+    // y detecte `maneja_garrafa_individual` sin endpoint adicional.
+    var productosJson = Json.Serialize(Model.Productos.Select(p => new
+    {
+        id = p.Id,
+        nombre = p.Nombre,
+        codigo = p.Codigo,
+        capacidadKg = p.CapacidadKg,
+        precioActual = p.PrecioActual,
+        manejaGarrafaIndividual = p.ManejaGarrafaIndividual,
+    }));
+
+    // Snapshot de items para que el JS pueda repoblar la tabla si la view se
+    // re-renderiza con un error de validación del server (escenario raro,
+    // porque el JS bloquea submit inválidos).
+    var itemsPreview = Model.Recepcion?.Items ?? new List<CrearRecepcionItemDto>();
+    var itemsPreviewJson = Json.Serialize(itemsPreview.Select(it => new
+    {
+        productoId = it.ProductoId,
+        cantidad = it.Cantidad,
+        precioUnitario = it.PrecioUnitario,
+        codigosGarrafa = it.CodigosGarrafa ?? new List<string>(),
+    }));
 }
 @section PageHeader {
-    <div class="mb-3">
-        <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Volver</a>
+    <div class="mb-3 d-flex justify-content-between align-items-center">
+        <a asp-action="Index" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Volver
+        </a>
+        <span class="text-muted small">Issue #45 · PR2 UI</span>
     </div>
 }
-@* Placeholder funcional para PR1 (issue #45). El diseño completo — tabla
-   dinámica de items, textarea GARRAFA por fila, modal SweetAlert2 — sale
-   en PR2 sobre develop. PR1 solo necesita el form bindable para que el
-   POST funcione y el catch del controller pueda re-renderizar con errores. *@
-<div class="card">
-    <div class="card-header"><h3 class="card-title">Registrar recepcion de proveedor</h3></div>
-    <form asp-action="Create" method="post">
-        @Html.AntiForgeryToken()
+
+<form id="recepcion-form" asp-action="Create" method="post">
+    @Html.AntiForgeryToken()
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+    <!-- ===== Card 1: Encabezado ===== -->
+    <div class="card card-primary mb-3">
+        <div class="card-header">
+            <h3 class="card-title">Encabezado de la recepcion</h3>
+        </div>
         <div class="card-body">
-            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
             <div class="row g-3">
                 <div class="col-md-3">
-                    <label asp-for="Recepcion.Fecha" class="form-label"></label>
-                    <input asp-for="Recepcion.Fecha" type="datetime-local" class="form-control" required />
+                    <label for="Recepcion_Fecha" class="form-label">Fecha <span class="text-danger">*</span></label>
+                    <input id="Recepcion_Fecha"
+                           name="Fecha"
+                           type="datetime-local"
+                           class="form-control"
+                           value="@(Model.Recepcion.Fecha.ToString("yyyy-MM-ddTHH:mm"))"
+                           required />
                 </div>
-                <div class="col-md-3">
-                    <label asp-for="Recepcion.ProveedorId" class="form-label"></label>
-                    <select asp-for="Recepcion.ProveedorId" class="form-select" required>
-                        <option value="">— seleccione —</option>
-                        @foreach (var p in Model.Proveedores) { <option value="@p.Id">@p.RazonSocial</option> }
+                <div class="col-md-5">
+                    <label for="Recepcion_ProveedorId" class="form-label">Proveedor <span class="text-danger">*</span></label>
+                    <select id="Recepcion_ProveedorId" name="ProveedorId" class="form-select" required>
+                        <option value="">-- Seleccione proveedor --</option>
+                        @foreach (var p in Model.Proveedores)
+                        {
+                            <option value="@p.Id" selected="@(Model.Recepcion.ProveedorId == p.Id)">
+                                @p.RazonSocial @(string.IsNullOrEmpty(p.Cuit) ? "" : $"({p.Cuit})")
+                            </option>
+                        }
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label asp-for="Recepcion.NumeroFacturaProveedor" class="form-label"></label>
-                    <input asp-for="Recepcion.NumeroFacturaProveedor" class="form-control" />
+                <div class="col-md-4">
+                    <label for="Recepcion_NumeroFacturaProveedor" class="form-label">Numero de factura del proveedor</label>
+                    <input id="Recepcion_NumeroFacturaProveedor"
+                           name="NumeroFacturaProveedor"
+                           type="text"
+                           maxlength="50"
+                           class="form-control"
+                           value="@(Model.Recepcion.NumeroFacturaProveedor ?? "")" />
                 </div>
-                <div class="col-md-3">
-                    <label asp-for="Recepcion.Total" class="form-label"></label>
-                    <input asp-for="Recepcion.Total" type="number" step="0.01" class="form-control" required />
+                <div class="col-md-4">
+                    <label for="Recepcion_Subtotal" class="form-label">Subtotal <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
+                        <input id="Recepcion_Subtotal"
+                               name="Subtotal"
+                               type="number" min="0" step="0.01"
+                               class="form-control"
+                               value="@Model.Recepcion.Subtotal.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
+                               required />
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label for="Recepcion_Descuento" class="form-label">Descuento <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-percent"></i></span>
+                        <input id="Recepcion_Descuento"
+                               name="Descuento"
+                               type="number" min="0" step="0.01"
+                               class="form-control"
+                               value="@Model.Recepcion.Descuento.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
+                               required />
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label for="Recepcion_Total" class="form-label">Total <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
+                        <input id="Recepcion_Total"
+                               name="Total"
+                               type="number" min="0" step="0.01"
+                               class="form-control"
+                               value="@Model.Recepcion.Total.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
+                               required />
+                    </div>
                 </div>
                 <div class="col-12">
-                    <label asp-for="Recepcion.Observaciones" class="form-label"></label>
-                    <textarea asp-for="Recepcion.Observaciones" class="form-control" rows="2"></textarea>
+                    <label for="Recepcion_Observaciones" class="form-label">Observaciones</label>
+                    <textarea id="Recepcion_Observaciones"
+                              name="Observaciones"
+                              class="form-control"
+                              rows="2"
+                              maxlength="2000">@(Model.Recepcion.Observaciones ?? "")</textarea>
                 </div>
             </div>
         </div>
-        <div class="card-footer d-flex gap-2">
-            <button type="submit" class="btn btn-primary" disabled>
-                <i class="bi bi-save me-1"></i> Guardar (habilitado en PR2)
+    </div>
+
+    <!-- ===== Card 2: Items ===== -->
+    <div class="card card-primary mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title mb-0">Items de la recepcion</h3>
+            <button type="button" id="btn-agregar-item" class="btn btn-sm btn-primary">
+                <i class="bi bi-plus-circle me-1"></i> Agregar item
             </button>
-            <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
         </div>
-    </form>
-</div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 28%">Producto <span class="text-danger">*</span></th>
+                            <th style="width: 10%">Cantidad <span class="text-danger">*</span></th>
+                            <th style="width: 14%">Precio unit. <span class="text-danger">*</span></th>
+                            <th style="width: 12%" class="text-end">Subtotal</th>
+                            <th>Codigos GARRAFA</th>
+                            <th style="width: 56px"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="items-tbody">
+                        <tr id="items-empty-row">
+                            <td colspan="6" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                                Sin items cargados. Haga clic en <strong>Agregar item</strong> para empezar.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span class="text-muted small">
+                <i class="bi bi-info-circle me-1"></i>
+                Los productos con <strong>tracking individual</strong> muestran un cuadro para codigos unicos por garrafa.
+                La cantidad debe coincidir con los codigos.
+            </span>
+            <div>
+                <span class="text-muted small me-2">Total garrafas a crear:</span>
+                <span class="badge text-bg-info fs-6 js-total-garrafas">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Card 3: Acciones ===== -->
+    <div class="card mb-3">
+        <div class="card-body d-flex gap-2 flex-wrap">
+            <button type="submit" id="btn-confirmar" class="btn btn-primary" disabled>
+                <i class="bi bi-check2-circle me-1"></i> Confirmar recepcion
+            </button>
+            <a asp-action="Index" class="btn btn-outline-secondary">
+                <i class="bi bi-x-circle me-1"></i> Cancelar
+            </a>
+            <span class="ms-auto text-muted small align-self-center">
+                <i class="bi bi-shield-check me-1"></i> Operacion atomica: recepciones + items + garrafas + movimientos
+            </span>
+        </div>
+    </div>
+
+    <!-- El JS inyecta aca los inputs hidden de items y codigos al confirmar -->
+    <div id="js-hidden-mount"></div>
+
+    <!-- Datos para el JS -->
+    <script>
+        window.__RECEPCIONES_PRODUCTOS__ = @Html.Raw(productosJson);
+        window.__RECEPCIONES_ITEMS_PREVIEW__ = @Html.Raw(itemsPreviewJson);
+    </script>
+</form>
+
+@section Scripts {
+    <script src="~/js/recepciones.js" asp-append-version="true"></script>
+}
