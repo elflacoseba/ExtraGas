@@ -85,7 +85,7 @@ public class GarrafaService : IGarrafaService
         return _mapper.Map<IEnumerable<EstadoGarrafaDto>>(estados);
     }
 
-    public async Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafaDto, CancellationToken ct = default)
+    public async Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafaDto, ulong? usuarioId, CancellationToken ct = default)
     {
         if (await _context.Garrafas.AnyAsync(g => g.Codigo == garrafaDto.Codigo, ct))
             throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafaDto.Codigo}.");
@@ -93,6 +93,8 @@ public class GarrafaService : IGarrafaService
         var garrafa = _mapper.Map<Garrafa>(garrafaDto);
         garrafa.CreatedAt = DateTime.UtcNow;
         garrafa.UpdatedAt = DateTime.UtcNow;
+        garrafa.CreatedBy = usuarioId;
+        garrafa.UpdatedBy = usuarioId;
 
         _context.Garrafas.Add(garrafa);
         await SaveOrThrowDuplicateAsync(garrafaDto.Codigo, ct);
@@ -100,7 +102,7 @@ public class GarrafaService : IGarrafaService
         return _mapper.Map<GarrafaDto>(garrafa);
     }
 
-    public async Task<GarrafaDto> UpdateAsync(UpdateGarrafaDto garrafaDto, CancellationToken ct = default)
+    public async Task<GarrafaDto> UpdateAsync(UpdateGarrafaDto garrafaDto, ulong? usuarioId, CancellationToken ct = default)
     {
         var garrafa = await _context.Garrafas.FindAsync(new object[] { garrafaDto.Id }, ct);
         if (garrafa == null)
@@ -111,6 +113,7 @@ public class GarrafaService : IGarrafaService
 
         _mapper.Map(garrafaDto, garrafa);
         garrafa.UpdatedAt = DateTime.UtcNow;
+        garrafa.UpdatedBy = usuarioId;
 
         await SaveOrThrowDuplicateAsync(garrafaDto.Codigo, ct);
 

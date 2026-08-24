@@ -10,8 +10,8 @@ public interface IGarrafaService
     Task<IEnumerable<GarrafaDto>> GetByClienteAsync(ulong clienteId, CancellationToken ct = default);
     Task<IEnumerable<GarrafaDto>> GetByEstadoAsync(ulong estadoId, CancellationToken ct = default);
     Task<IEnumerable<EstadoGarrafaDto>> GetEstadosAsync(CancellationToken ct = default);
-    Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafa, CancellationToken ct = default);
-    Task<GarrafaDto> UpdateAsync(UpdateGarrafaDto garrafa, CancellationToken ct = default);
+    Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafa, ulong? usuarioId, CancellationToken ct = default);
+    Task<GarrafaDto> UpdateAsync(UpdateGarrafaDto garrafa, ulong? usuarioId, CancellationToken ct = default);
     Task<bool> CambiarEstadoAsync(ulong id, CambiarEstadoGarrafaDto dto, CancellationToken ct = default);
     Task<bool> DeleteAsync(ulong id, CancellationToken ct = default);
 
