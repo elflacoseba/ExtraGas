@@ -32,5 +32,9 @@ public class MovimientoGarrafaDto
     public ulong? PedidoId { get; set; }
     public ulong? RecepcionId { get; set; }
 
+    // Código de la garrafa involucrada (issue #44: requerido para la card de
+    // trazabilidad en Pedidos/Details).
+    public string? GarrafaCodigo { get; set; }
+
     public string? Observaciones { get; set; }
 }

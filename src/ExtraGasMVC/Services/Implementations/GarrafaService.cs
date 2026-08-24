@@ -300,6 +300,107 @@ public class GarrafaService : IGarrafaService
         return _mapper.Map<IEnumerable<MovimientoGarrafaDto>>(movimientos);
     }
 
+    public async Task<IEnumerable<MovimientoGarrafaDto>> GetMovimientosByPedidoAsync(ulong pedidoId, CancellationToken ct = default)
+    {
+        // Sin filtro por soft-delete: movimientos_garrafa no tiene deleted_at
+        // (es log append-only). Si el pedido no existe o no tiene canje, enumerable vacío.
+        var movimientos = await _context.MovimientosGarrafa
+            .AsNoTracking()
+            .Include(m => m.TipoMovimiento)
+            .Include(m => m.EstadoOrigen)
+            .Include(m => m.EstadoDestino)
+            .Include(m => m.Empleado)
+            .Include(m => m.Garrafa)
+            .Where(m => m.PedidoId == pedidoId)
+            .OrderBy(m => m.Id)
+            .ToListAsync(ct);
+
+        return _mapper.Map<IEnumerable<MovimientoGarrafaDto>>(movimientos);
+    }
+
+    public async Task RegistrarMovimientoPorCanjeAsync(
+        ulong garrafaId,
+        ulong estadoDestinoId,
+        ulong? clienteId,
+        ulong pedidoId,
+        string tipoMovimientoCodigo,
+        ulong? usuarioId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(tipoMovimientoCodigo))
+            throw new InvalidOperationException("El código de tipo de movimiento es obligatorio para registrar un canje.");
+
+        // Lookup puntual de la garrafa (sin AsNoTracking — vamos a mutar ClienteId).
+        var garrafa = await _context.Garrafas
+            .FirstOrDefaultAsync(g => g.Id == garrafaId, ct)
+            ?? throw new KeyNotFoundException($"Garrafa con Id {garrafaId} no encontrada.");
+
+        // Cargamos origen, destino y tipo de movimiento en una sola query para
+        // validar la transición contra GarrafaTransiciones y resolver el id
+        // del tipo de movimiento. Mantiene el patrón de CambiarEstadoAsync.
+        var catalogos = await _context.EstadosGarrafa
+            .AsNoTracking()
+            .Where(e => e.Id == garrafa.EstadoGarrafaId || e.Id == estadoDestinoId)
+            .Select(e => new { e.Id, e.Codigo, e.Nombre })
+            .ToListAsync(ct);
+
+        var origen = catalogos.FirstOrDefault(e => e.Id == garrafa.EstadoGarrafaId)
+            ?? throw new InvalidOperationException(
+                $"El estado actual de la garrafa (id={garrafa.EstadoGarrafaId}) no existe en el catálogo estados_garrafa.");
+
+        var destino = catalogos.FirstOrDefault(e => e.Id == estadoDestinoId)
+            ?? throw new InvalidOperationException(
+                $"El estado destino solicitado (id={estadoDestinoId}) no existe en el catálogo estados_garrafa.");
+
+        if (!GarrafaTransiciones.EsValida(origen.Codigo, destino.Codigo))
+        {
+            throw new InvalidOperationException(
+                $"Transición inválida en canje: {origen.Nombre} ({origen.Codigo}) → {destino.Nombre} ({destino.Codigo}).");
+        }
+
+        var tipoMovimientoId = await _context.TiposMovimientoGarrafa
+            .AsNoTracking()
+            .Where(t => t.Codigo == tipoMovimientoCodigo)
+            .Select(t => t.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if (tipoMovimientoId == 0)
+            throw new InvalidOperationException(
+                $"No se encontró el tipo de movimiento {tipoMovimientoCodigo} en la base de datos.");
+
+        // El trigger trg_mov_garrafa_ai se encarga de estado_garrafa_id y
+        // fecha_ultimo_movimiento al hacer INSERT en movimientos_garrafa.
+        // Acá solo actualizamos lo que el trigger no toca: cliente_id en la
+        // garrafa (ENTREGA → cliente del pedido, DEVOLUCION → NULL).
+        garrafa.ClienteId = clienteId;
+        garrafa.UpdatedAt = DateTime.UtcNow;
+        garrafa.UpdatedBy = usuarioId;
+
+        var estadoOrigen = garrafa.EstadoGarrafaId;
+
+        var movimiento = new MovimientoGarrafa
+        {
+            GarrafaId = garrafa.Id,
+            Fecha = DateTime.UtcNow,
+            TipoMovimientoId = tipoMovimientoId,
+            PedidoId = pedidoId,
+            RecepcionId = null,
+            ClienteId = clienteId,
+            EstadoOrigenId = estadoOrigen,
+            EstadoDestinoId = estadoDestinoId,
+            EmpleadoId = null,
+            Observaciones = null,
+            CreatedBy = usuarioId
+        };
+
+        _context.MovimientosGarrafa.Add(movimiento);
+
+        // NO abrimos transacción propia: dependemos de la transacción ambiente
+        // que abrió PedidoService.RegistrarCanjePedidoAsync. Si no hay una, EF
+        // usa su SaveChanges implícito — suficiente para un solo movimiento.
+        await _context.SaveChangesAsync(ct);
+    }
+
     private async Task SaveOrThrowDuplicateAsync(string codigo, CancellationToken ct)
     {
         try

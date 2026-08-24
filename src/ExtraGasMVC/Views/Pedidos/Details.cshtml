@@ -129,3 +129,51 @@
         <div class="card-body">@Model.Observaciones</div>
     </div>
 }
+
+@* Issue #44: trazabilidad del canje físico de garrafas. La card se muestra *@
+@* solo cuando hay movimientos vinculados al pedido, lo que ocurre tras un *@
+@* CONFIRMADO con ENTREGA/DEVOLUCION. *@
+@if (ViewBag.MovimientosGarrafa is IEnumerable<ExtraGasMVC.DTOs.MovimientoGarrafaDto> movimientos && movimientos.Any())
+{
+    <div class="card mb-4">
+        <div class="card-header"><h3 class="card-title">Movimientos de garrafas</h3></div>
+        <div class="card-body table-responsive p-0">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Garrafa</th>
+                        <th>Tipo de movimiento</th>
+                        <th>Estado origen</th>
+                        <th>Estado destino</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in movimientos)
+                    {
+                        <tr>
+                            <td><strong>@(m.GarrafaCodigo ?? "-")</strong></td>
+                            <td>
+                                @switch (m.TipoMovimientoCodigo)
+                                {
+                                    case "ENTREGA_CLIENTE":
+                                        <span class="badge text-bg-primary">@m.TipoMovimientoNombre</span>
+                                        break;
+                                    case "DEVOLUCION_CLIENTE":
+                                        <span class="badge text-bg-warning">@m.TipoMovimientoNombre</span>
+                                        break;
+                                    default:
+                                        <span class="badge text-bg-secondary">@m.TipoMovimientoNombre</span>
+                                        break;
+                                }
+                            </td>
+                            <td>@(m.EstadoOrigenNombre ?? "-")</td>
+                            <td>@(m.EstadoDestinoNombre ?? "-")</td>
+                            <td>@m.Fecha.ToShortDateTime()</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

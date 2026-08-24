@@ -34,4 +34,37 @@ public interface IGarrafaService
     /// Devuelve enumerable vacío si la garrafa no existe o no tiene movimientos.
     /// </summary>
     Task<IEnumerable<MovimientoGarrafaDto>> GetHistorialAsync(ulong garrafaId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Devuelve los movimientos de garrafa vinculados a un pedido, ordenados
+    /// por id ascendente. Usado por la vista Details para mostrar la
+    /// trazabilidad del canje (issue #44).
+    /// </summary>
+    Task<IEnumerable<MovimientoGarrafaDto>> GetMovimientosByPedidoAsync(ulong pedidoId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Registra un movimiento de canje (ENTREGA_CLIENTE / DEVOLUCION_CLIENTE)
+    /// para una garrafa física, dejando que el trigger de BD actualice
+    /// <c>estado_garrafa_id</c> y <c>fecha_ultimo_movimiento</c>. La app solo
+    /// setea <c>garrafa.cliente_id</c>. NO abre transacción propia: depende de
+    /// la transacción ambiente de <c>PedidoService.RegistrarCanjePedidoAsync</c>.
+    /// </summary>
+    /// <param name="tipoMovimientoCodigo">
+    /// <c>ENTREGA_CLIENTE</c> o <c>DEVOLUCION_CLIENTE</c>. Determina el estado
+    /// destino esperado (EN_CLIENTE / LLENA_DEPOSITO) y se persiste en la fila
+    /// de <c>movimientos_garrafa</c>.
+    /// </param>
+    /// <param name="clienteId">
+    /// <c>pedido.cliente_id</c> para ENTREGA, <c>null</c> para DEVOLUCION.
+    /// Se aplica a <c>garrafas.cliente_id</c> y al campo
+    /// <c>movimientos_garrafa.cliente_id</c>.
+    /// </param>
+    Task RegistrarMovimientoPorCanjeAsync(
+        ulong garrafaId,
+        ulong estadoDestinoId,
+        ulong? clienteId,
+        ulong pedidoId,
+        string tipoMovimientoCodigo,
+        ulong? usuarioId,
+        CancellationToken ct = default);
 }

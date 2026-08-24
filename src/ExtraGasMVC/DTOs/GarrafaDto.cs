@@ -54,4 +54,29 @@ public class CambiarEstadoGarrafaDto
     public ulong NuevoEstadoId { get; set; }
     public ulong? ClienteId { get; set; }
     public string? Observaciones { get; set; }
+
+    /// <summary>
+    /// Set when the state change is part of a pedido canje. Carries the pedido
+    /// id so the resulting <c>movimiento_garrafa</c> row links back to the pedido
+    /// for traceability. Ignored on the manual CAMBIO_ESTADO flow.
+    /// </summary>
+    public ulong? PedidoId { get; set; }
+
+    /// <summary>
+    /// Type code for the canje movement (e.g. <c>ENTREGA_CLIENTE</c>,
+    /// <c>DEVOLUCION_CLIENTE</c>). When present, the service emits a
+    /// non-<c>CAMBIO_ESTADO</c> movement with this type instead of the default
+    /// manual type. Ignored on the manual CAMBIO_ESTADO flow.
+    /// </summary>
+    public string? TipoMovimientoCodigo { get; set; }
+}
+
+/// <summary>
+/// Bound from a single textarea in the canje modal: the item id plus the
+/// trimmed/deduped list of physical garrafa codes the operator entered.
+/// </summary>
+public class CodigoGarrafaItemDto
+{
+    public ulong ItemId { get; set; }
+    public List<string> Codigos { get; set; } = new();
 }
