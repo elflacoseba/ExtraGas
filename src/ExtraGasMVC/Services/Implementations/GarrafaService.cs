@@ -4,6 +4,7 @@ using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.Data.Entities.Views;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
@@ -93,6 +94,57 @@ public class GarrafaService : IGarrafaService
             .ToListAsync(ct);
 
         return _mapper.Map<IEnumerable<GarrafaDto>>(garrafas);
+    }
+
+    public async Task<PagedResult<GarrafaDto>> GetPagedAsync(
+        string? codigo, byte? capacidad, int page, int pageSize, CancellationToken ct = default)
+    {
+        // Normalización defensiva: page y pageSize llegan del query string
+        // (no son confiables). Si el usuario manda pageSize=10000 o page=-3,
+        // la query no debería explotar ni devolver el universo entero.
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100;
+
+        // Issue #52: filtrado y conteo en SQL, no en memoria como hacía
+        // GetAllAsync + LINQ-to-Objects. Las navegaciones se cargan aquí
+        // mismo (mismo patrón que el resto de los Get*) para que la UI
+        // muestre nombres sin joins adicionales.
+        IQueryable<Garrafa> query = _context.Garrafas
+            .AsNoTracking()
+            .Include(g => g.EstadoGarrafa)
+            .Include(g => g.Cliente)
+            .Include(g => g.Proveedor);
+
+        if (!string.IsNullOrWhiteSpace(codigo))
+        {
+            // EF.Functions.Like compila a un LIKE nativo de MySQL. La
+            // collation utf8mb4_unicode_ci del schema ya hace la comparación
+            // case-insensitive, así que no hace falta lower() en ambos lados.
+            var pattern = $"%{codigo.Trim()}%";
+            query = query.Where(g => EF.Functions.Like(g.Codigo, pattern));
+        }
+
+        if (capacidad.HasValue)
+            query = query.Where(g => g.CapacidadKg == capacidad.Value);
+
+        // Total antes de paginar — CountAsync traduce a SELECT COUNT(*)
+        // sobre el WHERE aplicado, sin cargar filas.
+        var total = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderBy(g => g.Codigo)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return new PagedResult<GarrafaDto>
+        {
+            Items = _mapper.Map<List<GarrafaDto>>(items),
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
     }
 
     public async Task<IEnumerable<EstadoGarrafaDto>> GetEstadosAsync(CancellationToken ct = default)

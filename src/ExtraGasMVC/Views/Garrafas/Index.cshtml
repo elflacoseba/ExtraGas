@@ -1,8 +1,38 @@
-@model IEnumerable<ExtraGasMVC.DTOs.GarrafaDto>
+@model ExtraGasMVC.Models.ViewModels.PagedResult<ExtraGasMVC.DTOs.GarrafaDto>
 @{
     ViewData["Title"] = "Garrafas";
     var codigo = ViewBag.Codigo as string;
     var capacidad = ViewBag.Capacidad as byte?;
+    var currentPage = Model.Page;
+    var totalPages = Model.TotalPages;
+    var pageSize = Model.PageSize;
+    var total = Model.Total;
+
+    // Issue #52: los links de paginación preservan los filtros en el query
+    // string para que cambiar de página no reinicie la búsqueda.
+    // asp-all-route-data requiere IDictionary<string, string>, por eso los
+    // valores van casteados a string explícitamente.
+    var routeValues = new Dictionary<string, string>();
+    if (!string.IsNullOrWhiteSpace(codigo)) routeValues["codigo"] = codigo;
+    if (capacidad.HasValue) routeValues["capacidad"] = capacidad.Value.ToString();
+
+    // Helper local: clona los filtros y agrega la página destino.
+    IDictionary<string, string> BuildPageLink(Dictionary<string, string> baseValues, int pageNumber)
+    {
+        var copy = new Dictionary<string, string>(baseValues) { ["page"] = pageNumber.ToString() };
+        return copy;
+    }
+
+    // Mostrando X-Y de Z: si total == 0 mostramos "0" en ambos extremos.
+    int firstItem = total == 0 ? 0 : ((currentPage - 1) * pageSize) + 1;
+    int lastItem = total == 0 ? 0 : Math.Min(currentPage * pageSize, total);
+
+    // Ventana de números de página centrada en la actual (max 5 botones).
+    const int windowSize = 5;
+    int startPage = Math.Max(1, currentPage - windowSize / 2);
+    int endPage = Math.Min(totalPages, startPage + windowSize - 1);
+    if (endPage - startPage + 1 < windowSize && totalPages >= windowSize)
+        startPage = Math.Max(1, endPage - windowSize + 1);
 }
 @section PageHeader {
     <div class="mb-3">
@@ -51,11 +81,11 @@
                 </tr>
             </thead>
             <tbody>
-                @if (!Model.Any())
+                @if (!Model.Items.Any())
                 {
                     <tr><td colspan="8" class="text-center py-4 text-secondary">No hay garrafas.</td></tr>
                 }
-                @foreach (var g in Model)
+                @foreach (var g in Model.Items)
                 {
                     <tr>
                         <td><strong><code>@g.Codigo</code></strong></td>
@@ -87,4 +117,35 @@
             </tbody>
         </table>
     </div>
+    @if (total > 0)
+    {
+        @* Issue #52: pie de tabla con controles de paginación. Los links
+           preservan filtros vía los routeValues del bloque superior. *@
+        <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="text-secondary small">
+                Mostrando <strong>@firstItem-@lastItem</strong> de <strong>@total</strong> garrafas.
+                Pagina <strong>@currentPage</strong> de <strong>@totalPages</strong>.
+            </div>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item @(Model.HasPrevious ? string.Empty : "disabled")">
+                        <a class="page-link" asp-action="Index" asp-all-route-data="@(BuildPageLink(routeValues, Math.Max(1, currentPage - 1)))">
+                            <i class="bi bi-chevron-left"></i> Anterior
+                        </a>
+                    </li>
+                    @for (int p = startPage; p <= endPage; p++)
+                    {
+                        <li class="page-item @(p == currentPage ? "active" : string.Empty)">
+                            <a class="page-link" asp-action="Index" asp-all-route-data="@(BuildPageLink(routeValues, p))">@p</a>
+                        </li>
+                    }
+                    <li class="page-item @(Model.HasNext ? string.Empty : "disabled")">
+                        <a class="page-link" asp-action="Index" asp-all-route-data="@(BuildPageLink(routeValues, Math.Min(totalPages, currentPage + 1)))">
+                            Siguiente <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    }
 </div>

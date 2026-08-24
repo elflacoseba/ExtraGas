@@ -72,17 +72,16 @@ public class GarrafasController : BaseController
             RecepcionesDropdownCantidad, ct);
     }
 
-    public async Task<IActionResult> Index(string? codigo, byte? capacidad, CancellationToken ct = default)
+    public async Task<IActionResult> Index(string? codigo, byte? capacidad, int page = 1, int pageSize = 20, CancellationToken ct = default)
     {
-        var garrafas = await _garrafaService.GetAllAsync(ct);
-        if (!string.IsNullOrWhiteSpace(codigo))
-            garrafas = garrafas.Where(g => g.Codigo.Contains(codigo.Trim(), StringComparison.OrdinalIgnoreCase));
-        if (capacidad.HasValue)
-            garrafas = garrafas.Where(g => g.CapacidadKg == capacidad.Value);
+        // Issue #52: el service pagina y filtra en SQL. ViewBag expone los
+        // filtros actuales para que la vista los mantenga en los links de
+        // paginación y en el form.
+        var resultado = await _garrafaService.GetPagedAsync(codigo, capacidad, page, pageSize, ct);
 
         ViewBag.Codigo = codigo;
         ViewBag.Capacidad = capacidad;
-        return View(garrafas.OrderBy(g => g.Codigo).ToList());
+        return View(resultado);
     }
 
     public async Task<IActionResult> Details(ulong id, CancellationToken ct = default)
