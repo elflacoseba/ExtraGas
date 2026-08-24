@@ -197,6 +197,97 @@ ORDER BY cantidad_vendida DESC;
 SELECT * FROM v_regularidad_clientes ORDER BY dias_promedio_entre_pedidos ASC;
 ```
 
+## Proceso de trabajo proporcional
+
+La metodología debe proteger la calidad sin introducir burocracia innecesaria.
+
+**No todas las tareas requieren el mismo nivel de análisis, documentación, testing ni validación.** La complejidad de la tarea determina el proceso, no las herramientas disponibles en el repositorio.
+
+Antes de implementar, clasificá internamente la tarea como **TRIVIAL, PEQUEÑA, MEDIANA o GRANDE**.
+
+### TRIVIAL
+
+Cambio localizado, sin impacto en arquitectura, contratos, persistencia ni reglas de negocio. Fácilmente reversible y con bajo riesgo de regresión.
+
+Ejemplos: cambiar texto de un botón, reordenar columnas en una vista, modificar una clase CSS, corregir un typo en una vista Razor, ajustar un mensaje al usuario, cambiar el label de un campo.
+
+**Proceso:** entender → modificar → verificar. No crear artefactos SDD/OpenSpec, no correr la suite completa, no leer documentación extensa. Inspección puntual y validación mínima razonable.
+
+### PEQUEÑA
+
+Afecta varias piezas relacionadas (2+ archivos), puede tocar una capa o interacción pequeña entre capas, no introduce arquitectura nueva ni decisiones técnicas importantes.
+
+Ejemplos: agregar un filtro o búsqueda a un listado existente, agregar paginación a una pantalla, agregar una acción a un Controller, modificar un Service existente, corregir un bug que requiere cambios coordinados en pocas clases.
+
+**Proceso:** analizar brevemente → implementar → validar. Sin SDD completo ni artefactos burocráticos. Implementación directa y tests solo cuando aporten valor.
+
+### MEDIANA
+
+Afecta varias capas (Controller → Service → DbContext → Vista), modifica contratos públicos (DTOs, ViewModels), modifica persistencia sin cambio arquitectónico importante, requiere varias decisiones de implementación y tiene riesgo moderado de regresión.
+
+Ejemplos: crear un caso de uso que atraviesa Controller/Service/DbContext, agregar una consulta con joins o agregaciones, modificar una funcionalidad que afecta varias vistas, agregar exportación de datos.
+
+**Proceso:** analizar impacto → revisar `db/docs/DECISIONES.md` si afecta decisiones técnicas, persistencia o reglas de negocio → planificar brevemente → implementar → probar → validar. SDD puede usarse si aporta valor, pero no es obligatorio.
+
+### GRANDE
+
+Introduce un nuevo módulo significativo, modifica arquitectura, modifica decisiones técnicas importantes, introduce funcionalidad transversal de negocio, modifica significativamente persistencia, modifica seguridad o autenticación, afecta múltiples módulos, tiene alto riesgo de regresión y requiere múltiples decisiones de diseño.
+
+Ejemplos: implementar un módulo completo (pagos, proveedores), cambiar la arquitectura de tracking de garrafas, introducir autenticación real con Identity, agregar integración con ARCA, refactorizar la capa de servicios a un patrón diferente.
+
+**Proceso:** OpenSpec/SDD completo (exploration → proposal → design → tasks → apply → verify → archive). Documentar en `db/docs/DECISIONES.md` las decisiones que deban quedar vigentes.
+
+### Regla de proporcionalidad
+
+El nivel de proceso depende de:
+
+- Complejidad y riesgo del cambio.
+- Cantidad de capas y archivos afectados.
+- Impacto sobre contratos, persistencia, seguridad y reglas de negocio.
+- Reversibilidad.
+
+**No medir la complejidad solo por líneas modificadas.** Un cambio de 5 líneas en una regla de negocio puede ser GRANDE. Un cambio de 100 líneas localizado en una vista puede seguir siendo PEQUEÑO.
+
+Ante la duda entre dos niveles, elegir el inferior cuando el cambio sea localizado, reversible y de bajo riesgo. Si durante la implementación se descubre mayor complejidad, elevar el nivel.
+
+### Mínimo contexto
+
+Para TRIVIAL y PEQUEÑA: solo inspeccionar archivos necesarios. No recorrer todo el repositorio, no leer todos los artefactos SDD, no ejecutar comandos costosos innecesariamente.
+
+El contexto también tiene costo: el objetivo es suficiente información para hacer bien el cambio, no máxima información leída.
+
+### Cambio mínimo
+
+En TRIVIAL y PEQUEÑA: modificar solo lo necesario. No refactorizar código no relacionado, no reorganizar archivos, no cambiar nombres por estética, no "mejorar" código fuera del alcance, no introducir abstracciones nuevas si una modificación directa alcanza.
+
+Una mejora no relacionada puede mencionarse al usuario, pero no implementarse automáticamente.
+
+### No sobre-ingeniería
+
+No crear una solución más compleja que el problema. Preferir modificar implementaciones existentes antes que introducir nuevas abstracciones. Reutilizar Services, DTOs y Controllers existentes. No crear interfaces únicamente por preferencia arquitectónica abstracta.
+
+La arquitectura protege el sistema; no convierte cada cambio en una ceremonia.
+
+### Validación proporcional
+
+| Tamaño | Validación |
+|---|---|
+| TRIVIAL | Solo lo directamente relacionado. Cambio CSS o textual → sin tests nuevos. Cambio de Razor sin lógica → validar compilación si corresponde. |
+| PEQUEÑA | Build de la parte afectada + tests directamente relacionados cuando aporten valor. |
+| MEDIANA | Build + tests de las capas afectadas; tests de integración si se modifica persistencia. |
+| GRANDE | Validación completa correspondiente al alcance del cambio. |
+
+No ejecutar comandos costosos solo por costumbre.
+
+### Resumen rápido
+
+| Tamaño | Flujo |
+|---|---|
+| TRIVIAL | entender → modificar → verificar |
+| PEQUEÑA | analizar → implementar → validar |
+| MEDIANA | analizar → planificar → implementar → probar → validar |
+| GRANDE | OpenSpec/SDD completo |
+
 ## Recursos
 
 - Skill `database-designer` en `.agents/skills/database-designer/` — usar para optimizaciones, índices y migraciones futuras.
