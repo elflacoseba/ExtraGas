@@ -10,7 +10,7 @@ USE extragas;
 -- Provincias (referenciadas por empleados, clientes y proveedores)
 -- (También disponible en db/seed/provincias_argentina.sql como referencia)
 -- -----------------------------------------------------------------------------
-INSERT INTO provincias (codigo, nombre, pais) VALUES
+INSERT IGNORE INTO provincias (codigo, nombre, pais) VALUES
   ('AR-C', 'Ciudad Autónoma de Buenos Aires', 'Argentina'),
   ('AR-B', 'Buenos Aires', 'Argentina'),
   ('AR-K', 'Catamarca', 'Argentina'),
@@ -39,14 +39,14 @@ INSERT INTO provincias (codigo, nombre, pais) VALUES
 -- -----------------------------------------------------------------------------
 -- Roles de usuario
 -- -----------------------------------------------------------------------------
-INSERT INTO roles (codigo, nombre, descripcion) VALUES
+INSERT IGNORE INTO roles (codigo, nombre, descripcion) VALUES
   ('ADMIN', 'Administrador', 'Dueño del sistema, acceso total'),
   ('OPERADOR', 'Operador', 'Empleado, gestión de pedidos y cobros');
 
 -- -----------------------------------------------------------------------------
 -- Tipos de producto
 -- -----------------------------------------------------------------------------
-INSERT INTO tipos_producto (codigo, nombre, descripcion) VALUES
+INSERT IGNORE INTO tipos_producto (codigo, nombre, descripcion) VALUES
   ('GAS', 'Gas envasado', 'Garrafas de gas en distintas capacidades'),
   ('CARBON', 'Carbón', 'Bolsas de carbón en distintas capacidades'),
   ('LENA', 'Leña', 'Bolsa de leña para hogar');
@@ -54,7 +54,7 @@ INSERT INTO tipos_producto (codigo, nombre, descripcion) VALUES
 -- -----------------------------------------------------------------------------
 -- Formas de pago
 -- -----------------------------------------------------------------------------
-INSERT INTO formas_pago (codigo, nombre, descripcion, requiere_referencia) VALUES
+INSERT IGNORE INTO formas_pago (codigo, nombre, descripcion, requiere_referencia) VALUES
   ('EFECTIVO', 'Efectivo', 'Pago en efectivo en el momento', FALSE),
   ('TRANSFERENCIA', 'Transferencia bancaria', 'Pago por transferencia/transferencia', TRUE),
   ('MERCADO_PAGO', 'Mercado Pago', 'Pago vía Mercado Pago u otra billetera virtual', TRUE),
@@ -63,7 +63,7 @@ INSERT INTO formas_pago (codigo, nombre, descripcion, requiere_referencia) VALUE
 -- -----------------------------------------------------------------------------
 -- Estados de pedido
 -- -----------------------------------------------------------------------------
-INSERT INTO estados_pedido (codigo, nombre, descripcion, es_final, color) VALUES
+INSERT IGNORE INTO estados_pedido (codigo, nombre, descripcion, es_final, color) VALUES
   ('PENDIENTE', 'Pendiente', 'Pedido recibido, sin confirmar', FALSE, '#FFA500'),
   ('CONFIRMADO', 'Confirmado', 'Pedido confirmado, pendiente de preparación', FALSE, '#1E90FF'),
   ('EN_PREPARACION', 'En preparación', 'Pedido en proceso de armado/entrega', FALSE, '#9370DB'),
@@ -73,7 +73,7 @@ INSERT INTO estados_pedido (codigo, nombre, descripcion, es_final, color) VALUES
 -- -----------------------------------------------------------------------------
 -- Estados de garrafa
 -- -----------------------------------------------------------------------------
-INSERT INTO estados_garrafa (codigo, nombre, descripcion, es_disponible_para_venta, requiere_cliente, color) VALUES
+INSERT IGNORE INTO estados_garrafa (codigo, nombre, descripcion, es_disponible_para_venta, requiere_cliente, color) VALUES
   ('LLENA_DEPOSITO', 'Llena en depósito', 'Garrafa llena disponible para entregar', TRUE, FALSE, '#228B22'),
   ('VACIA_DEPOSITO', 'Vacía en depósito', 'Garrafa vacía en el depósito', FALSE, FALSE, '#808080'),
   ('EN_CLIENTE', 'En cliente', 'Garrafa en poder de un cliente (canje/consignación)', FALSE, TRUE, '#1E90FF'),
@@ -84,7 +84,7 @@ INSERT INTO estados_garrafa (codigo, nombre, descripcion, es_disponible_para_ven
 -- -----------------------------------------------------------------------------
 -- Tipos de movimiento de garrafa
 -- -----------------------------------------------------------------------------
-INSERT INTO tipos_movimiento_garrafa (codigo, nombre, descripcion) VALUES
+INSERT IGNORE INTO tipos_movimiento_garrafa (codigo, nombre, descripcion) VALUES
   ('COMPRA', 'Compra a proveedor', 'Ingreso de garrafa por recepción de proveedor'),
   ('ENTREGA_CLIENTE', 'Entrega a cliente', 'Salida de garrafa hacia un cliente'),
   ('DEVOLUCION_CLIENTE', 'Devolución de cliente', 'Regreso de garrafa desde un cliente'),
@@ -97,7 +97,7 @@ INSERT INTO tipos_movimiento_garrafa (codigo, nombre, descripcion) VALUES
 -- -----------------------------------------------------------------------------
 -- Canales de venta
 -- -----------------------------------------------------------------------------
-INSERT INTO canales_venta (codigo, nombre, descripcion) VALUES
+INSERT IGNORE INTO canales_venta (codigo, nombre, descripcion) VALUES
   ('TELEFONO', 'Teléfono', 'Pedido recibido por llamada telefónica'),
   ('WHATSAPP', 'WhatsApp', 'Pedido recibido por mensaje de WhatsApp'),
   ('PRESENCIAL', 'Presencial', 'Pedido realizado en el local');
@@ -105,7 +105,7 @@ INSERT INTO canales_venta (codigo, nombre, descripcion) VALUES
 -- -----------------------------------------------------------------------------
 -- Medios de contacto del pedido
 -- -----------------------------------------------------------------------------
-INSERT INTO medios_contacto_pedido (codigo, nombre, descripcion) VALUES
+INSERT IGNORE INTO medios_contacto_pedido (codigo, nombre, descripcion) VALUES
   ('WHATSAPP', 'WhatsApp', 'Se contactó al cliente por WhatsApp'),
   ('TELEFONO', 'Llamada telefónica', 'Se contactó al cliente por llamada'),
   ('PRESENCIAL', 'Presencial', 'Cliente concurrió al local'),
@@ -114,7 +114,7 @@ INSERT INTO medios_contacto_pedido (codigo, nombre, descripcion) VALUES
 -- -----------------------------------------------------------------------------
 -- Tipos de contacto adicionales de cliente
 -- -----------------------------------------------------------------------------
-INSERT INTO tipos_contacto_cliente (codigo, nombre) VALUES
+INSERT IGNORE INTO tipos_contacto_cliente (codigo, nombre) VALUES
   ('TELEFONO', 'Teléfono'),
   ('WHATSAPP', 'WhatsApp'),
   ('EMAIL', 'Email'),
@@ -123,7 +123,7 @@ INSERT INTO tipos_contacto_cliente (codigo, nombre) VALUES
 -- -----------------------------------------------------------------------------
 -- Productos del catálogo
 -- -----------------------------------------------------------------------------
-INSERT INTO productos (codigo, nombre, descripcion, tipo_producto_id, capacidad_kg, unidad_venta, precio_actual, maneja_garrafa_individual) VALUES
+INSERT IGNORE INTO productos (codigo, nombre, descripcion, tipo_producto_id, capacidad_kg, unidad_venta, precio_actual, maneja_garrafa_individual) VALUES
   ('GAS-10',  'Garrafa de gas 10 kg',  'Garrafa de gas envasado de 10 kg',  (SELECT id FROM tipos_producto WHERE codigo='GAS'),    10.00, 'GARRAFA', 0.00, TRUE),
   ('GAS-15',  'Garrafa de gas 15 kg',  'Garrafa de gas envasado de 15 kg',  (SELECT id FROM tipos_producto WHERE codigo='GAS'),    15.00, 'GARRAFA', 0.00, TRUE),
   ('GAS-45',  'Garrafa de gas 45 kg',  'Garrafa de gas envasado de 45 kg',  (SELECT id FROM tipos_producto WHERE codigo='GAS'),    45.00, 'GARRAFA', 0.00, TRUE),
@@ -137,7 +137,7 @@ INSERT INTO productos (codigo, nombre, descripcion, tipo_producto_id, capacidad_
 -- Secuencias inicializadas (la numeración real la gestiona el trigger,
 -- esto es solo para que aparezcan en la tabla desde el principio)
 -- -----------------------------------------------------------------------------
-INSERT INTO secuencias (nombre, prefijo, anio, ultimo_valor) VALUES
+INSERT IGNORE INTO secuencias (nombre, prefijo, anio, ultimo_valor) VALUES
   ('pedidos',              'PED',      YEAR(CURDATE()), 0),
   ('pagos_cliente',        'REC',      YEAR(CURDATE()), 0),
   ('recepciones_proveedor','REC-PROV', YEAR(CURDATE()), 0),
@@ -149,10 +149,10 @@ INSERT INTO secuencias (nombre, prefijo, anio, ultimo_valor) VALUES
 -- password_hash es un placeholder; la app debe hashear con argon2id/bcrypt
 -- en el primer login o antes del primer uso.
 -- -----------------------------------------------------------------------------
-INSERT INTO empleados (nombre, apellido, dni, fecha_ingreso, activo) VALUES
+INSERT IGNORE INTO empleados (nombre, apellido, dni, fecha_ingreso, activo) VALUES
   ('Dueño', 'Administrador', NULL, CURDATE(), TRUE);
 
-INSERT INTO usuarios (username, password_hash, email, rol_id, activo) VALUES
+INSERT IGNORE INTO usuarios (username, password_hash, email, rol_id, activo) VALUES
   ('admin', '$2a$11$LXexHD1uSwkOLaBCUvArbe5YKVYC7xujLmwQHCRHtkHz61kTY6S2K', NULL, (SELECT id FROM roles WHERE codigo='ADMIN'), TRUE);
 
 UPDATE empleados e

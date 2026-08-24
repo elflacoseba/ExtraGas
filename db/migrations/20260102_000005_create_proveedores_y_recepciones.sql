@@ -13,7 +13,7 @@ USE extragas;
 --   - monto_pagado: lo mantiene trigger AFTER pagos_proveedor
 --   - saldo: columna generada
 -- -----------------------------------------------------------------------------
-CREATE TABLE recepciones_proveedor (
+CREATE TABLE IF NOT EXISTS recepciones_proveedor (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   numero VARCHAR(20) NULL,
   fecha DATETIME NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE recepciones_proveedor (
 -- recepcion_items: líneas de la recepción (uno por producto recibido)
 --   - subtotal: columna generada = cantidad * precio_unitario
 -- -----------------------------------------------------------------------------
-CREATE TABLE recepcion_items (
+CREATE TABLE IF NOT EXISTS recepcion_items (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   recepcion_id BIGINT UNSIGNED NOT NULL,
   producto_id BIGINT UNSIGNED NOT NULL,
@@ -69,7 +69,7 @@ CREATE TABLE recepcion_items (
 --   - recepcion_id: NULL permitido = "pago a cuenta" del proveedor
 --   - referencia: para transferencias
 -- -----------------------------------------------------------------------------
-CREATE TABLE pagos_proveedor (
+CREATE TABLE IF NOT EXISTS pagos_proveedor (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   numero VARCHAR(20) NULL,
   fecha DATETIME NOT NULL,
