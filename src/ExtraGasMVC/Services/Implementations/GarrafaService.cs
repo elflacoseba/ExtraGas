@@ -97,7 +97,9 @@ public class GarrafaService : IGarrafaService
     }
 
     public async Task<PagedResult<GarrafaDto>> GetPagedAsync(
-        string? codigo, byte? capacidad, int page, int pageSize, CancellationToken ct = default)
+        string? codigo, byte? capacidad, int page, int pageSize,
+        string sortBy = "codigo", string sortDir = "asc",
+        CancellationToken ct = default)
     {
         // Normalización defensiva: page y pageSize llegan del query string
         // (no son confiables). Si el usuario manda pageSize=10000 o page=-3,
@@ -132,8 +134,45 @@ public class GarrafaService : IGarrafaService
         // sobre el WHERE aplicado, sin cargar filas.
         var total = await query.CountAsync(ct);
 
-        var items = await query
-            .OrderBy(g => g.Codigo)
+        // Issue #53: ordenar por el campo pedido. Defaults seguros (cualquier
+        // sortBy desconocido cae a "codigo", cualquier sortDir != "desc" a
+        // "asc"). Cada case arma el IOrderedQueryable en su tipo concreto para
+        // que EF genere SQL específico por campo — no usamos reflection ni
+        // expression trees dinámicas porque romperían la traducción a SQL.
+        // ThenBy(Id) en todos los casos = tiebreaker estable para paginación.
+        var desc = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase);
+        IOrderedQueryable<Garrafa> ordered = sortBy.ToLowerInvariant() switch
+        {
+            "capacidad" => desc
+                ? query.OrderByDescending(g => g.CapacidadKg).ThenBy(g => g.Id)
+                : query.OrderBy(g => g.CapacidadKg).ThenBy(g => g.Id),
+            "estado" => desc
+                ? query.OrderByDescending(g => g.EstadoGarrafa!.Nombre).ThenBy(g => g.Id)
+                : query.OrderBy(g => g.EstadoGarrafa!.Nombre).ThenBy(g => g.Id),
+            // Cliente es nullable: ordenar por Apellido, luego Nombre. EF
+            // traduce el acceso a navegación como LEFT JOIN; las filas sin
+            // cliente quedan con NULL y MySQL las pone al inicio en ASC.
+            "cliente" => desc
+                ? query.OrderByDescending(g => g.Cliente!.Apellido)
+                       .ThenByDescending(g => g.Cliente!.Nombre)
+                       .ThenBy(g => g.Id)
+                : query.OrderBy(g => g.Cliente!.Apellido)
+                       .ThenBy(g => g.Cliente!.Nombre)
+                       .ThenBy(g => g.Id),
+            "fechacompra" => desc
+                ? query.OrderByDescending(g => g.FechaCompra).ThenBy(g => g.Id)
+                : query.OrderBy(g => g.FechaCompra).ThenBy(g => g.Id),
+            // FechaUltimoMovimiento es DateTime? — los NULL van primero en ASC
+            // (semántica de MySQL), lo cual es razonable para "último mov."
+            "ultimomov" => desc
+                ? query.OrderByDescending(g => g.FechaUltimoMovimiento).ThenBy(g => g.Id)
+                : query.OrderBy(g => g.FechaUltimoMovimiento).ThenBy(g => g.Id),
+            "codigo" or _ => desc
+                ? query.OrderByDescending(g => g.Codigo).ThenBy(g => g.Id)
+                : query.OrderBy(g => g.Codigo).ThenBy(g => g.Id),
+        };
+
+        var items = await ordered
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);

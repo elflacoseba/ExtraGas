@@ -3,6 +3,8 @@
     ViewData["Title"] = "Garrafas";
     var codigo = ViewBag.Codigo as string;
     var capacidad = ViewBag.Capacidad as byte?;
+    var sortBy = ViewBag.SortBy as string ?? "codigo";
+    var sortDir = ViewBag.SortDir as string ?? "asc";
     var currentPage = Model.Page;
     var totalPages = Model.TotalPages;
     var pageSize = Model.PageSize;
@@ -10,9 +12,15 @@
 
     // Issue #52: los links de paginación preservan los filtros en el query
     // string para que cambiar de página no reinicie la búsqueda.
+    // Issue #53: también preservan el orden activo (sortBy/sortDir) para
+    // que cambiar de página no reinicie el orden.
     // asp-all-route-data requiere IDictionary<string, string>, por eso los
     // valores van casteados a string explícitamente.
-    var routeValues = new Dictionary<string, string>();
+    var routeValues = new Dictionary<string, string>
+    {
+        ["sortBy"] = sortBy,
+        ["sortDir"] = sortDir
+    };
     if (!string.IsNullOrWhiteSpace(codigo)) routeValues["codigo"] = codigo;
     if (capacidad.HasValue) routeValues["capacidad"] = capacidad.Value.ToString();
 
@@ -21,6 +29,38 @@
     {
         var copy = new Dictionary<string, string>(baseValues) { ["page"] = pageNumber.ToString() };
         return copy;
+    }
+
+    // Issue #53: helper para construir los routeValues de un click de sort.
+    // - Si la columna clickeada ya es la activa: toggle de dirección.
+    // - Si es otra columna: arranca en asc.
+    // - page=1 siempre: cambiar de orden vuelve a la primera página, así no
+    //   dejamos al usuario en una página que podría quedar vacía con el
+    //   nuevo orden.
+    Dictionary<string, string> BuildSortLink(string column)
+    {
+        var copy = new Dictionary<string, string>(routeValues)
+        {
+            ["sortBy"] = column,
+            ["sortDir"] = column == sortBy && sortDir == "asc" ? "desc" : "asc",
+            ["page"] = "1"
+        };
+        return copy;
+    }
+
+    // Issue #53: ícono indicador del orden actual. La columna activa muestra
+    // la flecha correspondiente; las demás muestran un ícono atenuado de
+    // "ordenable" para sugerir visualmente que son clickeables.
+    // HtmlString se referencia con namespace completo porque _ViewImports no
+    // importa Microsoft.AspNetCore.Html (no queremos tocar el global por
+    // una sola vista).
+    Microsoft.AspNetCore.Html.IHtmlContent SortIcon(string column)
+    {
+        if (column == sortBy)
+            return new Microsoft.AspNetCore.Html.HtmlString(
+                $"<i class=\"bi bi-arrow-{(sortDir == "asc" ? "up" : "down")}\"></i>");
+        return new Microsoft.AspNetCore.Html.HtmlString(
+            "<i class=\"bi bi-arrow-down-up text-secondary opacity-50\"></i>");
     }
 
     // Mostrando X-Y de Z: si total == 0 mostramos "0" en ambos extremos.
@@ -64,19 +104,49 @@
                 <button type="submit" class="btn btn-primary flex-fill"><i class="bi bi-search me-1"></i>Buscar</button>
                 <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise"></i></a>
             </div>
+            @* Issue #53: hidden inputs para que el submit del filtro conserve
+               el orden activo. Sin esto, aplicar un filtro resetea el sort. *@
+            <input type="hidden" name="sortBy" value="@sortBy" />
+            <input type="hidden" name="sortDir" value="@sortDir" />
         </form>
     </div>
     <div class="card-body table-responsive p-0">
         <table class="table table-hover table-striped align-middle mb-0">
             <thead>
                 <tr>
-                    <th>Codigo</th>
-                    <th class="text-end">Capacidad (kg)</th>
-                    <th>Estado</th>
-                    <th>Cliente</th>
+                    @* Issue #53: cada th es un link que cambia el sort. El
+                       helper BuildSortLink preserva filtros y resetea page=1. *@
+                    <th>
+                        <a asp-action="Index" asp-all-route-data="@BuildSortLink("codigo")" class="text-decoration-none text-body">
+                            Codigo @SortIcon("codigo")
+                        </a>
+                    </th>
+                    <th class="text-end">
+                        <a asp-action="Index" asp-all-route-data="@BuildSortLink("capacidad")" class="text-decoration-none text-body">
+                            Capacidad (kg) @SortIcon("capacidad")
+                        </a>
+                    </th>
+                    <th>
+                        <a asp-action="Index" asp-all-route-data="@BuildSortLink("estado")" class="text-decoration-none text-body">
+                            Estado @SortIcon("estado")
+                        </a>
+                    </th>
+                    <th>
+                        <a asp-action="Index" asp-all-route-data="@BuildSortLink("cliente")" class="text-decoration-none text-body">
+                            Cliente @SortIcon("cliente")
+                        </a>
+                    </th>
                     <th>Proveedor</th>
-                    <th>F. compra</th>
-                    <th>F. ultimo mov.</th>
+                    <th>
+                        <a asp-action="Index" asp-all-route-data="@BuildSortLink("fechacompra")" class="text-decoration-none text-body">
+                            F. compra @SortIcon("fechacompra")
+                        </a>
+                    </th>
+                    <th>
+                        <a asp-action="Index" asp-all-route-data="@BuildSortLink("ultimomov")" class="text-decoration-none text-body">
+                            F. ultimo mov. @SortIcon("ultimomov")
+                        </a>
+                    </th>
                     <th class="text-end" style="width: 180px;">Acciones</th>
                 </tr>
             </thead>
@@ -120,7 +190,8 @@
     @if (total > 0)
     {
         @* Issue #52: pie de tabla con controles de paginación. Los links
-           preservan filtros vía los routeValues del bloque superior. *@
+           preservan filtros y (issue #53) sortBy/sortDir vía los
+           routeValues del bloque superior. *@
         <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div class="text-secondary small">
                 Mostrando <strong>@firstItem-@lastItem</strong> de <strong>@total</strong> garrafas.

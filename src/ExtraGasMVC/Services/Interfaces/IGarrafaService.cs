@@ -25,11 +25,25 @@ public interface IGarrafaService
     /// normalizan a 1.</param>
     /// <param name="pageSize">Tamaño de página. Default 20. Se aplica un
     /// tope máximo de 100 para evitar queries enormes accidentales.</param>
+    /// <param name="sortBy">
+    /// Campo por el que se ordena la página. Valores reconocidos:
+    /// <c>codigo</c> (default), <c>capacidad</c>, <c>estado</c>,
+    /// <c>cliente</c>, <c>fechacompra</c>, <c>ultimomov</c>. Cualquier otro
+    /// valor cae al default (issue #53).
+    /// </param>
+    /// <param name="sortDir">
+    /// <c>asc</c> o <c>desc</c>. Cualquier otro valor cae a <c>asc</c>.
+    /// El ordenamiento por <c>cliente</c> usa apellido + nombre como
+    /// desempate; todos los campos llevan <c>Id</c> como tiebreaker para
+    /// que la paginación sea estable entre requests.
+    /// </param>
     Task<PagedResult<GarrafaDto>> GetPagedAsync(
         string? codigo,
         byte? capacidad,
         int page = 1,
         int pageSize = 20,
+        string sortBy = "codigo",
+        string sortDir = "asc",
         CancellationToken ct = default);
     Task<IEnumerable<EstadoGarrafaDto>> GetEstadosAsync(CancellationToken ct = default);
     Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafa, ulong? usuarioId, CancellationToken ct = default);
