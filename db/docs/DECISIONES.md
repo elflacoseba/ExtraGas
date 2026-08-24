@@ -199,25 +199,35 @@ Documento de decisiones (ADR-style) y supuestos del sistema **ExtraGas**.
 
 ## 13. Estrategia de idempotencia para migraciones incrementales
 
-**Decisión:** las migraciones incrementales (las posteriores a la creación inicial del schema) deben ser idempotentes — re-ejecutables sin fallar contra una BD que ya las tiene aplicadas.
+**Decisión:** las migraciones incrementales (las posteriores a la creación inicial del schema) deben ser idempotentes — re-ejecutables sin fallar contra una BD que ya las tiene aplicadas. La idempotencia se garantiza en **dos capas**:
 
-**Por qué:** `db/scripts/install.sh` declara ser idempotente. Las migraciones iniciales (CREATE TABLE, CREATE VIEW) usan `IF NOT EXISTS` y son naturalmente idempotentes. Las incrementales no lo son por defecto:
-- `ALTER TABLE ADD COLUMN` falla si la columna ya existe.
-- `ALTER TABLE DROP COLUMN` falla si la columna no existe.
-- `INSERT INTO lookup` falla con duplicate key.
+1. **Capa SQL (dentro de cada `.sql`)**: cada migración es auto-suficiente y no falla al re-ejecutarse.
+2. **Capa runner (`db/scripts/install.sh`)**: mantiene una tabla `schema_migrations` con `filename` (PK) + `checksum` (SHA256 del contenido). Si el archivo está registrado y su checksum no cambió, se skipea sin ejecutar.
 
-Esto bloquea re-correr el script después de un `DROP DATABASE` parcial, o si se quiere re-aplicar una migración puntual.
+**Por qué dos capas:**
+- La capa SQL protege contra re-ejecuciones accidentales (defensa en profundidad).
+- La capa runner evita ejecutar el archivo completo cuando no hace falta, y — más importante — **detecta drift**: si alguien edita una migración ya aplicada, el checksum no coincide y `install.sh` aborta con error explícito en lugar de re-ejecutar algo que no es lo que se aplicó originalmente.
 
-**Cómo se logra:**
+**Capa SQL — cómo se logra:**
 - **ADD/DROP COLUMN**: MySQL 8.x no soporta `IF [NOT] EXISTS` para columnas en `ALTER TABLE`. Se usa el patrón `information_schema` + `PREPARE`/`EXECUTE` para ejecutar condicionalmente.
 - **INSERT en lookup**: `INSERT IGNORE` (descarta solo el error de duplicate-key, no otros errores).
 - **CREATE/DROP VIEW, CREATE TRIGGER**: ya idempotentes con `IF NOT EXISTS` / `DROP IF EXISTS`.
 - **CREATE TABLE**: ya idempotente con `IF NOT EXISTS`.
 - **CREATE INDEX UNIQUE**: requiere `DROP INDEX` previo si el índice ya existe con el mismo nombre (ver migración 20260606_000001).
+- **Status SELECT final**: cuando el archivo imprime un "OK" al terminar, debe ser **condicional** sobre el estado real (ver migración `20260607_000001_drop_pedidos_entregado.sql` post-PR #88). Un SELECT incondicional contradice los mensajes del IF-guard y confunde al debug.
+
+**Capa runner — cómo funciona `install.sh`:**
+1. **Bootstrap defensivo**: `CREATE TABLE IF NOT EXISTS schema_migrations (...)` antes del loop. Cubre el caso de BD recién creada (todavía no se aplicó la migración que crea la tabla).
+2. **Para cada `.sql`**: calcula SHA256 del contenido, consulta `SELECT checksum FROM schema_migrations WHERE filename = ?`.
+   - **Fila no existe** → ejecuta el archivo y hace `INSERT INTO schema_migrations`.
+   - **Fila existe, checksum coincide** → skip con mensaje "already applied".
+   - **Fila existe, checksum distinto** → aborta con error explícito: `migration modified after application; restore the file or write a new migration`.
+3. Las migraciones existentes (las que ya tienen guards de `information_schema`) no se tocan — siguen siendo defensa en profundidad.
 
 **Implicancia:**
-- Las migraciones nuevas deben seguir este patrón. Code review debe verificar idempotencia antes de aceptar una migración nueva.
-- La solución definitiva (más robusta) sería una tabla `schema_migrations` con hashes de archivos aplicados y el script consultarla antes de ejecutar. No se implementa acá por costo/beneficio (un solo dev, homelab), pero queda como evolución futura si el proyecto pasa a multi-dev o CI/CD.
+- Las migraciones nuevas deben seguir el patrón de guards SQL. Code review debe verificar idempotencia antes de aceptar una migración nueva.
+- **No editar migraciones ya aplicadas.** Si se necesita cambiar comportamiento, escribir una migración nueva. Esta restricción la enforce el checksum check de `install.sh`.
+- La tabla `schema_migrations` vive en la BD `extragas`. No confundir con catálogos de dominio (estados, formas de pago, etc.).
 
 ---
 
