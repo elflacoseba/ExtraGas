@@ -20,4 +20,6 @@ public class Garrafa
     public DateTime? DeletedAt { get; set; }
 
     public virtual EstadoGarrafa? EstadoGarrafa { get; set; }
+    public virtual Cliente? Cliente { get; set; }
+    public virtual Proveedor? Proveedor { get; set; }
 }

@@ -44,10 +44,17 @@
                     <tr>
                         <td><code>@g.Codigo</code></td>
                         <td class="text-end">@g.CapacidadKg</td>
-                        <td><span class="badge text-bg-secondary">#@g.EstadoGarrafaId</span></td>
                         <td>
-                            @if (g.ClienteId.HasValue)
-                            { <a asp-controller="Clientes" asp-action="Details" asp-route-id="@g.ClienteId">#@g.ClienteId</a> }
+                            @* Issue #47: badge con color del catálogo estados_garrafa y nombre legible *@
+                            <span class="badge" style="background-color: @(g.EstadoColor ?? "#6c757d"); color: #fff;">@(g.EstadoNombre ?? $"#{g.EstadoGarrafaId}")</span>
+                        </td>
+                        <td>
+                            @if (g.ClienteId.HasValue && !string.IsNullOrWhiteSpace(g.ClienteNombre))
+                            { <a asp-controller="Clientes" asp-action="Details" asp-route-id="@g.ClienteId">@g.ClienteNombre</a> }
+                            else if (cliente is not null)
+                            {
+                                <span>@cliente.Apellido, @cliente.Nombre</span>
+                            }
                         </td>
                         <td>@g.FechaUltimoMovimiento.ToShortDate()</td>
                     </tr>

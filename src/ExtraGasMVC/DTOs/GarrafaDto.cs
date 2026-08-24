@@ -20,6 +20,30 @@ public class GarrafaDto
     /// máquina de estados del módulo Garrafas.
     /// </summary>
     public string? EstadoCodigo { get; set; }
+
+    /// <summary>
+    /// Nombre legible del estado (ej. "Llena en depósito"). Se renderiza
+    /// como badge con <see cref="EstadoColor"/> en las vistas (issue #47).
+    /// </summary>
+    public string? EstadoNombre { get; set; }
+
+    /// <summary>
+    /// Color HEX del estado (catálogo <c>estados_garrafa.color</c>). Se aplica
+    /// como background del badge en las vistas (issue #47).
+    /// </summary>
+    public string? EstadoColor { get; set; }
+
+    /// <summary>
+    /// Nombre completo del cliente actual ("Apellido, Nombre"). Null cuando la
+    /// garrafa no está asignada a un cliente (issue #47).
+    /// </summary>
+    public string? ClienteNombre { get; set; }
+
+    /// <summary>
+    /// Razón social del proveedor de la garrafa. Null cuando no tiene
+    /// proveedor asociado (issue #47).
+    /// </summary>
+    public string? ProveedorNombre { get; set; }
 }
 
 public class CreateGarrafaDto
