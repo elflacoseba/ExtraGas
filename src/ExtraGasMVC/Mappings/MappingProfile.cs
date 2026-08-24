@@ -83,6 +83,14 @@ public class MappingProfile : Profile
         CreateMap<Garrafa, GarrafaDto>()
             .ForMember(d => d.EstadoCodigo, o => o.MapFrom(s =>
                 s.EstadoGarrafa != null ? s.EstadoGarrafa.Codigo : null))
+            .ForMember(d => d.EstadoNombre, o => o.MapFrom(s =>
+                s.EstadoGarrafa != null ? s.EstadoGarrafa.Nombre : null))
+            .ForMember(d => d.EstadoColor, o => o.MapFrom(s =>
+                s.EstadoGarrafa != null ? s.EstadoGarrafa.Color : null))
+            .ForMember(d => d.ClienteNombre, o => o.MapFrom(s =>
+                s.Cliente != null ? s.Cliente.Apellido + ", " + s.Cliente.Nombre : null))
+            .ForMember(d => d.ProveedorNombre, o => o.MapFrom(s =>
+                s.Proveedor != null ? s.Proveedor.RazonSocial : null))
             .ReverseMap();
         CreateMap<CreateGarrafaDto, Garrafa>();
         CreateMap<UpdateGarrafaDto, Garrafa>();

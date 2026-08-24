@@ -22,9 +22,14 @@ public class GarrafaService : IGarrafaService
 
     public async Task<GarrafaDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
     {
+        // Issue #47: cargamos EstadoGarrafa, Cliente y Proveedor para que la UI
+        // muestre nombres en lugar de IDs (el mapping proyecta las navegaciones
+        // a EstadoNombre/EstadoColor/ClienteNombre/ProveedorNombre).
         var garrafa = await _context.Garrafas
             .AsNoTracking()
             .Include(g => g.EstadoGarrafa)
+            .Include(g => g.Cliente)
+            .Include(g => g.Proveedor)
             .FirstOrDefaultAsync(g => g.Id == id, ct);
 
         return garrafa is null ? null : _mapper.Map<GarrafaDto>(garrafa);
@@ -32,9 +37,12 @@ public class GarrafaService : IGarrafaService
 
     public async Task<GarrafaDto?> GetByCodigoAsync(string codigo, CancellationToken ct = default)
     {
+        // Issue #47: ver GetByIdAsync — mismas navegaciones para los nombres de UI.
         var garrafa = await _context.Garrafas
             .AsNoTracking()
             .Include(g => g.EstadoGarrafa)
+            .Include(g => g.Cliente)
+            .Include(g => g.Proveedor)
             .FirstOrDefaultAsync(g => g.Codigo == codigo, ct);
 
         return garrafa is null ? null : _mapper.Map<GarrafaDto>(garrafa);
@@ -42,9 +50,12 @@ public class GarrafaService : IGarrafaService
 
     public async Task<IEnumerable<GarrafaDto>> GetAllAsync(CancellationToken ct = default)
     {
+        // Issue #47: navegaciones cargadas para que Index muestre nombres.
         var garrafas = await _context.Garrafas
             .AsNoTracking()
             .Include(g => g.EstadoGarrafa)
+            .Include(g => g.Cliente)
+            .Include(g => g.Proveedor)
             .OrderBy(g => g.Codigo)
             .ToListAsync(ct);
 
@@ -53,9 +64,13 @@ public class GarrafaService : IGarrafaService
 
     public async Task<IEnumerable<GarrafaDto>> GetByClienteAsync(ulong clienteId, CancellationToken ct = default)
     {
+        // Issue #47: Cliente se filtra por FK; igual cargamos la navegación para
+        // que ClienteNombre llegue poblado sin importar filtros del EF.
         var garrafas = await _context.Garrafas
             .AsNoTracking()
             .Include(g => g.EstadoGarrafa)
+            .Include(g => g.Cliente)
+            .Include(g => g.Proveedor)
             .Where(g => g.ClienteId == clienteId)
             .OrderBy(g => g.Codigo)
             .ToListAsync(ct);
@@ -65,9 +80,13 @@ public class GarrafaService : IGarrafaService
 
     public async Task<IEnumerable<GarrafaDto>> GetByEstadoAsync(ulong estadoId, CancellationToken ct = default)
     {
+        // Issue #47: EstadoGarrafa se filtra por FK; igual se incluye para
+        // consistencia con el resto de los Get*.
         var garrafas = await _context.Garrafas
             .AsNoTracking()
             .Include(g => g.EstadoGarrafa)
+            .Include(g => g.Cliente)
+            .Include(g => g.Proveedor)
             .Where(g => g.EstadoGarrafaId == estadoId)
             .OrderBy(g => g.Codigo)
             .ToListAsync(ct);

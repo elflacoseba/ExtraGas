@@ -29,16 +29,20 @@
         <dl class="row">
             <dt class="col-sm-3">Codigo</dt><dd class="col-sm-9"><code>@Model.Codigo</code></dd>
             <dt class="col-sm-3">Capacidad</dt><dd class="col-sm-9">@Model.CapacidadKg kg</dd>
-            <dt class="col-sm-3">Estado</dt><dd class="col-sm-9"><span class="badge text-bg-secondary">#@Model.EstadoGarrafaId</span></dd>
+            <dt class="col-sm-3">Estado</dt>
+            <dd class="col-sm-9">
+                @* Issue #47: badge con color del catálogo estados_garrafa y nombre legible *@
+                <span class="badge" style="background-color: @(Model.EstadoColor ?? "#6c757d"); color: #fff;">@(Model.EstadoNombre ?? $"#{Model.EstadoGarrafaId}")</span>
+            </dd>
             <dt class="col-sm-3">Fecha de compra</dt><dd class="col-sm-9">@Model.FechaCompra.ToString("dd/MM/yyyy")</dd>
             <dt class="col-sm-3">Ultimo movimiento</dt><dd class="col-sm-9">@Model.FechaUltimoMovimiento.ToShortDateTime()</dd>
             <dt class="col-sm-3">Cliente actual</dt>
             <dd class="col-sm-9">
-                @if (Model.ClienteId.HasValue)
-                { <a asp-controller="Clientes" asp-action="Details" asp-route-id="@Model.ClienteId">#@Model.ClienteId</a> }
+                @if (Model.ClienteId.HasValue && !string.IsNullOrWhiteSpace(Model.ClienteNombre))
+                { <a asp-controller="Clientes" asp-action="Details" asp-route-id="@Model.ClienteId">@Model.ClienteNombre</a> }
                 else { <span class="text-secondary">-</span> }
             </dd>
-            <dt class="col-sm-3">Proveedor</dt><dd class="col-sm-9">@(Model.ProveedorId?.ToString() ?? "-")</dd>
+            <dt class="col-sm-3">Proveedor</dt><dd class="col-sm-9">@(Model.ProveedorNombre ?? "-")</dd>
             <dt class="col-sm-3">Recepcion</dt><dd class="col-sm-9">@(Model.RecepcionId?.ToString() ?? "-")</dd>
             <dt class="col-sm-3">Activo</dt>
             <dd class="col-sm-9">
