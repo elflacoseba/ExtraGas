@@ -180,7 +180,21 @@
                         <td class="text-end">
                             <a asp-action="Details" asp-route-id="@g.Id" class="btn btn-sm btn-info" title="Ver"><i class="bi bi-eye"></i></a>
                             <a asp-action="Edit" asp-route-id="@g.Id" class="btn btn-sm btn-primary" title="Editar"><i class="bi bi-pencil"></i></a>
-                            <a asp-action="Delete" asp-route-id="@g.Id" class="btn btn-sm btn-danger" title="Eliminar"><i class="bi bi-trash"></i></a>
+                            @* Issue #54: confirmación con SweetAlert2 (mismo patrón
+                               que Clientes/Proveedores/Empleados). El form apunta
+                               a Delete (POST) y el helper global confirmarAccion
+                               gatilla el Swal antes de submitear. Solo se muestra
+                               para garrafas activas — las dadas de baja (soft-delete)
+                               no deberían volver a eliminarse desde acá. *@
+                            @if (g.Activo)
+                            {
+                                <form asp-action="Delete" asp-route-id="@g.Id" method="post" class="d-inline js-confirm-form" data-name="esta garrafa">
+                                    @Html.AntiForgeryToken()
+                                    <button type="button" class="btn btn-sm btn-danger" title="Eliminar" onclick="confirmarAccion(this)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            }
                         </td>
                     </tr>
                 }

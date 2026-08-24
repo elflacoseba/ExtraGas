@@ -368,7 +368,7 @@ public class GarrafaService : IGarrafaService
         return _mapper.Map<IEnumerable<EstadoGarrafaDto>>(destinos);
     }
 
-    public async Task<bool> DeleteAsync(ulong id, CancellationToken ct = default)
+    public async Task<bool> DeleteAsync(ulong id, ulong? updatedBy, CancellationToken ct = default)
     {
         var garrafa = await _context.Garrafas
             .IgnoreQueryFilters()
@@ -388,9 +388,12 @@ public class GarrafaService : IGarrafaService
             throw new InvalidOperationException(
                 $"No se puede eliminar una garrafa en estado {estadoCodigo}. Primero cambie su estado.");
 
+        // Issue #54: registrar quién ejecuta la baja para auditoría (mismo
+        // criterio que ClienteService.DeleteAsync).
         garrafa.DeletedAt = DateTime.UtcNow;
         garrafa.Activo = false;
         garrafa.UpdatedAt = DateTime.UtcNow;
+        garrafa.UpdatedBy = updatedBy;
 
         await _context.SaveChangesAsync(ct);
 

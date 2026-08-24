@@ -49,7 +49,17 @@ public interface IGarrafaService
     Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafa, ulong? usuarioId, CancellationToken ct = default);
     Task<GarrafaDto> UpdateAsync(UpdateGarrafaDto garrafa, ulong? usuarioId, CancellationToken ct = default);
     Task<bool> CambiarEstadoAsync(ulong id, CambiarEstadoGarrafaDto dto, ulong? currentUserId = null, CancellationToken ct = default);
-    Task<bool> DeleteAsync(ulong id, CancellationToken ct = default);
+    /// <summary>
+    /// Soft-delete de la garrafa: setea <c>deleted_at</c>, baja <c>activo</c> y
+    /// actualiza <c>updated_at</c>/<c>updated_by</c>. Bloquea garrafas en estado
+    /// EN_CLIENTE o EN_TRANSITO para preservar la trazabilidad de movimientos
+    /// de canje (ver <c>DECISIONES.md</c>, regla de tracking individual).
+    /// </summary>
+    /// <param name="updatedBy">
+    /// <c>UserId</c> que ejecuta la baja. Queda registrado en <c>updated_by</c>
+    /// para auditoría. Coincide con la firma de <see cref="IClienteService.DeleteAsync"/>.
+    /// </param>
+    Task<bool> DeleteAsync(ulong id, ulong? updatedBy, CancellationToken ct = default);
 
     /// <summary>
     /// Returns the catalog rows for the destination states that the given
