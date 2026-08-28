@@ -14,15 +14,18 @@ public class AccountController : BaseController
     private readonly IUsuarioService _usuarioService;
     private readonly IAuditoriaLoginService _auditoriaService;
     private readonly IPasswordPolicyService _passwordPolicy;
+    private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         IUsuarioService usuarioService,
         IAuditoriaLoginService auditoriaService,
-        IPasswordPolicyService passwordPolicy)
+        IPasswordPolicyService passwordPolicy,
+        ILogger<AccountController> logger)
     {
         _usuarioService = usuarioService;
         _auditoriaService = auditoriaService;
         _passwordPolicy = passwordPolicy;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -52,14 +55,26 @@ public class AccountController : BaseController
         // Registrar el intento en auditoria (siempre, exista o no el usuario).
         // usuarioId lleva el id del usuario conocido incluso si el login fallo por
         // inactivo/eliminado/lockout/password (ver LoginResult.AttemptedUserId).
-        await _auditoriaService.RecordAsync(
-            usernameIntentado: usuario,
-            usuarioId: loginResult.AttemptedUserId,
-            exito: loginResult.Success,
-            motivoFallo: loginResult.FailureReason,
-            ipOrigen: GetClientIp(),
-            userAgent: GetUserAgent(),
-            ct: default);
+        // La auditoria esta desacoplada del flujo de login: si la insercion falla,
+        // se registra el error y se continua; no debe bloquear la autenticacion.
+        try
+        {
+            await _auditoriaService.RecordAsync(
+                usernameIntentado: usuario,
+                usuarioId: loginResult.AttemptedUserId,
+                exito: loginResult.Success,
+                motivoFallo: loginResult.FailureReason,
+                ipOrigen: GetClientIp(),
+                userAgent: GetUserAgent(),
+                ct: default);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Fallo registrando intento de login para '{Username}' (exito={Success}, motivo={Reason}). " +
+                "El login continua normalmente.",
+                usuario, loginResult.Success, loginResult.FailureReason);
+        }
 
         if (!loginResult.Success)
         {
