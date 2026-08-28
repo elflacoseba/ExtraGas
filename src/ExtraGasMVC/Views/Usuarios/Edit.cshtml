@@ -55,7 +55,15 @@
                 </div>
                 <div class="col-md-4">
                     <label asp-for="RolId" class="form-label">Rol</label> <span class="text-danger">*</span>
-                    <select asp-for="RolId" class="form-select" required>
+                    @{
+                        // Si es el propio usuario logueado, deshabilitamos el select:
+                        // la regla "no puede cambiar su propio rol" la enforza el
+                        // server en Edit POST, pero la UI debe reflejarlo para no
+                        // tentar al usuario. El <input type="hidden> preserva el
+                        // valor al submittar (un <select disabled> no envia nada).
+                        var rolDisabled = (currentUserId.HasValue && currentUserId.Value == Model.Id) ? "disabled" : null;
+                    }
+                    <select asp-for="RolId" class="form-select" required disabled="@rolDisabled">
                         <option value="">-- Seleccionar rol --</option>
                         @if (roles != null)
                         {
@@ -65,12 +73,31 @@
                             }
                         }
                     </select>
+                    @if (currentUserId.HasValue && currentUserId.Value == Model.Id)
+                    {
+                        <input type="hidden" asp-for="RolId" />
+                        <small class="text-secondary d-block mt-1">No puede cambiar su propio rol.</small>
+                    }
                     <span asp-validation-for="RolId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4 d-flex align-items-end">
                     <div class="form-check">
-                        <input asp-for="Activo" class="form-check-input" type="checkbox" />
-                        <label asp-for="Activo" class="form-check-label">Usuario activo</label>
+                        @* Si es el propio usuario logueado, deshabilitamos el checkbox:
+                           la regla de negocio "no puede desactivarse a si mismo" la
+                           enforza el server en Edit POST, pero la UI debe reflejarlo
+                           para no tentar al usuario. El <input type="hidden> preserva
+                           el valor al submittar (un checkbox disabled no envia nada). *@
+                        @if (currentUserId.HasValue && currentUserId.Value == Model.Id)
+                        {
+                            <input asp-for="Activo" class="form-check-input" type="checkbox" disabled />
+                            <label class="form-check-label">Usuario activo (no puede desactivarse a si mismo)</label>
+                            <input type="hidden" asp-for="Activo" />
+                        }
+                        else
+                        {
+                            <input asp-for="Activo" class="form-check-input" type="checkbox" />
+                            <label asp-for="Activo" class="form-check-label">Usuario activo</label>
+                        }
                     </div>
                 </div>
             </div>
@@ -150,7 +177,19 @@
                 var cp = document.getElementById('ConfirmPassword').value;
                 if (np !== cp) {
                     e.preventDefault();
-                    alert('Las contraseñas no coinciden.');
+                    // Modal de error (no toast): requiere atencion del usuario
+                    // porque bloquea el submit. SweetAlert2 ya esta cargado via
+                    // _Scripts.cshtml; fallback a alert() solo si Swal no existe.
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Las contrasenas no coinciden',
+                            text: 'Verifique que la nueva contrasena y su confirmacion sean iguales.',
+                            confirmButtonColor: '#dc3545'
+                        });
+                    } else {
+                        alert('Las contrasenas no coinciden.');
+                    }
                 }
                 // Validaciones de policy (longitud minima, caracteres requeridos) son
                 // autoridad del servidor (IPasswordPolicyService). No se duplican en
