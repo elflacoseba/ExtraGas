@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
 namespace ExtraGasMVC.Controllers;
@@ -18,19 +19,22 @@ public class AccountController : BaseController
     private readonly IPasswordPolicyService _passwordPolicy;
     private readonly ILogger<AccountController> _logger;
     private readonly PasswordPolicyOptions _passwordOptions;
+    private readonly IMemoryCache _memoryCache;
 
     public AccountController(
         IUsuarioService usuarioService,
         IAuditoriaLoginService auditoriaService,
         IPasswordPolicyService passwordPolicy,
         ILogger<AccountController> logger,
-        IOptions<PasswordPolicyOptions> passwordOptions)
+        IOptions<PasswordPolicyOptions> passwordOptions,
+        IMemoryCache memoryCache)
     {
         _usuarioService = usuarioService;
         _auditoriaService = auditoriaService;
         _passwordPolicy = passwordPolicy;
         _logger = logger;
         _passwordOptions = passwordOptions.Value;
+        _memoryCache = memoryCache;
     }
 
     [HttpGet]
@@ -166,6 +170,104 @@ public class AccountController : BaseController
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar la contrasena: {ex.Message}");
             return View(dto);
+        }
+    }
+
+    /// <summary>
+    /// GET /Account/ForgotPassword — renderiza el formulario para pedir el enlace de reseteo.
+    /// </summary>
+    [HttpGet]
+    [AllowAnonymous]
+    public IActionResult ForgotPassword()
+    {
+        return View(new ForgotPasswordDto());
+    }
+
+    /// <summary>
+    /// POST /Account/ForgotPassword — rate-limit por IP (3/h via <see cref="IMemoryCache"/>)
+    /// y delegacion a <see cref="IUsuarioService.RequestPasswordResetAsync"/>.
+    /// La respuesta SIEMPRE es el mensaje generico (sin enumeracion).
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordDto model, CancellationToken ct = default)
+    {
+        if (!ModelState.IsValid)
+            return View(model);
+
+        var ipKey = $"password-reset:forgot:{GetClientIp() ?? "unknown"}";
+        var count = _memoryCache.GetOrCreate(ipKey, e =>
+        {
+            e.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
+            return 0;
+        });
+
+        if (count >= 3)
+        {
+            // Rate limit alcanzado: mostrar SIEMPRE el mismo mensaje generico, sin llamar al service.
+            TempData["Info"] = "Si tu dirección de correo está registrada, recibirás un enlace para restablecer tu contraseña.";
+            return RedirectToAction(nameof(ForgotPassword));
+        }
+
+        _memoryCache.Set(ipKey, count + 1, TimeSpan.FromHours(1));
+
+        await _usuarioService.RequestPasswordResetAsync(model.Email, GetClientIp(), GetUserAgent(), ct);
+
+        TempData["Info"] = "Si tu dirección de correo está registrada, recibirás un enlace para restablecer tu contraseña.";
+        return RedirectToAction(nameof(ForgotPassword));
+    }
+
+    /// <summary>
+    /// GET /Account/ResetPassword?token=... — renderiza el formulario con el token en campo oculto.
+    /// NO consulta la BD (decision de diseno ambiguedad #1): la validez se chequea solo en el POST.
+    /// </summary>
+    [HttpGet]
+    [AllowAnonymous]
+    public IActionResult ResetPassword(string? token)
+    {
+        return View(new ResetPasswordDto { Token = token ?? string.Empty });
+    }
+
+    /// <summary>
+    /// POST /Account/ResetPassword — valida el token y setea la nueva contrasena.
+    /// Mapea <see cref="ConsumeResetTokenOutcome"/> a TempData/ModelState segun diseno §Controllers.
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPassword(ResetPasswordDto model, CancellationToken ct = default)
+    {
+        if (!ModelState.IsValid)
+            return View(model);
+
+        var result = await _usuarioService.ConsumePasswordResetTokenAsync(model.Token, model.NewPassword, ct);
+
+        switch (result.Outcome)
+        {
+            case ConsumeResetTokenOutcome.Success:
+                TempData["Success"] = "Tu contraseña fue restablecida. Iniciá sesión con la nueva contraseña.";
+                return RedirectToAction(nameof(Login));
+
+            case ConsumeResetTokenOutcome.WeakPassword:
+                ModelState.AddModelError(nameof(model.NewPassword), result.ErrorMessage ?? "La contraseña no cumple la política.");
+                return View(model);
+
+            case ConsumeResetTokenOutcome.ExpiredToken:
+                TempData["Error"] = "El enlace ha expirado. Solicitá uno nuevo.";
+                return View(model);
+
+            case ConsumeResetTokenOutcome.AlreadyUsed:
+                TempData["Error"] = "Este enlace ya fue utilizado.";
+                return View(model);
+
+            case ConsumeResetTokenOutcome.InvalidToken:
+                TempData["Error"] = "Enlace inválido.";
+                return View(model);
+
+            default:
+                TempData["Error"] = "Ocurrió un error. Intentá de nuevo más tarde.";
+                return View(model);
         }
     }
 
