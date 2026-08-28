@@ -2,6 +2,12 @@
 @{
     var usuario = ViewBag.Usuario as ExtraGasMVC.DTOs.UsuarioDto;
     var roles = ViewBag.Roles as List<ExtraGasMVC.DTOs.RolDto>;
+    var currentUserId = ViewBag.CurrentUserId as ulong?;
+    // La password temporal se consume una sola vez en el controller (Peek+Remove)
+    // y llega a la vista como ViewBag. Asi un refresh posterior del admin NO la
+    // re-muestra (cumpliendo "se muestra una sola vez").
+    var temporaryPassword = ViewBag.TemporaryPassword as string;
+    var temporaryPasswordUsername = ViewBag.TemporaryPasswordUsername as string;
     ViewData["Title"] = "Editar usuario";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
     {
@@ -14,6 +20,17 @@
         <a asp-action="Index" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i> Volver
         </a>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(temporaryPassword))
+{
+    <div class="alert alert-warning" role="alert">
+        <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-1"></i> Password temporal para @temporaryPasswordUsername</h5>
+        <p class="mb-2">Anota esta contraseña. <strong>No se volvera a mostrar.</strong> El usuario debera cambiarla en su proximo login.</p>
+        <p class="mb-0">
+            <code class="fs-5 user-select-all">@temporaryPassword</code>
+        </p>
     </div>
 }
 
@@ -86,11 +103,11 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="NewPassword">Nueva contraseña</label> <span class="text-danger">*</span>
-                    <input type="password" id="NewPassword" name="NewPassword" class="form-control" required minlength="6" />
+                    <input type="password" id="NewPassword" name="NewPassword" class="form-control" required />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="ConfirmPassword">Confirmar nueva contraseña</label> <span class="text-danger">*</span>
-                    <input type="password" id="ConfirmPassword" name="ConfirmPassword" class="form-control" required minlength="6" />
+                    <input type="password" id="ConfirmPassword" name="ConfirmPassword" class="form-control" required />
                 </div>
             </div>
         </div>
@@ -101,6 +118,28 @@
         </div>
     </form>
 </div>
+
+@if (currentUserId.HasValue && currentUserId.Value != Model.Id)
+{
+    <div class="card mt-4 border-warning">
+        <div class="card-header bg-warning-subtle"><h3 class="card-title">Resetear contrasena (admin)</h3></div>
+        <form asp-action="ResetPassword" asp-route-id="@Model.Id" method="post">
+            @Html.AntiForgeryToken()
+            <div class="card-body">
+                <p class="text-secondary mb-0">
+                    Genera una password temporal aleatoria para este usuario y lo obliga a cambiarla en su proximo login.
+                    La password temporal se mostrara <strong>una sola vez</strong> tras confirmar.
+                </p>
+            </div>
+            <div class="card-footer">
+                <button type="submit" class="btn btn-warning"
+                        onclick="return confirm('Vas a resetear la contrasena de @(usuario?.Username). El usuario debera cambiarla en su proximo login. Continuar?');">
+                    <i class="bi bi-arrow-clockwise me-1"></i> Generar password temporal
+                </button>
+            </div>
+        </form>
+    </div>
+}
 
 @section Scripts {
     <script>
@@ -113,10 +152,9 @@
                     e.preventDefault();
                     alert('Las contraseñas no coinciden.');
                 }
-                if (np.length < 6) {
-                    e.preventDefault();
-                    alert('La nueva contraseña debe tener al menos 6 caracteres.');
-                }
+                // Validaciones de policy (longitud minima, caracteres requeridos) son
+                // autoridad del servidor (IPasswordPolicyService). No se duplican en
+                // el cliente porque harian mentir a la UI si la policy cambia.
             });
         });
     </script>

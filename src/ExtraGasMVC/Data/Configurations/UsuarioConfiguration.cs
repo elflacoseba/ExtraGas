@@ -37,6 +37,20 @@ public class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
             .HasColumnName("ultimo_login")
             .HasColumnType("datetime");
 
+        builder.Property(u => u.IntentosFallidos)
+            .HasColumnName("intentos_fallidos")
+            .HasColumnType("smallint unsigned")
+            .HasDefaultValue(0);
+
+        builder.Property(u => u.BloqueadoHasta)
+            .HasColumnName("bloqueado_hasta")
+            .HasColumnType("datetime");
+
+        builder.Property(u => u.DebeCambiarPassword)
+            .HasColumnName("debe_cambiar_password")
+            .HasColumnType("tinyint(1)")
+            .HasDefaultValue(false);
+
         builder.Property(u => u.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("datetime")

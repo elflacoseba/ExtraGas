@@ -1,9 +1,11 @@
 using AutoMapper;
+using ExtraGasMVC.Configuration;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace ExtraGasMVC.Services.Implementations;
 
@@ -11,11 +13,16 @@ public class UsuarioService : IUsuarioService
 {
     private readonly ExtraGasDbContext _context;
     private readonly IMapper _mapper;
+    private readonly AuthLockoutOptions _lockout;
 
-    public UsuarioService(ExtraGasDbContext context, IMapper mapper)
+    public UsuarioService(
+        ExtraGasDbContext context,
+        IMapper mapper,
+        IOptions<AuthLockoutOptions> lockout)
     {
         _context = context;
         _mapper = mapper;
+        _lockout = lockout.Value;
     }
 
     public async Task<UsuarioDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
@@ -115,24 +122,58 @@ public class UsuarioService : IUsuarioService
         return usuario is null ? null : _mapper.Map<UsuarioDto>(usuario);
     }
 
-    public async Task<UsuarioDto?> ValidateAndLoadForAuthAsync(string username, string password, CancellationToken ct = default)
+    public async Task<LoginResult> ValidateAndLoadForAuthAsync(string username, string password, CancellationToken ct = default)
     {
         var usuario = await _context.Usuarios
-            .AsNoTracking()
             .IgnoreQueryFilters()
             .Include(u => u.Rol)
             .FirstOrDefaultAsync(u => u.Username == username, ct);
 
-        if (usuario is null) return null;
-        if (usuario.DeletedAt is not null) return null;
-        if (!usuario.Activo) return null;
-        if (!BCrypt.Net.BCrypt.Verify(password, usuario.PasswordHash)) return null;
+        if (usuario is null)
+            return LoginResult.Fail(attemptedUserId: null, LoginFailureReason.UserNotFound);
 
+        // Precedencia: DeletedAt antes que Activo. Si el usuario esta soft-deleted
+        // (independientemente de su Activo), reportamos UserDeleted para preservar
+        // la fidelidad del historial aunque se restaure Activo=true a posteriori.
+        if (usuario.DeletedAt is not null)
+            return LoginResult.Fail(attemptedUserId: usuario.Id, LoginFailureReason.UserDeleted);
+
+        if (!usuario.Activo)
+            return LoginResult.Fail(attemptedUserId: usuario.Id, LoginFailureReason.UserInactive);
+
+        // Lockout vigente: rechazar sin re-hashear (no delatar si la password era correcta).
+        if (usuario.BloqueadoHasta is not null && usuario.BloqueadoHasta > DateTime.UtcNow)
+            return LoginResult.Fail(attemptedUserId: usuario.Id, LoginFailureReason.LockedOut);
+
+        if (!BCrypt.Net.BCrypt.Verify(password, usuario.PasswordHash))
+        {
+            await HandleFailedAttemptAsync(usuario, ct);
+            return LoginResult.Fail(attemptedUserId: usuario.Id, LoginFailureReason.InvalidPassword);
+        }
+
+        // Éxito: resetear contador y lockout, actualizar último login.
+        usuario.IntentosFallidos = 0;
+        usuario.BloqueadoHasta = null;
         usuario.UltimoLogin = DateTime.UtcNow;
         usuario.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(ct);
 
-        return _mapper.Map<UsuarioDto>(usuario);
+        return LoginResult.Ok(_mapper.Map<UsuarioDto>(usuario));
+    }
+
+    private async Task HandleFailedAttemptAsync(Usuario usuario, CancellationToken ct)
+    {
+        // MaxFailedAttempts <= 0 desactiva el lockout (útil para tests o si se quiere apagar).
+        if (_lockout.MaxFailedAttempts <= 0)
+            return;
+
+        usuario.IntentosFallidos++;
+
+        if (usuario.IntentosFallidos >= _lockout.MaxFailedAttempts)
+            usuario.BloqueadoHasta = DateTime.UtcNow.AddMinutes(_lockout.LockoutMinutes);
+
+        usuario.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(ct);
     }
 
     public async Task<UsuarioDto> CreateAsync(CreateUsuarioDto dto, ulong? createdBy, CancellationToken ct = default)
@@ -209,10 +250,47 @@ public class UsuarioService : IUsuarioService
             return false;
 
         usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        usuario.DebeCambiarPassword = false;
         usuario.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(ct);
 
         return true;
+    }
+
+    public async Task ChangePasswordWithoutCurrentAsync(ulong id, string newPassword, CancellationToken ct = default)
+    {
+        var usuario = await _context.Usuarios
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.Id == id, ct);
+
+        if (usuario is null)
+            throw new KeyNotFoundException($"Usuario con Id {id} no encontrado.");
+
+        usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        usuario.DebeCambiarPassword = false;
+        usuario.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(ct);
+    }
+
+    public async Task<string> ResetPasswordAsync(ulong id, ulong? updatedBy, CancellationToken ct = default)
+    {
+        var usuario = await _context.Usuarios
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.Id == id, ct);
+
+        if (usuario is null)
+            throw new KeyNotFoundException($"Usuario con Id {id} no encontrado.");
+
+        var temporaryPassword = TemporaryPasswordGenerator.Generate(12);
+        usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(temporaryPassword);
+        usuario.DebeCambiarPassword = true;
+        usuario.IntentosFallidos = 0;
+        usuario.BloqueadoHasta = null;
+        usuario.UpdatedAt = DateTime.UtcNow;
+        usuario.UpdatedBy = updatedBy;
+        await _context.SaveChangesAsync(ct);
+
+        return temporaryPassword;
     }
 
     private async Task EnrichDtoAsync(UsuarioDto dto, Usuario usuario, CancellationToken ct)

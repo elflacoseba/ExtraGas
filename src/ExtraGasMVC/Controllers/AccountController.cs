@@ -1,23 +1,40 @@
 using System.Security.Claims;
+using ExtraGasMVC.Configuration;
+using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Services;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace ExtraGasMVC.Controllers;
 
-[AllowAnonymous]
-public class AccountController : Controller
+public class AccountController : BaseController
 {
     private readonly IUsuarioService _usuarioService;
+    private readonly IAuditoriaLoginService _auditoriaService;
+    private readonly IPasswordPolicyService _passwordPolicy;
+    private readonly ILogger<AccountController> _logger;
+    private readonly PasswordPolicyOptions _passwordOptions;
 
-    public AccountController(IUsuarioService usuarioService)
+    public AccountController(
+        IUsuarioService usuarioService,
+        IAuditoriaLoginService auditoriaService,
+        IPasswordPolicyService passwordPolicy,
+        ILogger<AccountController> logger,
+        IOptions<PasswordPolicyOptions> passwordOptions)
     {
         _usuarioService = usuarioService;
+        _auditoriaService = auditoriaService;
+        _passwordPolicy = passwordPolicy;
+        _logger = logger;
+        _passwordOptions = passwordOptions.Value;
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public IActionResult Login(string? returnUrl = null)
     {
         if (User.Identity?.IsAuthenticated == true)
@@ -29,6 +46,7 @@ public class AccountController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [AllowAnonymous]
     public async Task<IActionResult> Login(string usuario, string password, string? returnUrl = null)
     {
         if (string.IsNullOrWhiteSpace(usuario) || string.IsNullOrWhiteSpace(password))
@@ -37,13 +55,43 @@ public class AccountController : Controller
             return View();
         }
 
-        var userDto = await _usuarioService.ValidateAndLoadForAuthAsync(usuario, password);
-        if (userDto is null)
+        var loginResult = await _usuarioService.ValidateAndLoadForAuthAsync(usuario, password);
+
+        // Registrar el intento en auditoria (siempre, exista o no el usuario).
+        // usuarioId lleva el id del usuario conocido incluso si el login fallo por
+        // inactivo/eliminado/lockout/password (ver LoginResult.AttemptedUserId).
+        // La auditoria esta desacoplada del flujo de login: si la insercion falla,
+        // se registra el error y se continua; no debe bloquear la autenticacion.
+        try
         {
-            ModelState.AddModelError(string.Empty, "Usuario o contrasena invalidos.");
+            await _auditoriaService.RecordAsync(
+                usernameIntentado: usuario,
+                usuarioId: loginResult.AttemptedUserId,
+                exito: loginResult.Success,
+                motivoFallo: loginResult.FailureReason,
+                ipOrigen: GetClientIp(),
+                userAgent: GetUserAgent(),
+                ct: default);
+        }
+        catch (Exception ex)
+        {
+            var sanitizedUsuario = (usuario ?? string.Empty)
+                .Replace("\r", string.Empty)
+                .Replace("\n", string.Empty);
+
+            _logger.LogError(ex,
+                "Fallo registrando intento de login para '{Username}' (exito={Success}, motivo={Reason}). " +
+                "El login continua normalmente.",
+                sanitizedUsuario, loginResult.Success, loginResult.FailureReason);
+        }
+
+        if (!loginResult.Success)
+        {
+            ModelState.AddModelError(string.Empty, MapLoginFailureToMessage(loginResult.FailureReason));
             return View();
         }
 
+        var userDto = loginResult.User!;
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, userDto.Id.ToString()),
@@ -64,14 +112,94 @@ public class AccountController : Controller
 
         TempData["Success"] = "Sesion iniciada.";
 
+        // Forzar cambio de password si fue marcado por un reset admin-assisted.
+        if (userDto.DebeCambiarPassword)
+        {
+            TempData["Warning"] = "Tu password fue reseteada por un administrador. Debes cambiarla antes de continuar.";
+            return RedirectToAction(nameof(ChangePassword));
+        }
+
         if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
             return Redirect(returnUrl);
 
         return RedirectToAction("Index", "Home");
     }
 
+    [HttpGet]
+    [Authorize]
+    public IActionResult ChangePassword()
+    {
+        ViewBag.PasswordPolicy = _passwordOptions;
+        return View(new AccountChangePasswordDto());
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword(AccountChangePasswordDto dto, CancellationToken ct = default)
+    {
+        if (!ModelState.IsValid)
+            return View(dto);
+
+        var policyResult = _passwordPolicy.Validate(dto.NewPassword);
+        if (!policyResult.IsValid)
+        {
+            foreach (var err in policyResult.Errors)
+                ModelState.AddModelError(nameof(dto.NewPassword), err);
+            return View(dto);
+        }
+
+        var userId = GetCurrentUserId();
+        if (userId is null)
+            return RedirectToAction(nameof(Logout));
+
+        try
+        {
+            await _usuarioService.ChangePasswordWithoutCurrentAsync(userId.Value, dto.NewPassword, ct);
+            TempData["Success"] = "Contrasena actualizada correctamente.";
+
+            // Re-issue el cookie claim para que el flag refreshed no quede inconsistente.
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction(nameof(Login));
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, $"No se pudo actualizar la contrasena: {ex.Message}");
+            return View(dto);
+        }
+    }
+
+    private static string MapLoginFailureToMessage(LoginFailureReason reason) => reason switch
+    {
+        LoginFailureReason.LockedOut =>
+            "Cuenta bloqueada temporalmente por demasiados intentos fallidos. Intenta nuevamente en unos minutos.",
+        LoginFailureReason.UserInactive =>
+            "El usuario esta inactivo. Contacta a un administrador.",
+        // UserNotFound, UserDeleted, InvalidPassword: mensaje generico para no delatar
+        // si el usuario existe.
+        _ => "Usuario o contrasena invalidos."
+    };
+
+    private string? GetClientIp()
+    {
+        // Si el middleware UseForwardedHeaders esta configurado con KnownProxies
+        // o KnownNetworks, HttpContext.Connection.RemoteIpAddress ya viene
+        // reescrito con el primer IP de X-Forwarded-For de confianza. Sin esa
+        // config, devolvemos la IP de la conexion directa. Configurar
+        // ForwardedHeaders:KnownProxies/KnownNetworks en appsettings para
+        // entornos detras de reverse proxy (Caddy, nginx, IIS).
+        return HttpContext.Connection.RemoteIpAddress?.ToString();
+    }
+
+    private string? GetUserAgent()
+    {
+        var ua = HttpContext.Request.Headers.UserAgent.ToString();
+        return string.IsNullOrWhiteSpace(ua) ? null : (ua.Length > 255 ? ua[..255] : ua);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [AllowAnonymous]
     public async Task<IActionResult> Logout()
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -79,5 +207,6 @@ public class AccountController : Controller
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public IActionResult AccessDenied() => View();
 }

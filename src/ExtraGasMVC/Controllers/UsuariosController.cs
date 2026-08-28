@@ -9,10 +9,12 @@ namespace ExtraGasMVC.Controllers;
 public class UsuariosController : BaseController
 {
     private readonly IUsuarioService _usuarioService;
+    private readonly IPasswordPolicyService _passwordPolicy;
 
-    public UsuariosController(IUsuarioService usuarioService)
+    public UsuariosController(IUsuarioService usuarioService, IPasswordPolicyService passwordPolicy)
     {
         _usuarioService = usuarioService;
+        _passwordPolicy = passwordPolicy;
     }
 
     public async Task<IActionResult> Index(string? busqueda, ulong? rolId, bool soloActivos = false,
@@ -53,6 +55,15 @@ public class UsuariosController : BaseController
             return View(dto);
         }
 
+        var policyResult = _passwordPolicy.Validate(dto.Password);
+        if (!policyResult.IsValid)
+        {
+            foreach (var err in policyResult.Errors)
+                ModelState.AddModelError(nameof(dto.Password), err);
+            ViewBag.EmpleadosSinUsuario = await _usuarioService.GetEmpleadosSinUsuarioAsync(ct);
+            return View(dto);
+        }
+
         var existing = await _usuarioService.GetByUsernameAsync(dto.Username, ct);
         if (existing is not null)
         {
@@ -89,8 +100,19 @@ public class UsuariosController : BaseController
             Activo = usuario.Activo
         };
 
+        // TempData de la password temporal se consume en este render: Peek para leer
+        // sin borrarla del storage, Remove para invalidarla. Asi un refresh posterior
+        // del admin NO re-mostrara la password (cumpliendo "se muestra una sola vez").
+        var temporaryPassword = TempData.Peek("TemporaryPassword") as string;
+        var temporaryPasswordUsername = TempData.Peek("TemporaryPasswordUsername") as string;
+        if (temporaryPassword is not null) TempData.Remove("TemporaryPassword");
+        if (temporaryPasswordUsername is not null) TempData.Remove("TemporaryPasswordUsername");
+
+        ViewBag.TemporaryPassword = temporaryPassword;
+        ViewBag.TemporaryPasswordUsername = temporaryPasswordUsername;
         ViewBag.Usuario = usuario;
         ViewBag.Roles = await _usuarioService.GetRolesAsync(ct);
+        ViewBag.CurrentUserId = GetCurrentUserId();
         return View(updateDto);
     }
 
@@ -142,6 +164,36 @@ public class UsuariosController : BaseController
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(ulong id, CancellationToken ct = default)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (id == currentUserId)
+        {
+            TempData["Error"] = "No puede resetear su propia contrasena. Use el formulario de cambio.";
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        try
+        {
+            var temporaryPassword = await _usuarioService.ResetPasswordAsync(id, currentUserId, ct);
+            TempData["TemporaryPassword"] = temporaryPassword;
+            TempData["TemporaryPasswordUsername"] = (await _usuarioService.GetByIdAsync(id, ct))?.Username;
+            TempData["Success"] = "Contrasena reseteada. La password temporal se muestra debajo UNA SOLA VEZ.";
+        }
+        catch (KeyNotFoundException)
+        {
+            TempData["Error"] = "No se encontro el usuario.";
+        }
+        catch (Exception ex)
+        {
+            TempData["Error"] = $"No se pudo resetear la contrasena: {ex.Message}";
+        }
+
+        return RedirectToAction(nameof(Edit), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> ChangePassword(ulong id, ChangePasswordDto dto, CancellationToken ct = default)
     {
         dto.UsuarioId = id;
@@ -149,6 +201,13 @@ public class UsuariosController : BaseController
         if (!ModelState.IsValid)
         {
             TempData["Error"] = "Verifique los datos ingresados.";
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        var policyResult = _passwordPolicy.Validate(dto.NewPassword);
+        if (!policyResult.IsValid)
+        {
+            TempData["Error"] = string.Join(" ", policyResult.Errors);
             return RedirectToAction(nameof(Edit), new { id });
         }
 

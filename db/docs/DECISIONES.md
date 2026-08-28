@@ -231,6 +231,35 @@ Documento de decisiones (ADR-style) y supuestos del sistema **ExtraGas**.
 
 ---
 
+## 14. Autenticacion propia (sin ASP.NET Core Identity) — lockout, politica configurable, auditoria y recuperacion admin-assisted
+
+**Contexto:** el sistema necesitaba endurecer la autenticacion (lockout por intentos fallidos, politica de password configurable, auditoria de logins, recuperacion admin-assisted) pero sin migrar a ASP.NET Core Identity por costo de adopcion y dependencia externa.
+
+**Decisiones tomadas:**
+
+1. **Mensaje generico anti-user-enumeration**: el login devuelve el mismo texto ("Usuario o contrasena invalidos") para `UserNotFound`, `UserDeleted` e `InvalidPassword`. Solo `LockedOut` y `UserInactive` se diferencian porque el usuario legitimo necesita saber por que no entra. Esto evita que un atacante use el endpoint para enumerar usernames validos.
+
+2. **Lockout sin re-hashear**: cuando una cuenta esta bloqueada (`bloqueado_hasta > NOW()`), `ValidateAndLoadForAuthAsync` rechaza antes de invocar `BCrypt.Verify`. Esto previene timing-attack: no se puede deducir si la password era correcta a partir del tiempo de respuesta.
+
+3. **`LoginResult` + `LoginFailureReason` como contrato**: el servicio no devuelve `UsuarioDto? null` sino un record `LoginResult(User, FailureReason, AttemptedUserId)`. Esto permite propagar el motivo de fallo a la UI (para mensajes especificos) y a la auditoria (para `motivo_fallo`). `AttemptedUserId` lleva el id del usuario conocido aun cuando el login fallo por inactivo/eliminado/lockout/password — clave para vincular los intentos fallidos al usuario real en `auditoria_logins`.
+
+4. **Auditoria desacoplada del login**: `RecordAsync` se invoca dentro de un `try/catch` que loguea con `ILogger` y no propaga. Si la tabla `auditoria_logins` tiene un problema (constraint, deadlock), el login sigue funcionando. La trazabilidad se prefiere sobre garantia absoluta de persistencia; un follow-up podria migrar a outbox.
+
+5. **PasswordPolicy + AuthLockout via `IOptions<>`**: ambas opciones se bindean al arranque. Cambios requieren reinicio. Out-of-scope la migracion a `IOptionsMonitor<>`.
+
+6. **`TemporaryPasswordGenerator` criptografico**: usa `RandomNumberGenerator.GetInt32` (no `Random`), garantiza lower/upper/digit/symbol en las primeras 4 posiciones y aplica Fisher-Yates al final. Resultado: passwords no predecibles que cumplen la policy por construccion.
+
+7. **ForwardedHeaders opcional**: detras de un reverse proxy, `HttpContext.Connection.RemoteIpAddress` ya viene reescrito por el middleware `UseForwardedHeaders` cuando hay `KnownProxies`/`KnownNetworks` configurados. Sin config, ASP.NET falla a "closed" (no reescribe), evitando IP spoofing. Configurar `ForwardedHeaders` en appsettings por entorno.
+
+8. **TempData una-vez para password temporal**: el POST de `ResetPassword` asigna `TempData["TemporaryPassword"]` y redirige a `Edit`. El GET de `Edit` usa `TempData.Peek` + `TempData.Remove` para asegurar que la password se muestre exactamente una vez (no reaparece en refresh). El modelo de cookie-based TempData del ASP.NET Core hace esto seguro: el `Remove` actualiza la cookie, el siguiente request no la ve.
+
+**Implicancia:**
+- No introducir ASP.NET Core Identity sin antes evaluar estas primitivas — la mayoria del valor de Identity (lockout, policy, hash) ya esta cubierta por esta capa.
+- Los archivos `Configuration/AuthLockoutOptions.cs` y `Configuration/PasswordPolicyOptions.cs` son la unica fuente de verdad para esos tunables. Cambiar defaults requiere migracion conceptual, no de datos.
+- Tests automatizados de `PasswordPolicyService.Validate`, `UsuarioService.HandleFailedAttemptAsync` y `TemporaryPasswordGenerator.Generate` quedan pendientes como deuda explicita.
+
+---
+
 ## Supuestos explícitos (no validados con el usuario)
 
 1. No hay delivery con zonas / tarifas distintas. Un pedido = una dirección.
