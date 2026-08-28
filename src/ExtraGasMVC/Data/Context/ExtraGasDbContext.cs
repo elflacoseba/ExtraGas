@@ -25,6 +25,7 @@ public class ExtraGasDbContext : DbContext
     public DbSet<Usuario> Usuarios => Set<Usuario>();
     public DbSet<Empleado> Empleados => Set<Empleado>();
     public DbSet<AuditoriaLogin> AuditoriaLogins => Set<AuditoriaLogin>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<Cliente> Clientes => Set<Cliente>();
     public DbSet<ClienteContacto> ClienteContactos => Set<ClienteContacto>();
     public DbSet<Proveedor> Proveedores => Set<Proveedor>();
