@@ -1,4 +1,5 @@
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -25,13 +26,17 @@ public class AuditoriaLoginsController : Controller
     {
         var resultado = await _auditoriaService.SearchAsync(busqueda, ip, soloFallidos, pagina, tamanio, ct);
 
-        ViewBag.Busqueda = busqueda;
-        ViewBag.Ip = ip;
-        ViewBag.SoloFallidos = soloFallidos;
-        ViewBag.Pagina = resultado.Pagina;
-        ViewBag.Tamanio = resultado.Tamanio;
-        ViewBag.Total = resultado.Total;
+        var viewModel = new AuditoriaLoginsIndexViewModel
+        {
+            Items = resultado.Items,
+            Busqueda = busqueda,
+            Ip = ip,
+            SoloFallidos = soloFallidos,
+            Pagina = resultado.Pagina,
+            Tamanio = resultado.Tamanio,
+            Total = resultado.Total,
+        };
 
-        return View(resultado.Items);
+        return View(viewModel);
     }
 }

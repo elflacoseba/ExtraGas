@@ -1,14 +1,7 @@
-@model IEnumerable<ExtraGasMVC.DTOs.AuditoriaLoginListDto>
+@model ExtraGasMVC.Models.ViewModels.AuditoriaLoginsIndexViewModel
 @using ExtraGasMVC.Extensions
 @{
     ViewData["Title"] = "Auditoria de logins";
-    var busqueda = ViewBag.Busqueda as string;
-    var ip = ViewBag.Ip as string;
-    var soloFallidos = (bool)(ViewBag.SoloFallidos ?? false);
-    var pagina = (int)(ViewBag.Pagina ?? 1);
-    var tamanio = (int)(ViewBag.Tamanio ?? 50);
-    var total = (int)(ViewBag.Total ?? 0);
-    var totalPaginas = tamanio > 0 ? (int)Math.Ceiling(total / (double)tamanio) : 0;
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
     {
         new() { Label = "Sistema" },
@@ -21,15 +14,15 @@
         <form method="get" class="row g-2 align-items-end">
             <div class="col-md-4">
                 <label class="form-label small mb-1" for="busqueda">Username intentado</label>
-                <input type="text" id="busqueda" name="busqueda" value="@busqueda" class="form-control" placeholder="ej: jperez" />
+                <input type="text" id="busqueda" name="busqueda" value="@Model.Busqueda" class="form-control" placeholder="ej: jperez" />
             </div>
             <div class="col-md-3">
                 <label class="form-label small mb-1" for="ip">IP de origen</label>
-                <input type="text" id="ip" name="ip" value="@ip" class="form-control" placeholder="ej: 192.168.1.10" />
+                <input type="text" id="ip" name="ip" value="@Model.Ip" class="form-control" placeholder="ej: 192.168.1.10" />
             </div>
             <div class="col-md-2">
                 <div class="form-check mt-3">
-                    <input class="form-check-input" type="checkbox" id="soloFallidos" name="soloFallidos" value="true" @(soloFallidos ? "checked" : "") />
+                    <input class="form-check-input" type="checkbox" id="soloFallidos" name="soloFallidos" value="true" @(Model.SoloFallidos ? "checked" : "") />
                     <input type="hidden" name="soloFallidos" value="false" />
                     <label class="form-check-label" for="soloFallidos">Solo fallidos</label>
                 </div>
@@ -58,11 +51,11 @@
                 </tr>
             </thead>
             <tbody>
-                @if (!Model.Any())
+                @if (Model.Items.Count == 0)
                 {
                     <tr><td colspan="7" class="text-center py-4 text-secondary">No hay intentos que coincidan con los filtros.</td></tr>
                 }
-                @foreach (var a in Model)
+                @foreach (var a in Model.Items)
                 {
                     <tr>
                         <td>@a.CreatedAt.ToShortDateTime()</td>
@@ -90,37 +83,37 @@
     </div>
     <div class="card-footer clearfix">
         <div class="float-end">
-            <small class="text-secondary me-2">@total registro@(total == 1 ? "" : "s")</small>
+            <small class="text-secondary me-2">@Model.Total registro@(Model.Total == 1 ? "" : "s")</small>
         </div>
-        @if (totalPaginas > 1)
+        @if (Model.TotalPaginas > 1)
         {
             <nav>
                 <ul class="pagination pagination-sm m-0 float-end">
-                    @if (pagina > 1)
+                    @if (Model.Pagina > 1)
                     {
                         <li class="page-item">
                             <a class="page-link"
                                asp-action="Index"
-                               asp-route-busqueda="@busqueda"
-                               asp-route-ip="@ip"
-                               asp-route-soloFallidos="@soloFallidos"
-                               asp-route-pagina="@(pagina - 1)"
-                               asp-route-tamanio="@tamanio">&laquo;</a>
+                               asp-route-busqueda="@Model.Busqueda"
+                               asp-route-ip="@Model.Ip"
+                               asp-route-soloFallidos="@Model.SoloFallidos"
+                               asp-route-pagina="@(Model.Pagina - 1)"
+                               asp-route-tamanio="@Model.Tamanio">&laquo;</a>
                         </li>
                     }
                     @{
-                        var start = Math.Max(1, pagina - 2);
-                        var end = Math.Min(totalPaginas, pagina + 2);
+                        var start = Math.Max(1, Model.Pagina - 2);
+                        var end = Math.Min(Model.TotalPaginas, Model.Pagina + 2);
                         if (start > 1)
                         {
                             <li class="page-item">
                                 <a class="page-link"
                                    asp-action="Index"
-                                   asp-route-busqueda="@busqueda"
-                                   asp-route-ip="@ip"
-                                   asp-route-soloFallidos="@soloFallidos"
+                                   asp-route-busqueda="@Model.Busqueda"
+                                   asp-route-ip="@Model.Ip"
+                                   asp-route-soloFallidos="@Model.SoloFallidos"
                                    asp-route-pagina="1"
-                                   asp-route-tamanio="@tamanio">1</a>
+                                   asp-route-tamanio="@Model.Tamanio">1</a>
                             </li>
                             if (start > 2)
                             {
@@ -129,43 +122,43 @@
                         }
                         for (var i = start; i <= end; i++)
                         {
-                            <li class="page-item @(i == pagina ? "active" : "")">
+                            <li class="page-item @(i == Model.Pagina ? "active" : "")">
                                 <a class="page-link"
                                    asp-action="Index"
-                                   asp-route-busqueda="@busqueda"
-                                   asp-route-ip="@ip"
-                                   asp-route-soloFallidos="@soloFallidos"
+                                   asp-route-busqueda="@Model.Busqueda"
+                                   asp-route-ip="@Model.Ip"
+                                   asp-route-soloFallidos="@Model.SoloFallidos"
                                    asp-route-pagina="@i"
-                                   asp-route-tamanio="@tamanio">@i</a>
+                                   asp-route-tamanio="@Model.Tamanio">@i</a>
                             </li>
                         }
-                        if (end < totalPaginas)
+                        if (end < Model.TotalPaginas)
                         {
-                            if (end < totalPaginas - 1)
+                            if (end < Model.TotalPaginas - 1)
                             {
                                 <li class="page-item disabled"><span class="page-link">...</span></li>
                             }
                             <li class="page-item">
                                 <a class="page-link"
                                    asp-action="Index"
-                                   asp-route-busqueda="@busqueda"
-                                   asp-route-ip="@ip"
-                                   asp-route-soloFallidos="@soloFallidos"
-                                   asp-route-pagina="@totalPaginas"
-                                   asp-route-tamanio="@tamanio">@totalPaginas</a>
+                                   asp-route-busqueda="@Model.Busqueda"
+                                   asp-route-ip="@Model.Ip"
+                                   asp-route-soloFallidos="@Model.SoloFallidos"
+                                   asp-route-pagina="@Model.TotalPaginas"
+                                   asp-route-tamanio="@Model.Tamanio">@Model.TotalPaginas</a>
                             </li>
                         }
                     }
-                    @if (pagina < totalPaginas)
+                    @if (Model.Pagina < Model.TotalPaginas)
                     {
                         <li class="page-item">
                             <a class="page-link"
                                asp-action="Index"
-                               asp-route-busqueda="@busqueda"
-                               asp-route-ip="@ip"
-                               asp-route-soloFallidos="@soloFallidos"
-                               asp-route-pagina="@(pagina + 1)"
-                               asp-route-tamanio="@tamanio">&raquo;</a>
+                               asp-route-busqueda="@Model.Busqueda"
+                               asp-route-ip="@Model.Ip"
+                               asp-route-soloFallidos="@Model.SoloFallidos"
+                               asp-route-pagina="@(Model.Pagina + 1)"
+                               asp-route-tamanio="@Model.Tamanio">&raquo;</a>
                         </li>
                     }
                 </ul>
