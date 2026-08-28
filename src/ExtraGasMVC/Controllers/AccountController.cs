@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ExtraGasMVC.Configuration;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services;
 using ExtraGasMVC.Services.Interfaces;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace ExtraGasMVC.Controllers;
 
@@ -15,17 +17,20 @@ public class AccountController : BaseController
     private readonly IAuditoriaLoginService _auditoriaService;
     private readonly IPasswordPolicyService _passwordPolicy;
     private readonly ILogger<AccountController> _logger;
+    private readonly PasswordPolicyOptions _passwordOptions;
 
     public AccountController(
         IUsuarioService usuarioService,
         IAuditoriaLoginService auditoriaService,
         IPasswordPolicyService passwordPolicy,
-        ILogger<AccountController> logger)
+        ILogger<AccountController> logger,
+        IOptions<PasswordPolicyOptions> passwordOptions)
     {
         _usuarioService = usuarioService;
         _auditoriaService = auditoriaService;
         _passwordPolicy = passwordPolicy;
         _logger = logger;
+        _passwordOptions = passwordOptions.Value;
     }
 
     [HttpGet]
@@ -120,6 +125,7 @@ public class AccountController : BaseController
     [Authorize]
     public IActionResult ChangePassword()
     {
+        ViewBag.PasswordPolicy = _passwordOptions;
         return View(new AccountChangePasswordDto());
     }
 
