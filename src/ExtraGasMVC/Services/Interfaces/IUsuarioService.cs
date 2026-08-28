@@ -2,6 +2,7 @@ using ExtraGasMVC.DTOs;
 
 namespace ExtraGasMVC.Services.Interfaces;
 
+
 public interface IUsuarioService
 {
     Task<UsuarioDto?> GetByIdAsync(ulong id, CancellationToken ct = default);
@@ -15,5 +16,5 @@ public interface IUsuarioService
     Task<UsuarioDto> UpdateAsync(UpdateUsuarioDto dto, ulong? updatedBy, CancellationToken ct = default);
     Task<bool> DeleteAsync(ulong id, CancellationToken ct = default);
     Task<bool> ChangePasswordAsync(ulong id, string currentPassword, string newPassword, CancellationToken ct = default);
-    Task<UsuarioDto?> ValidateAndLoadForAuthAsync(string username, string password, CancellationToken ct = default);
+    Task<LoginResult> ValidateAndLoadForAuthAsync(string username, string password, CancellationToken ct = default);
 }

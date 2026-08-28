@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ExtraGasMVC.Services;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -37,13 +38,14 @@ public class AccountController : Controller
             return View();
         }
 
-        var userDto = await _usuarioService.ValidateAndLoadForAuthAsync(usuario, password);
-        if (userDto is null)
+        var loginResult = await _usuarioService.ValidateAndLoadForAuthAsync(usuario, password);
+        if (!loginResult.Success)
         {
-            ModelState.AddModelError(string.Empty, "Usuario o contrasena invalidos.");
+            ModelState.AddModelError(string.Empty, MapLoginFailureToMessage(loginResult.FailureReason));
             return View();
         }
 
+        var userDto = loginResult.User!;
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, userDto.Id.ToString()),
@@ -69,6 +71,17 @@ public class AccountController : Controller
 
         return RedirectToAction("Index", "Home");
     }
+
+    private static string MapLoginFailureToMessage(LoginFailureReason reason) => reason switch
+    {
+        LoginFailureReason.LockedOut =>
+            "Cuenta bloqueada temporalmente por demasiados intentos fallidos. Intenta nuevamente en unos minutos.",
+        LoginFailureReason.UserInactive =>
+            "El usuario esta inactivo. Contacta a un administrador.",
+        // UserNotFound, UserDeleted, InvalidPassword: mensaje generico para no delatar
+        // si el usuario existe.
+        _ => "Usuario o contrasena invalidos."
+    };
 
     [HttpPost]
     [ValidateAntiForgeryToken]

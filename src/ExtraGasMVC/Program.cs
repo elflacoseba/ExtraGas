@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ExtraGasMVC.Configuration;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Mappings;
 using ExtraGasMVC.Services.Implementations;
@@ -30,6 +31,10 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("ADMIN"));
     options.AddPolicy("OperadorOrAdmin", policy => policy.RequireRole("ADMIN", "OPERADOR"));
 });
+
+// Bind AuthLockoutOptions desde appsettings (sección "Auth:Lockout").
+builder.Services.Configure<AuthLockoutOptions>(
+    builder.Configuration.GetSection(AuthLockoutOptions.SectionName));
 
 // Registrar AutoMapper
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
