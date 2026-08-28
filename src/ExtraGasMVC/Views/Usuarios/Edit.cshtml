@@ -177,7 +177,19 @@
                 var cp = document.getElementById('ConfirmPassword').value;
                 if (np !== cp) {
                     e.preventDefault();
-                    alert('Las contraseñas no coinciden.');
+                    // Modal de error (no toast): requiere atencion del usuario
+                    // porque bloquea el submit. SweetAlert2 ya esta cargado via
+                    // _Scripts.cshtml; fallback a alert() solo si Swal no existe.
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Las contrasenas no coinciden',
+                            text: 'Verifique que la nueva contrasena y su confirmacion sean iguales.',
+                            confirmButtonColor: '#dc3545'
+                        });
+                    } else {
+                        alert('Las contrasenas no coinciden.');
+                    }
                 }
                 // Validaciones de policy (longitud minima, caracteres requeridos) son
                 // autoridad del servidor (IPasswordPolicyService). No se duplican en
