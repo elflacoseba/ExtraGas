@@ -1,9 +1,13 @@
+using System.Data.Common;
+using System.Security.Cryptography;
+using System.Text;
 using AutoMapper;
 using ExtraGasMVC.Configuration;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -11,18 +15,83 @@ namespace ExtraGasMVC.Services.Implementations;
 
 public class UsuarioService : IUsuarioService
 {
+    /// <summary>Vigencia del token de reset, en horas.</summary>
+    private const int TokenLifetimeHours = 1;
+
+    /// <summary>Costo BCrypt usado al setear la contrasena desde el flujo de reset.</summary>
+    private const int ResetPasswordWorkFactor = 11;
+
+    /// <summary>Mensaje generico: nunca expone detalle interno al usuario final.</summary>
+    private const string GenericErrorMessage = "No se pudo procesar la solicitud. Intente nuevamente.";
+
     private readonly ExtraGasDbContext _context;
     private readonly IMapper _mapper;
     private readonly AuthLockoutOptions _lockout;
+    private readonly IPasswordPolicyService _passwordPolicy;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly EmailOptions _emailOptions;
+    private readonly ILogger<UsuarioService> _logger;
 
     public UsuarioService(
         ExtraGasDbContext context,
         IMapper mapper,
-        IOptions<AuthLockoutOptions> lockout)
+        IOptions<AuthLockoutOptions> lockout,
+        IPasswordPolicyService passwordPolicy,
+        IServiceScopeFactory scopeFactory,
+        IOptions<EmailOptions> emailOptions,
+        ILogger<UsuarioService> logger)
     {
         _context = context;
         _mapper = mapper;
         _lockout = lockout.Value;
+        _passwordPolicy = passwordPolicy;
+        _scopeFactory = scopeFactory;
+        _emailOptions = emailOptions.Value;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Genera un token raw criptograficamente seguro (32 bytes) en base64url,
+    /// 43 caracteres sin padding. El raw solo viaja por email: nunca se persiste.
+    /// </summary>
+    private static string GenerateRawToken()
+    {
+        var raw = RandomNumberGenerator.GetBytes(32);
+        return Base64UrlTextEncoder.Encode(raw);
+    }
+
+    /// <summary>
+    /// Calcula el SHA-256 hex (minusculas, 64 chars) del token raw.
+    /// Es lo unico que se guarda en <c>password_reset_tokens.token_hash</c>.
+    /// </summary>
+    private static string HashToken(string rawToken)
+    {
+        Span<byte> hash = stackalloc byte[32];
+        SHA256.HashData(Encoding.UTF8.GetBytes(rawToken), hash);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Despacha un email sin bloquear la request. SMTP puede tardar segundos y
+    /// un fallo de transporte no debe afectar la respuesta HTTP.
+    /// Resuelve un <see cref="IEmailSender"/> desde un scope nuevo porque el scope
+    /// de la request ya puede estar dispuesto cuando corre esta tarea.
+    /// </summary>
+    private void SendEmailFireAndForget(string to, string subject, string body)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var sender = scope.ServiceProvider.GetRequiredService<IEmailSender>();
+                await sender.SendAsync(to, subject, body, ct: CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fallo el envio del email a {Recipient}", to);
+            }
+        });
     }
 
     public async Task<UsuarioDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
@@ -291,6 +360,151 @@ public class UsuarioService : IUsuarioService
         await _context.SaveChangesAsync(ct);
 
         return temporaryPassword;
+    }
+
+    public async Task RequestPasswordResetAsync(string email, string? ipAddress, string? userAgent, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return;
+
+        var normalizedEmail = email.Trim();
+
+        var usuario = await _context.Usuarios
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.Email == normalizedEmail && u.Activo && u.DeletedAt == null, ct);
+
+        // Anti-enumeracion: email desconocido, usuario inactivo/borrado o sin
+        // email cargado => salimos en silencio, sin escribir ni enviar nada.
+        if (usuario is null || string.IsNullOrWhiteSpace(usuario.Email))
+            return;
+
+        var rawToken = GenerateRawToken();
+        var now = DateTime.UtcNow;
+
+        var token = new PasswordResetToken
+        {
+            UsuarioId = usuario.Id,
+            TokenHash = HashToken(rawToken),
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+            ExpiresAt = now.AddHours(TokenLifetimeHours),
+            CreatedAt = now,
+            UpdatedAt = now,
+            CreatedBy = null,
+            UpdatedBy = null
+        };
+
+        try
+        {
+            _context.PasswordResetTokens.Add(token);
+            await _context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex)
+        {
+            // Incluye la colision de uk_token_hash (practicamente imposible en 2^256).
+            _logger.LogError(ex, "No se pudo persistir el token de reset del usuario {UsuarioId}", usuario.Id);
+            return;
+        }
+
+        var resetUrl = $"{_emailOptions.BaseUrl.TrimEnd('/')}/Account/ResetPassword?token={rawToken}";
+
+        SendEmailFireAndForget(
+            usuario.Email,
+            EmailTemplates.ResetLinkSubject,
+            EmailTemplates.ResetLink(usuario.Username, resetUrl));
+    }
+
+    public async Task<ConsumeResetTokenResult> ConsumePasswordResetTokenAsync(string rawToken, string newPassword, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(rawToken))
+            return new ConsumeResetTokenResult(ConsumeResetTokenOutcome.InvalidToken, "Enlace inválido.");
+
+        var policy = _passwordPolicy.Validate(newPassword);
+        if (!policy.IsValid)
+            return new ConsumeResetTokenResult(ConsumeResetTokenOutcome.WeakPassword, string.Join(" ", policy.Errors));
+
+        var tokenHash = HashToken(rawToken);
+        var now = DateTime.UtcNow;
+
+        try
+        {
+            // Uso unico: el gate es el rows-affected del UPDATE atomico, no un SELECT
+            // previo. InnoDB serializa los intentos concurrentes via uk_token_hash.
+            var rowsAffected = await _context.PasswordResetTokens
+                .IgnoreQueryFilters()
+                .Where(rt => rt.TokenHash == tokenHash
+                          && rt.UsedAt == null
+                          && rt.ExpiresAt > now
+                          && rt.DeletedAt == null)
+                .ExecuteUpdateAsync(
+                    s => s
+                        .SetProperty(rt => rt.UsedAt, (DateTime?)now)
+                        .SetProperty(rt => rt.UpdatedAt, now),
+                    ct);
+
+            if (rowsAffected == 0)
+                return await DiagnoseFailedConsumeAsync(tokenHash, now, ct);
+
+            var usuarioId = await _context.PasswordResetTokens
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(rt => rt.TokenHash == tokenHash)
+                .Select(rt => rt.UsuarioId)
+                .FirstOrDefaultAsync(ct);
+
+            var usuario = await _context.Usuarios
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Id == usuarioId, ct);
+
+            if (usuario is null)
+            {
+                _logger.LogError("Token de reset consumido pero el usuario {UsuarioId} no existe.", usuarioId);
+                return new ConsumeResetTokenResult(ConsumeResetTokenOutcome.UnknownError, GenericErrorMessage);
+            }
+
+            usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword, workFactor: ResetPasswordWorkFactor);
+            usuario.DebeCambiarPassword = false;
+            usuario.UpdatedAt = now;
+            await _context.SaveChangesAsync(ct);
+
+            if (!string.IsNullOrWhiteSpace(usuario.Email))
+            {
+                SendEmailFireAndForget(
+                    usuario.Email,
+                    EmailTemplates.PasswordChangedSubject,
+                    EmailTemplates.PasswordChanged(usuario.Username));
+            }
+
+            return new ConsumeResetTokenResult(ConsumeResetTokenOutcome.Success);
+        }
+        catch (Exception ex) when (ex is DbUpdateException or DbException)
+        {
+            _logger.LogError(ex, "Error de base de datos al consumir un token de reset.");
+            return new ConsumeResetTokenResult(ConsumeResetTokenOutcome.UnknownError, GenericErrorMessage);
+        }
+    }
+
+    /// <summary>
+    /// Distingue por que el UPDATE atomico no afecto filas: token inexistente,
+    /// ya consumido o vencido. Solo corre en el camino de error.
+    /// </summary>
+    private async Task<ConsumeResetTokenResult> DiagnoseFailedConsumeAsync(string tokenHash, DateTime now, CancellationToken ct)
+    {
+        var token = await _context.PasswordResetTokens
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(rt => rt.TokenHash == tokenHash, ct);
+
+        if (token is null)
+            return new ConsumeResetTokenResult(ConsumeResetTokenOutcome.InvalidToken, "Enlace inválido.");
+
+        if (token.UsedAt is not null)
+            return new ConsumeResetTokenResult(ConsumeResetTokenOutcome.AlreadyUsed, "Este enlace ya fue utilizado.");
+
+        if (token.ExpiresAt <= now)
+            return new ConsumeResetTokenResult(ConsumeResetTokenOutcome.ExpiredToken, "El enlace ha expirado. Solicitá uno nuevo.");
+
+        return new ConsumeResetTokenResult(ConsumeResetTokenOutcome.UnknownError, GenericErrorMessage);
     }
 
     private async Task EnrichDtoAsync(UsuarioDto dto, Usuario usuario, CancellationToken ct)

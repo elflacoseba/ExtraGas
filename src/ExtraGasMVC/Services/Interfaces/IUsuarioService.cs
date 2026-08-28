@@ -1,4 +1,5 @@
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Services;
 
 namespace ExtraGasMVC.Services.Interfaces;
 
@@ -30,4 +31,21 @@ public interface IUsuarioService
     Task<string> ResetPasswordAsync(ulong id, ulong? updatedBy, CancellationToken ct = default);
 
     Task<LoginResult> ValidateAndLoadForAuthAsync(string username, string password, CancellationToken ct = default);
+
+    /// <summary>
+    /// Solicita un reset de contrasena para el usuario con el email indicado.
+    /// Emite un token de un solo uso con vigencia limitada, persiste su hash
+    /// SHA-256 y envia el token raw por email. Si el email no esta registrado
+    /// (o el usuario esta inactivo) retorna en silencio, sin enviar email, para
+    /// no permitir enumeracion de cuentas. ipAddress/userAgent son de auditoria.
+    /// </summary>
+    Task RequestPasswordResetAsync(string email, string? ipAddress, string? userAgent, CancellationToken ct = default);
+
+    /// <summary>
+    /// Valida un token de reset raw, lo marca como consumido si es valido y
+    /// actualiza el hash BCrypt de la contrasena del usuario.
+    /// Ante exito envia un email de notificacion de cambio.
+    /// </summary>
+    /// <returns>Un <see cref="ConsumeResetTokenResult"/> que describe el desenlace.</returns>
+    Task<ConsumeResetTokenResult> ConsumePasswordResetTokenAsync(string rawToken, string newPassword, CancellationToken ct = default);
 }

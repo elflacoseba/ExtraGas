@@ -94,6 +94,8 @@ public class ChangePasswordTempDataFlowTests
         public Task ChangePasswordWithoutCurrentAsync(ulong id, string n, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<string> ResetPasswordAsync(ulong id, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<LoginResult> ValidateAndLoadForAuthAsync(string u, string p, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task RequestPasswordResetAsync(string e, string? ip, string? ua, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<ConsumeResetTokenResult> ConsumePasswordResetTokenAsync(string t, string p, CancellationToken ct = default) => throw new NotImplementedException();
     }
 
     private class FakePasswordPolicyService : IPasswordPolicyService
