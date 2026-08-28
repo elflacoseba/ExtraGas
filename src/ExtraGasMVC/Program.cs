@@ -36,6 +36,9 @@ builder.Services.AddAuthorization(options =>
 builder.Services.Configure<AuthLockoutOptions>(
     builder.Configuration.GetSection(AuthLockoutOptions.SectionName));
 
+builder.Services.Configure<PasswordPolicyOptions>(
+    builder.Configuration.GetSection(PasswordPolicyOptions.SectionName));
+
 // Registrar AutoMapper
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 
@@ -61,6 +64,7 @@ builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<IEmpleadoService, EmpleadoService>();
 builder.Services.AddScoped<IRecepcionService, RecepcionService>();
 builder.Services.AddScoped<IAuditoriaLoginService, AuditoriaLoginService>();
+builder.Services.AddSingleton<IPasswordPolicyService, PasswordPolicyService>();
 
 var app = builder.Build();
 

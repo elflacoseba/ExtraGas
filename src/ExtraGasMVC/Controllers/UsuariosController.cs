@@ -9,10 +9,12 @@ namespace ExtraGasMVC.Controllers;
 public class UsuariosController : BaseController
 {
     private readonly IUsuarioService _usuarioService;
+    private readonly IPasswordPolicyService _passwordPolicy;
 
-    public UsuariosController(IUsuarioService usuarioService)
+    public UsuariosController(IUsuarioService usuarioService, IPasswordPolicyService passwordPolicy)
     {
         _usuarioService = usuarioService;
+        _passwordPolicy = passwordPolicy;
     }
 
     public async Task<IActionResult> Index(string? busqueda, ulong? rolId, bool soloActivos = false,
@@ -49,6 +51,15 @@ public class UsuariosController : BaseController
     {
         if (!ModelState.IsValid)
         {
+            ViewBag.EmpleadosSinUsuario = await _usuarioService.GetEmpleadosSinUsuarioAsync(ct);
+            return View(dto);
+        }
+
+        var policyResult = _passwordPolicy.Validate(dto.Password);
+        if (!policyResult.IsValid)
+        {
+            foreach (var err in policyResult.Errors)
+                ModelState.AddModelError(nameof(dto.Password), err);
             ViewBag.EmpleadosSinUsuario = await _usuarioService.GetEmpleadosSinUsuarioAsync(ct);
             return View(dto);
         }
@@ -149,6 +160,13 @@ public class UsuariosController : BaseController
         if (!ModelState.IsValid)
         {
             TempData["Error"] = "Verifique los datos ingresados.";
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        var policyResult = _passwordPolicy.Validate(dto.NewPassword);
+        if (!policyResult.IsValid)
+        {
+            TempData["Error"] = string.Join(" ", policyResult.Errors);
             return RedirectToAction(nameof(Edit), new { id });
         }
 

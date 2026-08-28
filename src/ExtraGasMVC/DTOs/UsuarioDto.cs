@@ -34,7 +34,6 @@ public class CreateUsuarioDto
     public string? Email { get; set; }
 
     [Required(ErrorMessage = "La contrasena es obligatoria.")]
-    [StringLength(100, MinimumLength = 6, ErrorMessage = "La contrasena debe tener al menos 6 caracteres.")]
     [DataType(DataType.Password)]
     public string Password { get; set; } = null!;
 
@@ -69,7 +68,6 @@ public class ChangePasswordDto
     public string CurrentPassword { get; set; } = null!;
 
     [Required(ErrorMessage = "La nueva contrasena es obligatoria.")]
-    [StringLength(100, MinimumLength = 6, ErrorMessage = "La contrasena debe tener al menos 6 caracteres.")]
     [DataType(DataType.Password)]
     public string NewPassword { get; set; } = null!;
 
