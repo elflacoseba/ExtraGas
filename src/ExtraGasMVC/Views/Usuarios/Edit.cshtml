@@ -55,7 +55,15 @@
                 </div>
                 <div class="col-md-4">
                     <label asp-for="RolId" class="form-label">Rol</label> <span class="text-danger">*</span>
-                    <select asp-for="RolId" class="form-select" required>
+                    @{
+                        // Si es el propio usuario logueado, deshabilitamos el select:
+                        // la regla "no puede cambiar su propio rol" la enforza el
+                        // server en Edit POST, pero la UI debe reflejarlo para no
+                        // tentar al usuario. El <input type="hidden> preserva el
+                        // valor al submittar (un <select disabled> no envia nada).
+                        var rolDisabled = (currentUserId.HasValue && currentUserId.Value == Model.Id) ? "disabled" : null;
+                    }
+                    <select asp-for="RolId" class="form-select" required disabled="@rolDisabled">
                         <option value="">-- Seleccionar rol --</option>
                         @if (roles != null)
                         {
@@ -65,6 +73,11 @@
                             }
                         }
                     </select>
+                    @if (currentUserId.HasValue && currentUserId.Value == Model.Id)
+                    {
+                        <input type="hidden" asp-for="RolId" />
+                        <small class="text-secondary d-block mt-1">No puede cambiar su propio rol.</small>
+                    }
                     <span asp-validation-for="RolId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4 d-flex align-items-end">

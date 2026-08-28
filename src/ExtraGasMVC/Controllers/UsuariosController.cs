@@ -128,18 +128,33 @@ public class UsuariosController : BaseController
             return View(dto);
         }
 
-        // Regla sobre el propio usuario logueado: no puede desactivarse a si
-        // mismo (dejaria la app sin admin/su propia cuenta). Mismo patron que
-        // Delete y ResetPassword, que ya comparan id == currentUserId. La
-        // autoridad es el server; la UI deshabilita el control para no tentar.
+        // Reglas sobre el propio usuario logueado. La autoridad es el server
+        // (la UI deshabilita los controles pero no es barrera).
+        //   - No puede desactivarse: dejaria la app sin admin (o sin su
+        //     propia cuenta) sin posibilidad de re-entrar.
+        //   - No puede cambiarse el rol: podria auto-degradarse y perder
+        //     permisos para volver a entrar (la policy [Authorize(Role =
+        //     ADMIN)] del propio controller lo bloquearia).
+        // Mismo patron que Delete y ResetPassword, que ya comparan
+        // id == currentUserId.
         var currentUserId = GetCurrentUserId();
-        if (id == currentUserId && !dto.Activo)
+        if (id == currentUserId)
         {
-            ModelState.AddModelError(nameof(dto.Activo), "No puede desactivarse a si mismo.");
-            ViewBag.Usuario = await _usuarioService.GetByIdAsync(id, ct);
-            ViewBag.Roles = await _usuarioService.GetRolesAsync(ct);
-            ViewBag.CurrentUserId = currentUserId;
-            return View(dto);
+            var current = await _usuarioService.GetByIdAsync(id, ct);
+            if (current is null) return NotFound();
+
+            if (!dto.Activo)
+                ModelState.AddModelError(nameof(dto.Activo), "No puede desactivarse a si mismo.");
+            if (dto.RolId != current.RolId)
+                ModelState.AddModelError(nameof(dto.RolId), "No puede cambiar su propio rol.");
+
+            if (!ModelState.IsValid)
+            {
+                ViewBag.Usuario = current;
+                ViewBag.Roles = await _usuarioService.GetRolesAsync(ct);
+                ViewBag.CurrentUserId = currentUserId;
+                return View(dto);
+            }
         }
 
         try
