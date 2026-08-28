@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication;
@@ -8,19 +9,24 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ExtraGasMVC.Controllers;
 
-[AllowAnonymous]
-public class AccountController : Controller
+public class AccountController : BaseController
 {
     private readonly IUsuarioService _usuarioService;
     private readonly IAuditoriaLoginService _auditoriaService;
+    private readonly IPasswordPolicyService _passwordPolicy;
 
-    public AccountController(IUsuarioService usuarioService, IAuditoriaLoginService auditoriaService)
+    public AccountController(
+        IUsuarioService usuarioService,
+        IAuditoriaLoginService auditoriaService,
+        IPasswordPolicyService passwordPolicy)
     {
         _usuarioService = usuarioService;
         _auditoriaService = auditoriaService;
+        _passwordPolicy = passwordPolicy;
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public IActionResult Login(string? returnUrl = null)
     {
         if (User.Identity?.IsAuthenticated == true)
@@ -32,6 +38,7 @@ public class AccountController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [AllowAnonymous]
     public async Task<IActionResult> Login(string usuario, string password, string? returnUrl = null)
     {
         if (string.IsNullOrWhiteSpace(usuario) || string.IsNullOrWhiteSpace(password))
@@ -79,10 +86,60 @@ public class AccountController : Controller
 
         TempData["Success"] = "Sesion iniciada.";
 
+        // Forzar cambio de password si fue marcado por un reset admin-assisted.
+        if (userDto.DebeCambiarPassword)
+        {
+            TempData["Warning"] = "Tu password fue reseteada por un administrador. Debes cambiarla antes de continuar.";
+            return RedirectToAction(nameof(ChangePassword));
+        }
+
         if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
             return Redirect(returnUrl);
 
         return RedirectToAction("Index", "Home");
+    }
+
+    [HttpGet]
+    [Authorize]
+    public IActionResult ChangePassword()
+    {
+        return View(new AccountChangePasswordDto());
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword(AccountChangePasswordDto dto, CancellationToken ct = default)
+    {
+        if (!ModelState.IsValid)
+            return View(dto);
+
+        var policyResult = _passwordPolicy.Validate(dto.NewPassword);
+        if (!policyResult.IsValid)
+        {
+            foreach (var err in policyResult.Errors)
+                ModelState.AddModelError(nameof(dto.NewPassword), err);
+            return View(dto);
+        }
+
+        var userId = GetCurrentUserId();
+        if (userId is null)
+            return RedirectToAction(nameof(Logout));
+
+        try
+        {
+            await _usuarioService.ChangePasswordWithoutCurrentAsync(userId.Value, dto.NewPassword, ct);
+            TempData["Success"] = "Contrasena actualizada correctamente.";
+
+            // Re-issue el cookie claim para que el flag refreshed no quede inconsistente.
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction(nameof(Login));
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty, $"No se pudo actualizar la contrasena: {ex.Message}");
+            return View(dto);
+        }
     }
 
     private static string MapLoginFailureToMessage(LoginFailureReason reason) => reason switch
@@ -111,6 +168,7 @@ public class AccountController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [AllowAnonymous]
     public async Task<IActionResult> Logout()
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -118,5 +176,6 @@ public class AccountController : Controller
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public IActionResult AccessDenied() => View();
 }

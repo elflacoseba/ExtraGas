@@ -46,6 +46,11 @@ public class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
             .HasColumnName("bloqueado_hasta")
             .HasColumnType("datetime");
 
+        builder.Property(u => u.DebeCambiarPassword)
+            .HasColumnName("debe_cambiar_password")
+            .HasColumnType("tinyint(1)")
+            .HasDefaultValue(false);
+
         builder.Property(u => u.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("datetime")

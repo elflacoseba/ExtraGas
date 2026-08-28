@@ -247,10 +247,47 @@ public class UsuarioService : IUsuarioService
             return false;
 
         usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        usuario.DebeCambiarPassword = false;
         usuario.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(ct);
 
         return true;
+    }
+
+    public async Task ChangePasswordWithoutCurrentAsync(ulong id, string newPassword, CancellationToken ct = default)
+    {
+        var usuario = await _context.Usuarios
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.Id == id, ct);
+
+        if (usuario is null)
+            throw new KeyNotFoundException($"Usuario con Id {id} no encontrado.");
+
+        usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        usuario.DebeCambiarPassword = false;
+        usuario.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(ct);
+    }
+
+    public async Task<string> ResetPasswordAsync(ulong id, ulong? updatedBy, CancellationToken ct = default)
+    {
+        var usuario = await _context.Usuarios
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.Id == id, ct);
+
+        if (usuario is null)
+            throw new KeyNotFoundException($"Usuario con Id {id} no encontrado.");
+
+        var temporaryPassword = TemporaryPasswordGenerator.Generate(12);
+        usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(temporaryPassword);
+        usuario.DebeCambiarPassword = true;
+        usuario.IntentosFallidos = 0;
+        usuario.BloqueadoHasta = null;
+        usuario.UpdatedAt = DateTime.UtcNow;
+        usuario.UpdatedBy = updatedBy;
+        await _context.SaveChangesAsync(ct);
+
+        return temporaryPassword;
     }
 
     private async Task EnrichDtoAsync(UsuarioDto dto, Usuario usuario, CancellationToken ct)

@@ -2,6 +2,9 @@
 @{
     var usuario = ViewBag.Usuario as ExtraGasMVC.DTOs.UsuarioDto;
     var roles = ViewBag.Roles as List<ExtraGasMVC.DTOs.RolDto>;
+    var currentUserId = ViewBag.CurrentUserId as ulong?;
+    var temporaryPassword = TempData["TemporaryPassword"] as string;
+    var temporaryPasswordUsername = TempData["TemporaryPasswordUsername"] as string;
     ViewData["Title"] = "Editar usuario";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
     {
@@ -14,6 +17,17 @@
         <a asp-action="Index" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i> Volver
         </a>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(temporaryPassword))
+{
+    <div class="alert alert-warning" role="alert">
+        <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-1"></i> Password temporal para @temporaryPasswordUsername</h5>
+        <p class="mb-2">Anota esta contraseña. <strong>No se volvera a mostrar.</strong> El usuario debera cambiarla en su proximo login.</p>
+        <p class="mb-0">
+            <code class="fs-5 user-select-all">@temporaryPassword</code>
+        </p>
     </div>
 }
 
@@ -102,6 +116,28 @@
     </form>
 </div>
 
+@if (currentUserId.HasValue && currentUserId.Value != Model.Id)
+{
+    <div class="card mt-4 border-warning">
+        <div class="card-header bg-warning-subtle"><h3 class="card-title">Resetear contrasena (admin)</h3></div>
+        <form asp-action="ResetPassword" asp-route-id="@Model.Id" method="post">
+            @Html.AntiForgeryToken()
+            <div class="card-body">
+                <p class="text-secondary mb-0">
+                    Genera una password temporal aleatoria para este usuario y lo obliga a cambiarla en su proximo login.
+                    La password temporal se mostrara <strong>una sola vez</strong> tras confirmar.
+                </p>
+            </div>
+            <div class="card-footer">
+                <button type="submit" class="btn btn-warning"
+                        onclick="return confirm('Vas a resetear la contrasena de @(usuario?.Username). El usuario debera cambiarla en su proximo login. Continuar?');">
+                    <i class="bi bi-arrow-clockwise me-1"></i> Generar password temporal
+                </button>
+            </div>
+        </form>
+    </div>
+}
+
 @section Scripts {
     <script>
         document.addEventListener('DOMContentLoaded', function () {
@@ -113,9 +149,9 @@
                     e.preventDefault();
                     alert('Las contraseñas no coinciden.');
                 }
-                if (np.length < 6) {
+                if (np.length < 8) {
                     e.preventDefault();
-                    alert('La nueva contraseña debe tener al menos 6 caracteres.');
+                    alert('La nueva contraseña debe tener al menos 8 caracteres.');
                 }
             });
         });

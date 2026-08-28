@@ -102,6 +102,7 @@ public class UsuariosController : BaseController
 
         ViewBag.Usuario = usuario;
         ViewBag.Roles = await _usuarioService.GetRolesAsync(ct);
+        ViewBag.CurrentUserId = GetCurrentUserId();
         return View(updateDto);
     }
 
@@ -149,6 +150,36 @@ public class UsuariosController : BaseController
             ? "Usuario desactivado correctamente."
             : "No se encontro el usuario.";
         return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(ulong id, CancellationToken ct = default)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (id == currentUserId)
+        {
+            TempData["Error"] = "No puede resetear su propia contrasena. Use el formulario de cambio.";
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        try
+        {
+            var temporaryPassword = await _usuarioService.ResetPasswordAsync(id, currentUserId, ct);
+            TempData["TemporaryPassword"] = temporaryPassword;
+            TempData["TemporaryPasswordUsername"] = (await _usuarioService.GetByIdAsync(id, ct))?.Username;
+            TempData["Success"] = "Contrasena reseteada. La password temporal se muestra debajo UNA SOLA VEZ.";
+        }
+        catch (KeyNotFoundException)
+        {
+            TempData["Error"] = "No se encontro el usuario.";
+        }
+        catch (Exception ex)
+        {
+            TempData["Error"] = $"No se pudo resetear la contrasena: {ex.Message}";
+        }
+
+        return RedirectToAction(nameof(Edit), new { id });
     }
 
     [HttpPost]

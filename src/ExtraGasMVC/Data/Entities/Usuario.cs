@@ -11,6 +11,7 @@ public class Usuario
     public DateTime? UltimoLogin { get; set; }
     public ushort IntentosFallidos { get; set; }
     public DateTime? BloqueadoHasta { get; set; }
+    public bool DebeCambiarPassword { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public ulong? CreatedBy { get; set; }

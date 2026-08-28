@@ -12,6 +12,7 @@ public class UsuarioDto
     public string? RolNombre { get; set; }
     public bool Activo { get; set; }
     public DateTime? UltimoLogin { get; set; }
+    public bool DebeCambiarPassword { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public ulong? CreatedBy { get; set; }
