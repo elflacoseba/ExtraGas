@@ -1,7 +1,11 @@
 namespace ExtraGasMVC.Configuration;
 
 /// <summary>
-/// Política configurable de contraseñas. Bound desde "Auth:PasswordPolicy".
+/// Política configurable de contraseñas. Bound desde "Auth:PasswordPolicy" de appsettings.
+///
+/// IMPORTANTE: el binding se hace en el arranque del proceso con IOptions&lt;&gt;.
+/// Cambios en appsettings.json requieren reinicio de la aplicacion.
+/// Si se necesita hot-reload, migrar a IOptionsMonitor&lt;&gt;.
 /// </summary>
 public class PasswordPolicyOptions
 {
