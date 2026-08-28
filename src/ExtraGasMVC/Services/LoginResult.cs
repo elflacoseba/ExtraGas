@@ -17,11 +17,19 @@ public enum LoginFailureReason
     LockedOut
 }
 
-public record LoginResult(UsuarioDto? User, LoginFailureReason FailureReason)
+/// <summary>
+/// Resultado de un intento de login. <see cref="AttemptedUserId"/> lleva el id
+/// del usuario que fue encontrado en la BD (aunque después el login falle por
+/// inactivo, eliminado, lockout o password incorrecta) para que la auditoría
+/// pueda vincular el intento al usuario real. Es null solo cuando el username
+/// no existe en la tabla.
+/// </summary>
+public record LoginResult(UsuarioDto? User, LoginFailureReason FailureReason, ulong? AttemptedUserId = null)
 {
     public bool Success => User is not null;
 
-    public static LoginResult Ok(UsuarioDto user) => new(user, LoginFailureReason.None);
+    public static LoginResult Ok(UsuarioDto user) => new(user, LoginFailureReason.None, user.Id);
 
-    public static LoginResult Fail(LoginFailureReason reason) => new(null, reason);
+    public static LoginResult Fail(ulong? attemptedUserId, LoginFailureReason reason)
+        => new(null, reason, attemptedUserId);
 }

@@ -130,22 +130,25 @@ public class UsuarioService : IUsuarioService
             .FirstOrDefaultAsync(u => u.Username == username, ct);
 
         if (usuario is null)
-            return LoginResult.Fail(LoginFailureReason.UserNotFound);
+            return LoginResult.Fail(attemptedUserId: null, LoginFailureReason.UserNotFound);
 
+        // Precedencia: DeletedAt antes que Activo. Si el usuario esta soft-deleted
+        // (independientemente de su Activo), reportamos UserDeleted para preservar
+        // la fidelidad del historial aunque se restaure Activo=true a posteriori.
         if (usuario.DeletedAt is not null)
-            return LoginResult.Fail(LoginFailureReason.UserDeleted);
+            return LoginResult.Fail(attemptedUserId: usuario.Id, LoginFailureReason.UserDeleted);
 
         if (!usuario.Activo)
-            return LoginResult.Fail(LoginFailureReason.UserInactive);
+            return LoginResult.Fail(attemptedUserId: usuario.Id, LoginFailureReason.UserInactive);
 
         // Lockout vigente: rechazar sin re-hashear (no delatar si la password era correcta).
         if (usuario.BloqueadoHasta is not null && usuario.BloqueadoHasta > DateTime.UtcNow)
-            return LoginResult.Fail(LoginFailureReason.LockedOut);
+            return LoginResult.Fail(attemptedUserId: usuario.Id, LoginFailureReason.LockedOut);
 
         if (!BCrypt.Net.BCrypt.Verify(password, usuario.PasswordHash))
         {
             await HandleFailedAttemptAsync(usuario, ct);
-            return LoginResult.Fail(LoginFailureReason.InvalidPassword);
+            return LoginResult.Fail(attemptedUserId: usuario.Id, LoginFailureReason.InvalidPassword);
         }
 
         // Éxito: resetear contador y lockout, actualizar último login.

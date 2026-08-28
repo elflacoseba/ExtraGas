@@ -50,9 +50,11 @@ public class AccountController : BaseController
         var loginResult = await _usuarioService.ValidateAndLoadForAuthAsync(usuario, password);
 
         // Registrar el intento en auditoria (siempre, exista o no el usuario).
+        // usuarioId lleva el id del usuario conocido incluso si el login fallo por
+        // inactivo/eliminado/lockout/password (ver LoginResult.AttemptedUserId).
         await _auditoriaService.RecordAsync(
             usernameIntentado: usuario,
-            usuarioId: loginResult.User?.Id,
+            usuarioId: loginResult.AttemptedUserId,
             exito: loginResult.Success,
             motivoFallo: loginResult.FailureReason,
             ipOrigen: GetClientIp(),
