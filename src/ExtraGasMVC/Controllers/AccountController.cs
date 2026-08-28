@@ -75,10 +75,14 @@ public class AccountController : BaseController
         }
         catch (Exception ex)
         {
+            var sanitizedUsuario = (usuario ?? string.Empty)
+                .Replace("\r", string.Empty)
+                .Replace("\n", string.Empty);
+
             _logger.LogError(ex,
                 "Fallo registrando intento de login para '{Username}' (exito={Success}, motivo={Reason}). " +
                 "El login continua normalmente.",
-                usuario, loginResult.Success, loginResult.FailureReason);
+                sanitizedUsuario, loginResult.Success, loginResult.FailureReason);
         }
 
         if (!loginResult.Success)
