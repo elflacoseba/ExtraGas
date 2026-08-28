@@ -157,8 +157,12 @@ public class AccountController : BaseController
 
     private string? GetClientIp()
     {
-        // Connection.RemoteIpAddress puede ser null detras de ciertos proxies;
-        // en produccion se suele complementar con X-Forwarded-For.
+        // Si el middleware UseForwardedHeaders esta configurado con KnownProxies
+        // o KnownNetworks, HttpContext.Connection.RemoteIpAddress ya viene
+        // reescrito con el primer IP de X-Forwarded-For de confianza. Sin esa
+        // config, devolvemos la IP de la conexion directa. Configurar
+        // ForwardedHeaders:KnownProxies/KnownNetworks en appsettings para
+        // entornos detras de reverse proxy (Caddy, nginx, IIS).
         return HttpContext.Connection.RemoteIpAddress?.ToString();
     }
 
