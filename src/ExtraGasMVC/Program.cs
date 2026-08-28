@@ -8,6 +8,7 @@ using ExtraGasMVC.Services.Implementations;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +42,11 @@ builder.Services.Configure<AuthLockoutOptions>(
 builder.Services.Configure<PasswordPolicyOptions>(
     builder.Configuration.GetSection(PasswordPolicyOptions.SectionName));
 
+// Bind EmailOptions desde appsettings (seccion "Email"). En produccion las
+// credenciales (Username/Password) se setean con dotnet user-secrets — ver README.
+builder.Services.Configure<EmailOptions>(
+    builder.Configuration.GetSection(EmailOptions.SectionName));
+
 // Registrar AutoMapper
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 
@@ -63,12 +69,35 @@ builder.Services.AddScoped<IProveedorService, ProveedorService>();
 builder.Services.AddScoped<IPagoService, PagoService>();
 builder.Services.AddScoped<IGarrafaService, GarrafaService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
+builder.Services.AddScoped<IEmailSender, MailKitEmailSender>();
 builder.Services.AddScoped<IEmpleadoService, EmpleadoService>();
 builder.Services.AddScoped<IRecepcionService, RecepcionService>();
 builder.Services.AddScoped<IAuditoriaLoginService, AuditoriaLoginService>();
 builder.Services.AddSingleton<IPasswordPolicyService, PasswordPolicyService>();
 
 var app = builder.Build();
+
+// Sanity check de configuracion SMTP fuera de Development: si hay Host pero
+// faltan Username/Password, loggear warning y NO crashear (MailKit fallara
+// al primer envio; el caller hace fire-and-forget y loggea). En dev (MailHog)
+// los campos son opcionales por lo que no se valida.
+if (!app.Environment.IsDevelopment())
+{
+    var emailOptions = app.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
+    if (!string.IsNullOrWhiteSpace(emailOptions.Host))
+    {
+        if (string.IsNullOrEmpty(emailOptions.Username) || string.IsNullOrEmpty(emailOptions.Password))
+        {
+            var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("EmailStartup");
+            startupLogger.LogWarning(
+                "Email:Host configurado ({Host}) pero Email:Username/Email:Password no estan seteados. " +
+                "Defini las credenciales SMTP via 'dotnet user-secrets set' antes de enviar emails. " +
+                "Los envios fallaran silenciosamente.",
+                emailOptions.Host);
+        }
+    }
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
