@@ -100,6 +100,16 @@ public class UsuariosController : BaseController
             Activo = usuario.Activo
         };
 
+        // TempData de la password temporal se consume en este render: Peek para leer
+        // sin borrarla del storage, Remove para invalidarla. Asi un refresh posterior
+        // del admin NO re-mostrara la password (cumpliendo "se muestra una sola vez").
+        var temporaryPassword = TempData.Peek("TemporaryPassword") as string;
+        var temporaryPasswordUsername = TempData.Peek("TemporaryPasswordUsername") as string;
+        if (temporaryPassword is not null) TempData.Remove("TemporaryPassword");
+        if (temporaryPasswordUsername is not null) TempData.Remove("TemporaryPasswordUsername");
+
+        ViewBag.TemporaryPassword = temporaryPassword;
+        ViewBag.TemporaryPasswordUsername = temporaryPasswordUsername;
         ViewBag.Usuario = usuario;
         ViewBag.Roles = await _usuarioService.GetRolesAsync(ct);
         ViewBag.CurrentUserId = GetCurrentUserId();

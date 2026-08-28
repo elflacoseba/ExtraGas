@@ -3,8 +3,11 @@
     var usuario = ViewBag.Usuario as ExtraGasMVC.DTOs.UsuarioDto;
     var roles = ViewBag.Roles as List<ExtraGasMVC.DTOs.RolDto>;
     var currentUserId = ViewBag.CurrentUserId as ulong?;
-    var temporaryPassword = TempData["TemporaryPassword"] as string;
-    var temporaryPasswordUsername = TempData["TemporaryPasswordUsername"] as string;
+    // La password temporal se consume una sola vez en el controller (Peek+Remove)
+    // y llega a la vista como ViewBag. Asi un refresh posterior del admin NO la
+    // re-muestra (cumpliendo "se muestra una sola vez").
+    var temporaryPassword = ViewBag.TemporaryPassword as string;
+    var temporaryPasswordUsername = ViewBag.TemporaryPasswordUsername as string;
     ViewData["Title"] = "Editar usuario";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
     {
