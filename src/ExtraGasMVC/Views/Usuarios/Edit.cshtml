@@ -103,11 +103,11 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="NewPassword">Nueva contraseña</label> <span class="text-danger">*</span>
-                    <input type="password" id="NewPassword" name="NewPassword" class="form-control" required minlength="6" />
+                    <input type="password" id="NewPassword" name="NewPassword" class="form-control" required />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="ConfirmPassword">Confirmar nueva contraseña</label> <span class="text-danger">*</span>
-                    <input type="password" id="ConfirmPassword" name="ConfirmPassword" class="form-control" required minlength="6" />
+                    <input type="password" id="ConfirmPassword" name="ConfirmPassword" class="form-control" required />
                 </div>
             </div>
         </div>
@@ -152,10 +152,9 @@
                     e.preventDefault();
                     alert('Las contraseñas no coinciden.');
                 }
-                if (np.length < 8) {
-                    e.preventDefault();
-                    alert('La nueva contraseña debe tener al menos 8 caracteres.');
-                }
+                // Validaciones de policy (longitud minima, caracteres requeridos) son
+                // autoridad del servidor (IPasswordPolicyService). No se duplican en
+                // el cliente porque harian mentir a la UI si la policy cambia.
             });
         });
     </script>
