@@ -60,6 +60,7 @@ builder.Services.AddScoped<IGarrafaService, GarrafaService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<IEmpleadoService, EmpleadoService>();
 builder.Services.AddScoped<IRecepcionService, RecepcionService>();
+builder.Services.AddScoped<IAuditoriaLoginService, AuditoriaLoginService>();
 
 var app = builder.Build();
 

@@ -24,6 +24,7 @@ public class ExtraGasDbContext : DbContext
     // ============== Personas y seguridad ==============
     public DbSet<Usuario> Usuarios => Set<Usuario>();
     public DbSet<Empleado> Empleados => Set<Empleado>();
+    public DbSet<AuditoriaLogin> AuditoriaLogins => Set<AuditoriaLogin>();
     public DbSet<Cliente> Clientes => Set<Cliente>();
     public DbSet<ClienteContacto> ClienteContactos => Set<ClienteContacto>();
     public DbSet<Proveedor> Proveedores => Set<Proveedor>();

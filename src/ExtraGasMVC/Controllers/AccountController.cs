@@ -12,10 +12,12 @@ namespace ExtraGasMVC.Controllers;
 public class AccountController : Controller
 {
     private readonly IUsuarioService _usuarioService;
+    private readonly IAuditoriaLoginService _auditoriaService;
 
-    public AccountController(IUsuarioService usuarioService)
+    public AccountController(IUsuarioService usuarioService, IAuditoriaLoginService auditoriaService)
     {
         _usuarioService = usuarioService;
+        _auditoriaService = auditoriaService;
     }
 
     [HttpGet]
@@ -39,6 +41,17 @@ public class AccountController : Controller
         }
 
         var loginResult = await _usuarioService.ValidateAndLoadForAuthAsync(usuario, password);
+
+        // Registrar el intento en auditoria (siempre, exista o no el usuario).
+        await _auditoriaService.RecordAsync(
+            usernameIntentado: usuario,
+            usuarioId: loginResult.User?.Id,
+            exito: loginResult.Success,
+            motivoFallo: loginResult.FailureReason,
+            ipOrigen: GetClientIp(),
+            userAgent: GetUserAgent(),
+            ct: default);
+
         if (!loginResult.Success)
         {
             ModelState.AddModelError(string.Empty, MapLoginFailureToMessage(loginResult.FailureReason));
@@ -82,6 +95,19 @@ public class AccountController : Controller
         // si el usuario existe.
         _ => "Usuario o contrasena invalidos."
     };
+
+    private string? GetClientIp()
+    {
+        // Connection.RemoteIpAddress puede ser null detras de ciertos proxies;
+        // en produccion se suele complementar con X-Forwarded-For.
+        return HttpContext.Connection.RemoteIpAddress?.ToString();
+    }
+
+    private string? GetUserAgent()
+    {
+        var ua = HttpContext.Request.Headers.UserAgent.ToString();
+        return string.IsNullOrWhiteSpace(ua) ? null : (ua.Length > 255 ? ua[..255] : ua);
+    }
 
     [HttpPost]
     [ValidateAntiForgeryToken]

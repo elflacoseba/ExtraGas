@@ -1,0 +1,175 @@
+@model IEnumerable<ExtraGasMVC.DTOs.AuditoriaLoginListDto>
+@using ExtraGasMVC.Extensions
+@{
+    ViewData["Title"] = "Auditoria de logins";
+    var busqueda = ViewBag.Busqueda as string;
+    var ip = ViewBag.Ip as string;
+    var soloFallidos = (bool)(ViewBag.SoloFallidos ?? false);
+    var pagina = (int)(ViewBag.Pagina ?? 1);
+    var tamanio = (int)(ViewBag.Tamanio ?? 50);
+    var total = (int)(ViewBag.Total ?? 0);
+    var totalPaginas = tamanio > 0 ? (int)Math.Ceiling(total / (double)tamanio) : 0;
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Sistema" },
+        new() { Label = "Auditoria de logins" }
+    };
+}
+
+<div class="card">
+    <div class="card-header">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label small mb-1" for="busqueda">Username intentado</label>
+                <input type="text" id="busqueda" name="busqueda" value="@busqueda" class="form-control" placeholder="ej: jperez" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1" for="ip">IP de origen</label>
+                <input type="text" id="ip" name="ip" value="@ip" class="form-control" placeholder="ej: 192.168.1.10" />
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="soloFallidos" name="soloFallidos" value="true" @(soloFallidos ? "checked" : "") />
+                    <input type="hidden" name="soloFallidos" value="false" />
+                    <label class="form-check-label" for="soloFallidos">Solo fallidos</label>
+                </div>
+            </div>
+            <div class="col-md-3 d-grid gap-2 d-md-flex">
+                <button type="submit" class="btn btn-primary flex-fill">
+                    <i class="bi bi-search me-1"></i> Buscar
+                </button>
+                <a asp-action="Index" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Username intentado</th>
+                    <th>Usuario real</th>
+                    <th class="text-center">Resultado</th>
+                    <th>Motivo</th>
+                    <th>IP origen</th>
+                    <th>User agent</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="7" class="text-center py-4 text-secondary">No hay intentos que coincidan con los filtros.</td></tr>
+                }
+                @foreach (var a in Model)
+                {
+                    <tr>
+                        <td>@a.CreatedAt.ToShortDateTime()</td>
+                        <td><strong>@a.UsernameIntentado</strong></td>
+                        <td>@(a.UsuarioNombre ?? (a.UsuarioId.HasValue ? $"#{a.UsuarioId}" : "-"))</td>
+                        <td class="text-center">
+                            @if (a.Exito)
+                            {
+                                <span class="badge text-bg-success">OK</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-danger">Fallo</span>
+                            }
+                        </td>
+                        <td>@(a.MotivoFalloLegible ?? "-")</td>
+                        <td><code class="small">@(a.IpOrigen ?? "-")</code></td>
+                        <td class="small text-secondary text-truncate" style="max-width: 280px;" title="@a.UserAgent">
+                            @(a.UserAgent ?? "-")
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer clearfix">
+        <div class="float-end">
+            <small class="text-secondary me-2">@total registro@(total == 1 ? "" : "s")</small>
+        </div>
+        @if (totalPaginas > 1)
+        {
+            <nav>
+                <ul class="pagination pagination-sm m-0 float-end">
+                    @if (pagina > 1)
+                    {
+                        <li class="page-item">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-busqueda="@busqueda"
+                               asp-route-ip="@ip"
+                               asp-route-soloFallidos="@soloFallidos"
+                               asp-route-pagina="@(pagina - 1)"
+                               asp-route-tamanio="@tamanio">&laquo;</a>
+                        </li>
+                    }
+                    @{
+                        var start = Math.Max(1, pagina - 2);
+                        var end = Math.Min(totalPaginas, pagina + 2);
+                        if (start > 1)
+                        {
+                            <li class="page-item">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-busqueda="@busqueda"
+                                   asp-route-ip="@ip"
+                                   asp-route-soloFallidos="@soloFallidos"
+                                   asp-route-pagina="1"
+                                   asp-route-tamanio="@tamanio">1</a>
+                            </li>
+                            if (start > 2)
+                            {
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            }
+                        }
+                        for (var i = start; i <= end; i++)
+                        {
+                            <li class="page-item @(i == pagina ? "active" : "")">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-busqueda="@busqueda"
+                                   asp-route-ip="@ip"
+                                   asp-route-soloFallidos="@soloFallidos"
+                                   asp-route-pagina="@i"
+                                   asp-route-tamanio="@tamanio">@i</a>
+                            </li>
+                        }
+                        if (end < totalPaginas)
+                        {
+                            if (end < totalPaginas - 1)
+                            {
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            }
+                            <li class="page-item">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-busqueda="@busqueda"
+                                   asp-route-ip="@ip"
+                                   asp-route-soloFallidos="@soloFallidos"
+                                   asp-route-pagina="@totalPaginas"
+                                   asp-route-tamanio="@tamanio">@totalPaginas</a>
+                            </li>
+                        }
+                    }
+                    @if (pagina < totalPaginas)
+                    {
+                        <li class="page-item">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-busqueda="@busqueda"
+                               asp-route-ip="@ip"
+                               asp-route-soloFallidos="@soloFallidos"
+                               asp-route-pagina="@(pagina + 1)"
+                               asp-route-tamanio="@tamanio">&raquo;</a>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        }
+    </div>
+</div>

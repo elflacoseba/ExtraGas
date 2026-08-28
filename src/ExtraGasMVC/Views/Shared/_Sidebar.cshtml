@@ -199,6 +199,12 @@
                             <p>Usuarios</p>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a asp-controller="AuditoriaLogins" asp-action="Index" class="nav-link @(isCurrent("AuditoriaLogins") ? "active" : "")">
+                            <i class="nav-icon bi bi-shield-check"></i>
+                            <p>Auditoria logins</p>
+                        </a>
+                    </li>
                 }
                 <li class="nav-item">
                     <a asp-controller="Home" asp-action="Privacy" class="nav-link @(isCurrent("Home", "Privacy") ? "active" : "")">
