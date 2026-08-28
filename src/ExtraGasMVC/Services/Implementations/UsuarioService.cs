@@ -89,7 +89,7 @@ public class UsuarioService : IUsuarioService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Fallo el envio del email '{Subject}' a {Recipient}", subject, to);
+                _logger.LogError(ex, "Fallo el envio del email a {Recipient}", to);
             }
         });
     }
