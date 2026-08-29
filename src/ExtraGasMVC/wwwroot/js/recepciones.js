@@ -167,25 +167,48 @@
     function validarCliente(items) {
         if (items.length === 0) return 'Debe agregar al menos un item antes de confirmar.';
         for (var i = 0; i < items.length; i++) {
-            var it = items[i];
-            if (!(it.cantidad > 0)) return 'Item ' + (i + 1) + ': la cantidad debe ser mayor a 0.';
-            if (it.precioUnitario < 0) return 'Item ' + (i + 1) + ': el precio unitario no puede ser negativo.';
-            if (it.manejaGarrafaIndividual) {
-                if (Math.trunc(it.cantidad) !== it.cantidad)
-                    return 'Item ' + (i + 1) + ' (' + it.productoNombre + '): la cantidad debe ser entera para GARRAFA.';
-                var esp = Math.trunc(it.cantidad);
-                if (esp !== it.codigosGarrafa.length)
-                    return 'Item ' + (i + 1) + ' (' + it.productoNombre + '): esperaba ' + esp + ' código(s) y recibió ' + it.codigosGarrafa.length + '.';
-                var seen = {}, dupes = [];
-                it.codigosGarrafa.forEach(function (c) {
-                    var k = c.toLowerCase();
-                    if (seen[k]) dupes.push(c); else seen[k] = true;
-                });
-                if (dupes.length > 0)
-                    return 'Item ' + (i + 1) + ' (' + it.productoNombre + '): códigos duplicados: ' + Array.from(new Set(dupes)).join(', ') + '.';
-            }
+            var msg = validarItem(items[i], i + 1);
+            if (msg !== null) return msg;
         }
         return null;
+    }
+
+    /// Devuelve un mensaje de error si el item no cumple las reglas del
+    /// formulario; null si está OK. Las reglas GARRAFA (cantidad entera,
+    /// cantidad vs códigos, dedupe) se aplican solo si el producto tiene
+    /// tracking individual.
+    function validarItem(it, idx) {
+        if (!(it.cantidad > 0)) return 'Item ' + idx + ': la cantidad debe ser mayor a 0.';
+        if (it.precioUnitario < 0) return 'Item ' + idx + ': el precio unitario no puede ser negativo.';
+        if (!it.manejaGarrafaIndividual) return null;
+        return validarCodigosGarrafa(it, idx);
+    }
+
+    /// Valida cantidad, conteo de códigos y duplicados para items GARRAFA.
+    function validarCodigosGarrafa(it, idx) {
+        if (Math.trunc(it.cantidad) !== it.cantidad)
+            return 'Item ' + idx + ' (' + it.productoNombre + '): la cantidad debe ser entera para GARRAFA.';
+
+        var esperado = Math.trunc(it.cantidad);
+        if (esperado !== it.codigosGarrafa.length)
+            return 'Item ' + idx + ' (' + it.productoNombre + '): esperaba ' + esperado + ' código(s) y recibió ' + it.codigosGarrafa.length + '.';
+
+        var dupes = duplicadosInsensitive(it.codigosGarrafa);
+        if (dupes.length > 0)
+            return 'Item ' + idx + ' (' + it.productoNombre + '): códigos duplicados: ' + dupes.join(', ') + '.';
+
+        return null;
+    }
+
+    /// Devuelve la lista de códigos duplicados (case-insensitive) sin repetir
+    /// el mismo duplicado en el resultado.
+    function duplicadosInsensitive(codigos) {
+        var seen = {}, dupes = [];
+        codigos.forEach(function (c) {
+            var k = c.toLowerCase();
+            if (seen[k]) dupes.push(c); else seen[k] = true;
+        });
+        return Array.from(new Set(dupes));
     }
 
     function resumenHtml(items, totales) {

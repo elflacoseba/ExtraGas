@@ -59,30 +59,30 @@ public class PagoService : IPagoService
         return _mapper.Map<IEnumerable<PagoDto>>(pagos);
     }
 
-    public async Task<PagoDto> CreateAsync(CreatePagoDto pagoDto, CancellationToken ct = default)
+    public async Task<PagoDto> CreateAsync(CreatePagoDto pago, CancellationToken ct = default)
     {
-        var pago = _mapper.Map<Pago>(pagoDto);
-        pago.CreatedAt = DateTime.UtcNow;
-        pago.UpdatedAt = DateTime.UtcNow;
-        
-        _context.Pagos.Add(pago);
+        var entity = _mapper.Map<Pago>(pago);
+        entity.CreatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        _context.Pagos.Add(entity);
         await _context.SaveChangesAsync(ct);
-        
-        return _mapper.Map<PagoDto>(pago);
+
+        return _mapper.Map<PagoDto>(entity);
     }
 
-    public async Task<PagoDto> UpdateAsync(UpdatePagoDto pagoDto, CancellationToken ct = default)
+    public async Task<PagoDto> UpdateAsync(UpdatePagoDto pago, CancellationToken ct = default)
     {
-        var pago = await _context.Pagos.FindAsync(new object[] { pagoDto.Id }, ct);
-        if (pago == null)
-            throw new KeyNotFoundException($"Pago con Id {pagoDto.Id} no encontrado.");
+        var entity = await _context.Pagos.FindAsync(new object[] { pago.Id }, ct);
+        if (entity == null)
+            throw new KeyNotFoundException($"Pago con Id {pago.Id} no encontrado.");
 
-        _mapper.Map(pagoDto, pago);
-        pago.UpdatedAt = DateTime.UtcNow;
-        
+        _mapper.Map(pago, entity);
+        entity.UpdatedAt = DateTime.UtcNow;
+
         await _context.SaveChangesAsync(ct);
-        
-        return _mapper.Map<PagoDto>(pago);
+
+        return _mapper.Map<PagoDto>(entity);
     }
 
     public async Task<bool> DeleteAsync(ulong id, CancellationToken ct = default)

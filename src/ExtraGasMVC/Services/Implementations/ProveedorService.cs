@@ -96,39 +96,39 @@ public class ProveedorService : IProveedorService
         };
     }
 
-    public async Task<ProveedorDto> CreateAsync(CreateProveedorDto proveedorDto, ulong? createdBy, CancellationToken ct = default)
+    public async Task<ProveedorDto> CreateAsync(CreateProveedorDto proveedor, ulong? createdBy, CancellationToken ct = default)
     {
-        if (!await IsCuitUniqueAsync(proveedorDto.Cuit, ct))
+        if (!await IsCuitUniqueAsync(proveedor.Cuit, ct))
             throw new InvalidOperationException("El CUIT ingresado ya está registrado.");
 
-        var proveedor = _mapper.Map<Proveedor>(proveedorDto);
-        proveedor.CreatedAt = DateTime.UtcNow;
-        proveedor.UpdatedAt = DateTime.UtcNow;
-        proveedor.CreatedBy = createdBy;
-        proveedor.UpdatedBy = createdBy;
-        
-        _context.Proveedores.Add(proveedor);
+        var entity = _mapper.Map<Proveedor>(proveedor);
+        entity.CreatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.CreatedBy = createdBy;
+        entity.UpdatedBy = createdBy;
+
+        _context.Proveedores.Add(entity);
         await _context.SaveChangesAsync(ct);
-        
-        return _mapper.Map<ProveedorDto>(proveedor);
+
+        return _mapper.Map<ProveedorDto>(entity);
     }
 
-    public async Task<ProveedorDto> UpdateAsync(ulong id, UpdateProveedorDto proveedorDto, ulong? updatedBy, CancellationToken ct = default)
+    public async Task<ProveedorDto> UpdateAsync(ulong id, UpdateProveedorDto proveedor, ulong? updatedBy, CancellationToken ct = default)
     {
-        var proveedor = await _context.Proveedores.FindAsync(new object[] { id }, ct);
-        if (proveedor == null)
+        var entity = await _context.Proveedores.FindAsync(new object[] { id }, ct);
+        if (entity == null)
             throw new KeyNotFoundException($"Proveedor con Id {id} no encontrado.");
 
-        if (!await IsCuitUniqueAsync(proveedorDto.Cuit, id, ct))
+        if (!await IsCuitUniqueAsync(proveedor.Cuit, id, ct))
             throw new InvalidOperationException("El CUIT ingresado ya está registrado.");
 
-        _mapper.Map(proveedorDto, proveedor);
-        proveedor.UpdatedAt = DateTime.UtcNow;
-        proveedor.UpdatedBy = updatedBy;
-        
+        _mapper.Map(proveedor, entity);
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedBy = updatedBy;
+
         await _context.SaveChangesAsync(ct);
-        
-        return _mapper.Map<ProveedorDto>(proveedor);
+
+        return _mapper.Map<ProveedorDto>(entity);
     }
 
     public async Task<bool> DeleteAsync(ulong id, ulong? updatedBy, CancellationToken ct = default)

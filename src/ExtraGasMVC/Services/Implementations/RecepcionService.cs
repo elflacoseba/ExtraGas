@@ -13,6 +13,12 @@ public class RecepcionService : IRecepcionService
 {
     private const string TipoMovimientoCompra = "COMPRA";
 
+    /// <summary>
+    /// Proyección mínima de Producto usada durante la validación previa al commit.
+    /// Evita arrastrar navegaciones ni columnas que no se necesitan en este flujo.
+    /// </summary>
+    private sealed record ProductoResumen(ulong Id, bool ManejaGarrafaIndividual, decimal? CapacidadKg, string Nombre);
+
     private readonly ExtraGasDbContext _context;
     private readonly IProductoService _productoService;
 
@@ -22,58 +28,19 @@ public class RecepcionService : IRecepcionService
         _productoService = productoService;
     }
 
-    public async Task<RecepcionDto> CreateAsync(CrearRecepcionDto input, ulong? usuarioId, CancellationToken ct = default)
+    public async Task<RecepcionDto> CreateAsync(CrearRecepcionDto dto, ulong? usuarioId, CancellationToken ct = default)
     {
-        if (input.Items is null || input.Items.Count == 0)
+        if (dto.Items is null || dto.Items.Count == 0)
             throw new InvalidOperationException("La recepción debe incluir al menos un item.");
 
         var empleadoId = await ResolverEmpleadoIdAsync(usuarioId, ct)
             ?? throw new InvalidOperationException(
                 "No se pudo resolver el operador: el usuario autenticado no tiene un empleado activo vinculado.");
 
-        var productoIds = input.Items.Select(i => i.ProductoId).Distinct().ToList();
-        var productoById = await _context.Productos.AsNoTracking()
-            .Where(p => productoIds.Contains(p.Id))
-            .Select(p => new { p.Id, p.ManejaGarrafaIndividual, p.CapacidadKg, p.Nombre })
-            .ToDictionaryAsync(p => p.Id, ct);
+        var productoById = await LoadProductosByIdAsync(dto.Items, ct);
+        var (estadoLlenaDepositoId, tipoCompraId) = await LoadCatalogosCompraAsync(ct);
 
-        var estadoLlenaDepositoId = await _context.EstadosGarrafa.AsNoTracking()
-            .Where(e => e.Codigo == GarrafaEstados.LlenaDeposito).Select(e => e.Id).FirstOrDefaultAsync(ct);
-        if (estadoLlenaDepositoId == 0) throw new InvalidOperationException("No se encontró el estado LLENA_DEPOSITO en el catálogo.");
-        var tipoCompraId = await _context.TiposMovimientoGarrafa.AsNoTracking()
-            .Where(t => t.Codigo == TipoMovimientoCompra).Select(t => t.Id).FirstOrDefaultAsync(ct);
-        if (tipoCompraId == 0) throw new InvalidOperationException("No se encontró el tipo de movimiento COMPRA en el catálogo.");
-
-        // Validaciones previas: cantidad==codigos, dedupe, codigo existente, capacidad.
-        foreach (var (item, idx) in input.Items.Select((it, i) => (it, i)))
-        {
-            if (!productoById.TryGetValue(item.ProductoId, out var producto))
-                throw new InvalidOperationException($"Item {idx + 1}: el producto {item.ProductoId} no existe o está inactivo.");
-            if (!producto.ManejaGarrafaIndividual) continue;
-
-            if (decimal.Truncate(item.Cantidad) != item.Cantidad)
-                throw new InvalidOperationException($"Item {idx + 1} ({producto.Nombre}): la cantidad debe ser entera para GARRAFA (recibido {item.Cantidad}).");
-
-            var esperado = (int)item.Cantidad;
-            var codigos = (item.CodigosGarrafa ?? new List<string>())
-                .Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).ToList();
-            if (esperado == 0 && codigos.Count == 0) continue;
-            if (esperado != codigos.Count)
-                throw new InvalidOperationException($"Item {idx + 1} ({producto.Nombre}): esperaba {esperado} código(s) y recibió {codigos.Count}.");
-
-            var dups = codigos.GroupBy(c => c, StringComparer.OrdinalIgnoreCase)
-                .Where(g => g.Count() > 1).Select(g => g.Key).ToList();
-            if (dups.Count > 0)
-                throw new InvalidOperationException($"Item {idx + 1} ({producto.Nombre}): código(s) duplicado(s): {string.Join(", ", dups)}.");
-
-            if (!producto.CapacidadKg.HasValue)
-                throw new InvalidOperationException($"Item {idx + 1} ({producto.Nombre}): el producto GARRAFA no tiene capacidad_kg definida.");
-
-            var existentes = await _context.Garrafas.IgnoreQueryFilters()
-                .Where(g => codigos.Contains(g.Codigo)).Select(g => g.Codigo).ToListAsync(ct);
-            if (existentes.Count > 0)
-                throw new InvalidOperationException($"Item {idx + 1} ({producto.Nombre}): código(s) ya existente(s): {string.Join(", ", existentes)}.");
-        }
+        await ValidarItemsPreCommitAsync(dto.Items, productoById, ct);
 
         await using var tx = await _context.Database.BeginTransactionAsync(ct);
         try
@@ -81,16 +48,16 @@ public class RecepcionService : IRecepcionService
             var now = DateTime.UtcNow;
             var recepcion = new RecepcionProveedor
             {
-                Fecha = input.Fecha, ProveedorId = input.ProveedorId, EmpleadoId = empleadoId,
-                NumeroFacturaProveedor = input.NumeroFacturaProveedor,
-                Subtotal = input.Subtotal, Descuento = input.Descuento, Total = input.Total,
-                Observaciones = input.Observaciones,
+                Fecha = dto.Fecha, ProveedorId = dto.ProveedorId, EmpleadoId = empleadoId,
+                NumeroFacturaProveedor = dto.NumeroFacturaProveedor,
+                Subtotal = dto.Subtotal, Descuento = dto.Descuento, Total = dto.Total,
+                Observaciones = dto.Observaciones,
                 CreatedAt = now, UpdatedAt = now, CreatedBy = usuarioId, UpdatedBy = usuarioId,
             };
             _context.RecepcionesProveedor.Add(recepcion);
             await _context.SaveChangesAsync(ct);   // trigger llena recepcion.Numero
 
-            foreach (var itemDto in input.Items)
+            foreach (var itemDto in dto.Items)
             {
                 _context.RecepcionItems.Add(new RecepcionItem
                 {
@@ -100,40 +67,10 @@ public class RecepcionService : IRecepcionService
                 });
                 await _context.SaveChangesAsync(ct);
 
-                var producto = productoById[itemDto.ProductoId];
-                if (!producto.ManejaGarrafaIndividual) continue;
-
-                var capacidad = (byte)decimal.Truncate(producto.CapacidadKg!.Value);
-                var codigosUnicos = (itemDto.CodigosGarrafa ?? new List<string>())
-                    .Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim())
-                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-
-                foreach (var codigo in codigosUnicos)
-                {
-                    _context.Garrafas.Add(new Garrafa
-                    {
-                        Codigo = codigo, CapacidadKg = capacidad,
-                        ProveedorId = recepcion.ProveedorId, RecepcionId = recepcion.Id,
-                        FechaCompra = DateOnly.FromDateTime(recepcion.Fecha),
-                        EstadoGarrafaId = estadoLlenaDepositoId, Activo = true,
-                        CreatedAt = now, UpdatedAt = now,
-                        CreatedBy = usuarioId, UpdatedBy = usuarioId,
-                    });
-                    Garrafa garrafa;
-                    try { await _context.SaveChangesAsync(ct); garrafa = _context.Garrafas.Local.Single(g => g.Codigo == codigo); }
-                    catch (DbUpdateException dbex) when (dbex.InnerException is MySqlException my && my.Number == 1062)
-                    { throw new InvalidOperationException($"Código duplicado detectado al guardar: {codigo}."); }
-
-                    _context.MovimientosGarrafa.Add(new MovimientoGarrafa
-                    {
-                        GarrafaId = garrafa.Id, Fecha = recepcion.Fecha,
-                        TipoMovimientoId = tipoCompraId, RecepcionId = recepcion.Id,
-                        EstadoOrigenId = estadoLlenaDepositoId, EstadoDestinoId = estadoLlenaDepositoId,
-                        EmpleadoId = empleadoId, Observaciones = $"Compra - {recepcion.Numero}",
-                        CreatedBy = usuarioId,
-                    });
-                    await _context.SaveChangesAsync(ct);
-                }
+                if (!productoById[itemDto.ProductoId].ManejaGarrafaIndividual) continue;
+                await CrearGarrafasYMovimientosAsync(
+                    itemDto, recepcion, empleadoId, usuarioId,
+                    productoById[itemDto.ProductoId], estadoLlenaDepositoId, tipoCompraId, ct);
             }
 
             await tx.CommitAsync(ct);
@@ -145,6 +82,190 @@ public class RecepcionService : IRecepcionService
             await tx.RollbackAsync(ct);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Resuelve los IDs de productos del dto en una sola query y los devuelve
+    /// en un diccionario para evitar lookups repetidos en el bucle principal.
+    /// </summary>
+    private async Task<Dictionary<ulong, ProductoResumen>> LoadProductosByIdAsync(
+        IEnumerable<CrearRecepcionItemDto> items, CancellationToken ct)
+    {
+        var productoIds = items.Select(i => i.ProductoId).Distinct().ToList();
+        var rows = await _context.Productos.AsNoTracking()
+            .Where(p => productoIds.Contains(p.Id))
+            .Select(p => new ProductoResumen(p.Id, p.ManejaGarrafaIndividual, p.CapacidadKg, p.Nombre))
+            .ToListAsync(ct);
+        return rows.ToDictionary(p => p.Id);
+    }
+
+    /// <summary>
+    /// Resuelve los IDs del estado LLENA_DEPOSITO y del tipo de movimiento
+    /// COMPRA en una sola query cada uno. Falla rápido si faltan en el
+    /// catálogo — son lookups obligatorios para registrar la recepción.
+    /// </summary>
+    private async Task<(ulong estadoLlenaDepositoId, ulong tipoCompraId)> LoadCatalogosCompraAsync(CancellationToken ct)
+    {
+        var estadoLlenaDepositoId = await _context.EstadosGarrafa.AsNoTracking()
+            .Where(e => e.Codigo == GarrafaEstados.LlenaDeposito).Select(e => e.Id).FirstOrDefaultAsync(ct);
+        if (estadoLlenaDepositoId == 0)
+            throw new InvalidOperationException("No se encontró el estado LLENA_DEPOSITO en el catálogo.");
+
+        var tipoCompraId = await _context.TiposMovimientoGarrafa.AsNoTracking()
+            .Where(t => t.Codigo == TipoMovimientoCompra).Select(t => t.Id).FirstOrDefaultAsync(ct);
+        if (tipoCompraId == 0)
+            throw new InvalidOperationException("No se encontró el tipo de movimiento COMPRA en el catálogo.");
+
+        return (estadoLlenaDepositoId, tipoCompraId);
+    }
+
+    /// <summary>
+    /// Validaciones previas: cantidad==codigos, dedupe, codigo existente,
+    /// capacidad. Falla rápido (sin escribir nada) ante cualquier error.
+    /// </summary>
+    private async Task ValidarItemsPreCommitAsync(
+        IEnumerable<CrearRecepcionItemDto> items,
+        Dictionary<ulong, ProductoResumen> productoById,
+        CancellationToken ct)
+    {
+        foreach (var (item, idx) in items.Select((it, i) => (it, i)))
+        {
+            if (!productoById.TryGetValue(item.ProductoId, out var producto))
+                throw new InvalidOperationException($"Item {idx + 1}: el producto {item.ProductoId} no existe o está inactivo.");
+
+            if (!producto.ManejaGarrafaIndividual) continue;
+
+            ValidarCantidadEntera(item, producto, idx);
+            await ValidarCodigosGarrafaAsync(item, producto, idx, ct);
+        }
+    }
+
+    /// <summary>
+    /// Verifica que la cantidad sea entera para productos GARRAFA. La
+    /// comparación se hace contra el truncate explícito para no confundir
+    /// 2.0 (válido) con 2.5 (rechazado).
+    /// </summary>
+    private static void ValidarCantidadEntera(CrearRecepcionItemDto item, ProductoResumen producto, int idx)
+    {
+        if (decimal.Truncate(item.Cantidad) != item.Cantidad)
+            throw new InvalidOperationException(
+                $"Item {idx + 1} ({producto.Nombre}): la cantidad debe ser entera para GARRAFA (recibido {item.Cantidad}).");
+    }
+
+    /// <summary>
+    /// Validaciones específicas de items GARRAFA: cantidad vs códigos,
+    /// duplicados, capacidad_kg definida, códigos ya existentes en la BD.
+    /// </summary>
+    private async Task ValidarCodigosGarrafaAsync(
+        CrearRecepcionItemDto item, ProductoResumen producto, int idx, CancellationToken ct)
+    {
+        var esperado = (int)item.Cantidad;
+        var codigos = (item.CodigosGarrafa ?? new List<string>())
+            .Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).ToList();
+
+        if (esperado == 0 && codigos.Count == 0) return;
+        if (esperado != codigos.Count)
+            throw new InvalidOperationException(
+                $"Item {idx + 1} ({producto.Nombre}): esperaba {esperado} código(s) y recibió {codigos.Count}.");
+
+        var dups = codigos.GroupBy(c => c, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        if (dups.Count > 0)
+            throw new InvalidOperationException(
+                $"Item {idx + 1} ({producto.Nombre}): código(s) duplicado(s): {string.Join(", ", dups)}.");
+
+        if (!producto.CapacidadKg.HasValue)
+            throw new InvalidOperationException(
+                $"Item {idx + 1} ({producto.Nombre}): el producto GARRAFA no tiene capacidad_kg definida.");
+
+        var existentes = await _context.Garrafas.IgnoreQueryFilters()
+            .Where(g => codigos.Contains(g.Codigo)).Select(g => g.Codigo).ToListAsync(ct);
+        if (existentes.Count > 0)
+            throw new InvalidOperationException(
+                $"Item {idx + 1} ({producto.Nombre}): código(s) ya existente(s): {string.Join(", ", existentes)}.");
+    }
+
+    /// <summary>
+    /// Inserta una Garrafa + su MovimientoGarrafa de COMPRA por cada código
+    /// único del item. Asume que ya estamos dentro de la transacción del
+    /// caller (no abre una nueva).
+    /// </summary>
+    private async Task CrearGarrafasYMovimientosAsync(
+        CrearRecepcionItemDto itemDto,
+        RecepcionProveedor recepcion,
+        ulong empleadoId,
+        ulong? usuarioId,
+        ProductoResumen producto,
+        ulong estadoLlenaDepositoId,
+        ulong tipoCompraId,
+        CancellationToken ct)
+    {
+        var capacidad = (byte)decimal.Truncate(producto.CapacidadKg!.Value);
+        var codigosUnicos = (itemDto.CodigosGarrafa ?? new List<string>())
+            .Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        foreach (var codigo in codigosUnicos)
+            await CrearUnaGarrafaConSuMovimientoAsync(
+                codigo, capacidad, recepcion, empleadoId, usuarioId,
+                estadoLlenaDepositoId, tipoCompraId, ct);
+    }
+
+    /// <summary>
+    /// Inserta una sola garrafa y su movimiento de COMPRA atado a la
+    /// recepción. Captura el error 1062 de MySQL (duplicado) que se le haya
+    /// escapado a la validación previa y lo traduce a un mensaje claro.
+    /// </summary>
+    private async Task CrearUnaGarrafaConSuMovimientoAsync(
+        string codigo,
+        byte capacidad,
+        RecepcionProveedor recepcion,
+        ulong empleadoId,
+        ulong? usuarioId,
+        ulong estadoLlenaDepositoId,
+        ulong tipoCompraId,
+        CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        _context.Garrafas.Add(new Garrafa
+        {
+            Codigo = codigo,
+            CapacidadKg = capacidad,
+            ProveedorId = recepcion.ProveedorId,
+            RecepcionId = recepcion.Id,
+            FechaCompra = DateOnly.FromDateTime(recepcion.Fecha),
+            EstadoGarrafaId = estadoLlenaDepositoId,
+            Activo = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+            CreatedBy = usuarioId,
+            UpdatedBy = usuarioId,
+        });
+
+        Garrafa garrafa;
+        try
+        {
+            await _context.SaveChangesAsync(ct);
+            garrafa = _context.Garrafas.Local.Single(g => g.Codigo == codigo);
+        }
+        catch (DbUpdateException dbex) when (dbex.InnerException is MySqlException my && my.Number == 1062)
+        {
+            throw new InvalidOperationException($"Código duplicado detectado al guardar: {codigo}.");
+        }
+
+        _context.MovimientosGarrafa.Add(new MovimientoGarrafa
+        {
+            GarrafaId = garrafa.Id,
+            Fecha = recepcion.Fecha,
+            TipoMovimientoId = tipoCompraId,
+            RecepcionId = recepcion.Id,
+            EstadoOrigenId = estadoLlenaDepositoId,
+            EstadoDestinoId = estadoLlenaDepositoId,
+            EmpleadoId = empleadoId,
+            Observaciones = $"Compra - {recepcion.Numero}",
+            CreatedBy = usuarioId,
+        });
+        await _context.SaveChangesAsync(ct);
     }
 
     public async Task<bool> ReversarAsync(ulong recepcionId, ulong? usuarioId, CancellationToken ct = default)

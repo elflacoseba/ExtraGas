@@ -81,23 +81,7 @@ var app = builder.Build();
 // faltan Username/Password, loggear warning y NO crashear (MailKit fallara
 // al primer envio; el caller hace fire-and-forget y loggea). En dev (MailHog)
 // los campos son opcionales por lo que no se valida.
-if (!app.Environment.IsDevelopment())
-{
-    var emailOptions = app.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
-    if (!string.IsNullOrWhiteSpace(emailOptions.Host))
-    {
-        if (string.IsNullOrEmpty(emailOptions.Username) || string.IsNullOrEmpty(emailOptions.Password))
-        {
-            var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
-                .CreateLogger("EmailStartup");
-            startupLogger.LogWarning(
-                "Email:Host configurado ({Host}) pero Email:Username/Email:Password no estan seteados. " +
-                "Defini las credenciales SMTP via 'dotnet user-secrets set' antes de enviar emails. " +
-                "Los envios fallaran silenciosamente.",
-                emailOptions.Host);
-        }
-    }
-}
+WarnOnIncompleteSmtpConfig(app);
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -117,32 +101,7 @@ if (!app.Environment.IsDevelopment())
 //     "KnownProxies":  ["10.0.0.5", "192.168.1.20"],
 //     "KnownNetworks": ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"]
 //   }
-var forwardedHeadersSection = builder.Configuration.GetSection("ForwardedHeaders");
-var hasForwardedConfig = forwardedHeadersSection.Exists();
-if (hasForwardedConfig)
-{
-    var forwardedOptions = new Microsoft.AspNetCore.Builder.ForwardedHeadersOptions
-    {
-        ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
-                         | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto,
-        RequireHeaderSymmetry = false,
-        ForwardLimit = 2,
-    };
-
-    var knownProxies = forwardedHeadersSection.GetSection("KnownProxies").Get<string[]>();
-    if (knownProxies is not null)
-        foreach (var ip in knownProxies)
-            if (System.Net.IPAddress.TryParse(ip, out var addr))
-                forwardedOptions.KnownProxies.Add(addr);
-
-    var knownNetworks = forwardedHeadersSection.GetSection("KnownNetworks").Get<string[]>();
-    if (knownNetworks is not null)
-        foreach (var cidr in knownNetworks)
-            if (TryParseCidr(cidr, out var network))
-                forwardedOptions.KnownIPNetworks.Add(network);
-
-    app.UseForwardedHeaders(forwardedOptions);
-}
+ConfigureForwardedHeaders(app, builder.Configuration);
 
 app.UseHttpsRedirection();
 app.UseRouting();
@@ -159,8 +118,86 @@ app.MapControllerRoute(
 
 app.Run();
 
-// Parsea un CIDR ("192.168.0.0/16") a IPNetwork. Usado por la configuracion
-// de ForwardedHeaders.KnownNetworks.
+/// <summary>
+/// Loggea un warning si en produccion el email tiene Host pero faltan
+/// Username/Password. No rompe el startup: el caller hace fire-and-forget
+/// y va a loggear el fallo real al primer envio.
+/// </summary>
+static void WarnOnIncompleteSmtpConfig(WebApplication app)
+{
+    if (app.Environment.IsDevelopment()) return;
+
+    var emailOptions = app.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
+    if (string.IsNullOrWhiteSpace(emailOptions.Host)) return;
+    if (!string.IsNullOrEmpty(emailOptions.Username) && !string.IsNullOrEmpty(emailOptions.Password)) return;
+
+    var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("EmailStartup");
+    startupLogger.LogWarning(
+        "Email:Host configurado ({Host}) pero Email:Username/Email:Password no estan seteados. " +
+        "Defini las credenciales SMTP via 'dotnet user-secrets set' antes de enviar emails. " +
+        "Los envios fallaran silenciosamente.",
+        emailOptions.Host);
+}
+
+/// <summary>
+/// Aplica <c>UseForwardedHeaders</c> solo si la sección "ForwardedHeaders"
+/// existe en configuración. Si no, no se reescribe nada (defensa contra
+/// spoofing de IP).
+/// </summary>
+static void ConfigureForwardedHeaders(WebApplication app, IConfiguration configuration)
+{
+    var section = configuration.GetSection("ForwardedHeaders");
+    if (!section.Exists()) return;
+
+    var options = new Microsoft.AspNetCore.Builder.ForwardedHeadersOptions
+    {
+        ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+                         | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto,
+        RequireHeaderSymmetry = false,
+        ForwardLimit = 2,
+    };
+
+    AddKnownProxies(options, section.GetSection("KnownProxies"));
+    AddKnownNetworks(options, section.GetSection("KnownNetworks"));
+
+    app.UseForwardedHeaders(options);
+}
+
+/// <summary>
+/// Suma las IPs de <c>KnownProxies</c> al builder de options. Las IPs
+/// inválidas se descartan silenciosamente (no son bloqueantes).
+/// </summary>
+static void AddKnownProxies(
+    Microsoft.AspNetCore.Builder.ForwardedHeadersOptions options, IConfigurationSection section)
+{
+    var proxies = section.Get<string[]>();
+    if (proxies is null) return;
+
+    foreach (var ip in proxies)
+        if (System.Net.IPAddress.TryParse(ip, out var addr))
+            options.KnownProxies.Add(addr);
+}
+
+/// <summary>
+/// Suma los CIDR de <c>KnownNetworks</c> al builder de options. Los CIDR
+/// inválidos se descartan silenciosamente.
+/// </summary>
+static void AddKnownNetworks(
+    Microsoft.AspNetCore.Builder.ForwardedHeadersOptions options, IConfigurationSection section)
+{
+    var cidrs = section.Get<string[]>();
+    if (cidrs is null) return;
+
+    foreach (var cidr in cidrs)
+        if (TryParseCidr(cidr, out var network))
+            options.KnownIPNetworks.Add(network);
+}
+
+/// <summary>
+/// Parsea un CIDR ("192.168.0.0/16") a IPNetwork. Usado por la configuracion
+/// de ForwardedHeaders.KnownNetworks.
+/// </summary>
 static bool TryParseCidr(string cidr, out IPNetwork network)
 {
     network = default;

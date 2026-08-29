@@ -83,33 +83,33 @@ public class ProductoService : IProductoService
         return _mapper.Map<IEnumerable<TipoProductoDto>>(tipos);
     }
 
-    public async Task<ProductoDto> CreateAsync(CreateProductoDto productoDto, ulong? usuarioId, CancellationToken ct = default)
+    public async Task<ProductoDto> CreateAsync(CreateProductoDto producto, ulong? usuarioId, CancellationToken ct = default)
     {
-        var producto = _mapper.Map<Producto>(productoDto);
-        producto.CreatedAt = DateTime.UtcNow;
-        producto.UpdatedAt = DateTime.UtcNow;
-        producto.CreatedBy = usuarioId;
-        producto.UpdatedBy = usuarioId;
-        
-        _context.Productos.Add(producto);
+        var entity = _mapper.Map<Producto>(producto);
+        entity.CreatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.CreatedBy = usuarioId;
+        entity.UpdatedBy = usuarioId;
+
+        _context.Productos.Add(entity);
         await _context.SaveChangesAsync(ct);
-        
-        return _mapper.Map<ProductoDto>(producto);
+
+        return _mapper.Map<ProductoDto>(entity);
     }
 
-    public async Task<ProductoDto> UpdateAsync(UpdateProductoDto productoDto, ulong? usuarioId, CancellationToken ct = default)
+    public async Task<ProductoDto> UpdateAsync(UpdateProductoDto producto, ulong? usuarioId, CancellationToken ct = default)
     {
-        var producto = await _context.Productos.FindAsync(new object[] { productoDto.Id }, ct);
-        if (producto == null)
-            throw new KeyNotFoundException($"Producto con Id {productoDto.Id} no encontrado.");
+        var entity = await _context.Productos.FindAsync(new object[] { producto.Id }, ct);
+        if (entity == null)
+            throw new KeyNotFoundException($"Producto con Id {producto.Id} no encontrado.");
 
-        _mapper.Map(productoDto, producto);
-        producto.UpdatedAt = DateTime.UtcNow;
-        producto.UpdatedBy = usuarioId;
-        
+        _mapper.Map(producto, entity);
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedBy = usuarioId;
+
         await _context.SaveChangesAsync(ct);
-        
-        return _mapper.Map<ProductoDto>(producto);
+
+        return _mapper.Map<ProductoDto>(entity);
     }
 
     public async Task<bool> DeleteAsync(ulong id, CancellationToken ct = default)

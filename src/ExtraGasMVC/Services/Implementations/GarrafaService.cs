@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using AutoMapper;
 using ExtraGasMVC.Constants;
 using ExtraGasMVC.Data.Context;
@@ -100,7 +101,7 @@ public class GarrafaService : IGarrafaService
     }
 
     public async Task<PagedResult<GarrafaDto>> GetPagedAsync(
-        string? codigo, byte? capacidad, int page, int pageSize,
+        string? codigo, byte? capacidad, int page = 1, int pageSize = 20,
         string sortBy = "codigo", string sortDir = "asc",
         CancellationToken ct = default)
     {
@@ -139,41 +140,8 @@ public class GarrafaService : IGarrafaService
 
         // Issue #53: ordenar por el campo pedido. Defaults seguros (cualquier
         // sortBy desconocido cae a "codigo", cualquier sortDir != "desc" a
-        // "asc"). Cada case arma el IOrderedQueryable en su tipo concreto para
-        // que EF genere SQL específico por campo — no usamos reflection ni
-        // expression trees dinámicas porque romperían la traducción a SQL.
-        // ThenBy(Id) en todos los casos = tiebreaker estable para paginación.
-        var desc = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase);
-        IOrderedQueryable<Garrafa> ordered = sortBy.ToLowerInvariant() switch
-        {
-            "capacidad" => desc
-                ? query.OrderByDescending(g => g.CapacidadKg).ThenBy(g => g.Id)
-                : query.OrderBy(g => g.CapacidadKg).ThenBy(g => g.Id),
-            "estado" => desc
-                ? query.OrderByDescending(g => g.EstadoGarrafa!.Nombre).ThenBy(g => g.Id)
-                : query.OrderBy(g => g.EstadoGarrafa!.Nombre).ThenBy(g => g.Id),
-            // Cliente es nullable: ordenar por Apellido, luego Nombre. EF
-            // traduce el acceso a navegación como LEFT JOIN; las filas sin
-            // cliente quedan con NULL y MySQL las pone al inicio en ASC.
-            "cliente" => desc
-                ? query.OrderByDescending(g => g.Cliente!.Apellido)
-                       .ThenByDescending(g => g.Cliente!.Nombre)
-                       .ThenBy(g => g.Id)
-                : query.OrderBy(g => g.Cliente!.Apellido)
-                       .ThenBy(g => g.Cliente!.Nombre)
-                       .ThenBy(g => g.Id),
-            "fechacompra" => desc
-                ? query.OrderByDescending(g => g.FechaCompra).ThenBy(g => g.Id)
-                : query.OrderBy(g => g.FechaCompra).ThenBy(g => g.Id),
-            // FechaUltimoMovimiento es DateTime? — los NULL van primero en ASC
-            // (semántica de MySQL), lo cual es razonable para "último mov."
-            "ultimomov" => desc
-                ? query.OrderByDescending(g => g.FechaUltimoMovimiento).ThenBy(g => g.Id)
-                : query.OrderBy(g => g.FechaUltimoMovimiento).ThenBy(g => g.Id),
-            "codigo" or _ => desc
-                ? query.OrderByDescending(g => g.Codigo).ThenBy(g => g.Id)
-                : query.OrderBy(g => g.Codigo).ThenBy(g => g.Id),
-        };
+        // "asc"). ThenBy(Id) en todos los casos = tiebreaker estable para paginación.
+        var ordered = BuildOrderedQueryable(query, sortBy, sortDir);
 
         var items = await ordered
             .Skip((page - 1) * pageSize)
@@ -189,6 +157,51 @@ public class GarrafaService : IGarrafaService
         };
     }
 
+    /// <summary>
+    /// Construye el IOrderedQueryable según los parámetros sortBy/sortDir.
+    /// Cada case arma el ordenamiento en su tipo concreto para que EF genere
+    /// SQL específico por campo — no usamos reflection ni expression trees
+    /// dinámicas porque romperían la traducción a SQL.
+    /// </summary>
+    private static IOrderedQueryable<Garrafa> BuildOrderedQueryable(
+        IQueryable<Garrafa> query, string sortBy, string sortDir)
+    {
+        var desc = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase);
+        return sortBy.ToLowerInvariant() switch
+        {
+            "capacidad" => OrderByCampoOrId(query, g => g.CapacidadKg, desc),
+            "estado" => OrderByCampoOrId(query, g => g.EstadoGarrafa!.Nombre, desc),
+            // Cliente es nullable: ordenar por Apellido, luego Nombre. EF
+            // traduce el acceso a navegación como LEFT JOIN; las filas sin
+            // cliente quedan con NULL y MySQL las pone al inicio en ASC.
+            "cliente" => desc
+                ? query.OrderByDescending(g => g.Cliente!.Apellido)
+                       .ThenByDescending(g => g.Cliente!.Nombre)
+                       .ThenBy(g => g.Id)
+                : query.OrderBy(g => g.Cliente!.Apellido)
+                       .ThenBy(g => g.Cliente!.Nombre)
+                       .ThenBy(g => g.Id),
+            "fechacompra" => OrderByCampoOrId(query, g => g.FechaCompra, desc),
+            // FechaUltimoMovimiento es DateTime? — los NULL van primero en ASC
+            // (semántica de MySQL), lo cual es razonable para "último mov."
+            "ultimomov" => OrderByCampoOrId(query, g => g.FechaUltimoMovimiento, desc),
+            // "codigo" y default: campo principal + Id como tiebreaker.
+            _ => OrderByCampoOrId(query, g => g.Codigo, desc),
+        };
+    }
+
+    /// <summary>
+    /// Helper común: ordena por la key provista y usa Id como tiebreaker
+    /// estable. Reduce el switch anterior a una sola expresión por case.
+    /// </summary>
+    private static IOrderedQueryable<Garrafa> OrderByCampoOrId<TKey>(
+        IQueryable<Garrafa> query, System.Linq.Expressions.Expression<Func<Garrafa, TKey>> keySelector, bool desc)
+    {
+        return desc
+            ? query.OrderByDescending(keySelector).ThenBy(g => g.Id)
+            : query.OrderBy(keySelector).ThenBy(g => g.Id);
+    }
+
     public async Task<IEnumerable<EstadoGarrafaDto>> GetEstadosAsync(CancellationToken ct = default)
     {
         var estados = await _context.EstadosGarrafa
@@ -199,39 +212,39 @@ public class GarrafaService : IGarrafaService
         return _mapper.Map<IEnumerable<EstadoGarrafaDto>>(estados);
     }
 
-    public async Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafaDto, ulong? usuarioId, CancellationToken ct = default)
+    public async Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafa, ulong? usuarioId, CancellationToken ct = default)
     {
-        if (await _context.Garrafas.AnyAsync(g => g.Codigo == garrafaDto.Codigo, ct))
-            throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafaDto.Codigo}.");
+        if (await _context.Garrafas.AnyAsync(g => g.Codigo == garrafa.Codigo, ct))
+            throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafa.Codigo}.");
 
-        var garrafa = _mapper.Map<Garrafa>(garrafaDto);
-        garrafa.CreatedAt = DateTime.UtcNow;
-        garrafa.UpdatedAt = DateTime.UtcNow;
-        garrafa.CreatedBy = usuarioId;
-        garrafa.UpdatedBy = usuarioId;
+        var entity = _mapper.Map<Garrafa>(garrafa);
+        entity.CreatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.CreatedBy = usuarioId;
+        entity.UpdatedBy = usuarioId;
 
-        _context.Garrafas.Add(garrafa);
-        await SaveOrThrowDuplicateAsync(garrafaDto.Codigo, ct);
+        _context.Garrafas.Add(entity);
+        await SaveOrThrowDuplicateAsync(garrafa.Codigo, ct);
 
-        return _mapper.Map<GarrafaDto>(garrafa);
+        return _mapper.Map<GarrafaDto>(entity);
     }
 
-    public async Task<GarrafaDto> UpdateAsync(UpdateGarrafaDto garrafaDto, ulong? usuarioId, CancellationToken ct = default)
+    public async Task<GarrafaDto> UpdateAsync(UpdateGarrafaDto garrafa, ulong? usuarioId, CancellationToken ct = default)
     {
-        var garrafa = await _context.Garrafas.FindAsync(new object[] { garrafaDto.Id }, ct);
-        if (garrafa == null)
-            throw new KeyNotFoundException($"Garrafa con Id {garrafaDto.Id} no encontrada.");
+        var entity = await _context.Garrafas.FindAsync(new object[] { garrafa.Id }, ct);
+        if (entity == null)
+            throw new KeyNotFoundException($"Garrafa con Id {garrafa.Id} no encontrada.");
 
-        if (await _context.Garrafas.AnyAsync(g => g.Codigo == garrafaDto.Codigo && g.Id != garrafaDto.Id, ct))
-            throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafaDto.Codigo}.");
+        if (await _context.Garrafas.AnyAsync(g => g.Codigo == garrafa.Codigo && g.Id != garrafa.Id, ct))
+            throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafa.Codigo}.");
 
-        _mapper.Map(garrafaDto, garrafa);
-        garrafa.UpdatedAt = DateTime.UtcNow;
-        garrafa.UpdatedBy = usuarioId;
+        _mapper.Map(garrafa, entity);
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedBy = usuarioId;
 
-        await SaveOrThrowDuplicateAsync(garrafaDto.Codigo, ct);
+        await SaveOrThrowDuplicateAsync(garrafa.Codigo, ct);
 
-        return _mapper.Map<GarrafaDto>(garrafa);
+        return _mapper.Map<GarrafaDto>(entity);
     }
 
     public async Task<bool> CambiarEstadoAsync(ulong id, CambiarEstadoGarrafaDto dto, ulong? currentUserId = null, CancellationToken ct = default)

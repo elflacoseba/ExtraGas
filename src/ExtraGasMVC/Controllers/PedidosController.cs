@@ -220,56 +220,13 @@ public class PedidosController : BaseController
             // para que la transición de estado y los movimientos de garrafa sean
             // atómicos. Si no hay códigos (pedido solo VENTA / carbón / leña),
             // caemos al flujo normal de CambiarEstadoAsync.
-            var estados = await _pedidoService.GetEstadosPedidoAsync(ct);
-            var estadoDestino = estados.FirstOrDefault(e => e.Id == nuevoEstadoId);
-            var esConfirmado = estadoDestino?.Codigo == PedidoEstados.Confirmado;
-            var hayCodigos = !string.IsNullOrWhiteSpace(codigosGarrafaJson);
+            var destino = await ResolveEstadoDestinoAsync(nuevoEstadoId, ct);
+            var esConfirmadoConCodigos = destino?.Codigo == PedidoEstados.Confirmado
+                                         && !string.IsNullOrWhiteSpace(codigosGarrafaJson);
 
-            if (esConfirmado && hayCodigos)
-            {
-                Dictionary<ulong, List<string>>? codigosPorItem = null;
-                try
-                {
-                    codigosPorItem = System.Text.Json.JsonSerializer.Deserialize<Dictionary<ulong, List<string>>>(
-                        codigosGarrafaJson!,
-                        new System.Text.Json.JsonSerializerOptions
-                        {
-                            PropertyNameCaseInsensitive = true
-                        });
-                }
-                catch (System.Text.Json.JsonException)
-                {
-                    TempData["Error"] = "Los códigos de garrafas enviados tienen un formato inválido. Recargue la pantalla e intente nuevamente.";
-                    return RedirectToAction(nameof(Edit), new { id });
-                }
-
-                var ok = await _pedidoService.RegistrarCanjePedidoAsync(
-                    id,
-                    codigosPorItem ?? new Dictionary<ulong, List<string>>(),
-                    userId,
-                    ct);
-
-                TempData[ok ? "Success" : "Error"] = ok
-                    ? "Pedido confirmado y garrafas registradas correctamente."
-                    : "No se encontró el pedido.";
-
-                if (ok)
-                    return RedirectToAction(nameof(Details), new { id });
-            }
-            else
-            {
-                var ok = await _pedidoService.CambiarEstadoAsync(id, nuevoEstadoId, motivoCancelacion, userId, ct);
-                TempData[ok ? "Success" : "Error"] = ok
-                    ? "Estado del pedido actualizado correctamente."
-                    : "No se encontró el pedido.";
-
-                if (ok)
-                {
-                    var pedido = await _pedidoService.GetByIdAsync(id, ct);
-                    if (PedidoEstados.EstadosFinales.Contains(pedido?.EstadoCodigo ?? ""))
-                        return RedirectToAction(nameof(Details), new { id });
-                }
-            }
+            return esConfirmadoConCodigos
+                ? await ConfirmarConCanjeAsync(id, codigosGarrafaJson!, userId, ct)
+                : await CambiarEstadoGenericoAsync(id, nuevoEstadoId, motivoCancelacion, userId, ct);
         }
         catch (InvalidOperationException ex)
         {
@@ -282,6 +239,70 @@ public class PedidosController : BaseController
             TempData["Error"] = "Ocurrió un error al cambiar el estado del pedido. Intente nuevamente.";
         }
         return RedirectToAction(nameof(Edit), new { id });
+    }
+
+    /// <summary>
+    /// Resuelve el <see cref="EstadoPedidoDto"/> destino a partir del id del form.
+    /// Devuelve null si el id no existe en el catálogo (se propaga como
+    /// "estado destino no existe" desde el service).
+    /// </summary>
+    private async Task<EstadoPedidoDto?> ResolveEstadoDestinoAsync(ulong nuevoEstadoId, CancellationToken ct)
+    {
+        var estados = await _pedidoService.GetEstadosPedidoAsync(ct);
+        return estados.FirstOrDefault(e => e.Id == nuevoEstadoId);
+    }
+
+    /// <summary>
+    /// Branch CONFIRMADO + códigos de garrafas: deserializa el JSON de
+    /// códigos y delega en <c>RegistrarCanjePedidoAsync</c> para hacer
+    /// atómica la transición de estado y los movimientos de garrafa.
+    /// </summary>
+    private async Task<IActionResult> ConfirmarConCanjeAsync(
+        ulong id, string codigosGarrafaJson, ulong? userId, CancellationToken ct)
+    {
+        Dictionary<ulong, List<string>> codigosPorItem;
+        try
+        {
+            codigosPorItem = System.Text.Json.JsonSerializer.Deserialize<Dictionary<ulong, List<string>>>(
+                codigosGarrafaJson,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? new Dictionary<ulong, List<string>>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            TempData["Error"] = "Los códigos de garrafas enviados tienen un formato inválido. Recargue la pantalla e intente nuevamente.";
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        var ok = await _pedidoService.RegistrarCanjePedidoAsync(id, codigosPorItem, userId, ct);
+
+        TempData[ok ? "Success" : "Error"] = ok
+            ? "Pedido confirmado y garrafas registradas correctamente."
+            : "No se encontró el pedido.";
+
+        return ok
+            ? RedirectToAction(nameof(Details), new { id })
+            : RedirectToAction(nameof(Edit), new { id });
+    }
+
+    /// <summary>
+    /// Branch genérico: llama a <c>CambiarEstadoAsync</c> y, si la transición
+    /// lleva al pedido a un estado final, redirige a Details en lugar de Edit.
+    /// </summary>
+    private async Task<IActionResult> CambiarEstadoGenericoAsync(
+        ulong id, ulong nuevoEstadoId, string? motivoCancelacion, ulong? userId, CancellationToken ct)
+    {
+        var ok = await _pedidoService.CambiarEstadoAsync(id, nuevoEstadoId, motivoCancelacion, userId, ct);
+        TempData[ok ? "Success" : "Error"] = ok
+            ? "Estado del pedido actualizado correctamente."
+            : "No se encontró el pedido.";
+
+        if (!ok) return RedirectToAction(nameof(Edit), new { id });
+
+        var pedido = await _pedidoService.GetByIdAsync(id, ct);
+        return PedidoEstados.EstadosFinales.Contains(pedido?.EstadoCodigo ?? "")
+            ? RedirectToAction(nameof(Details), new { id })
+            : RedirectToAction(nameof(Edit), new { id });
     }
 
     public async Task<IActionResult> Pendientes(CancellationToken ct = default)
