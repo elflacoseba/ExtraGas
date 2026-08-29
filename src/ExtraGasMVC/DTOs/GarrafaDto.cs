@@ -48,6 +48,14 @@ public class GarrafaDto
     public string? ProveedorNombre { get; set; }
 }
 
+/// <summary>
+/// DTO de alta de garrafa. NO incluye <c>Activo</c> (lo setea el Service en
+/// <c>true</c>). El flag <c>Activo</c> de Garrafa cumple un rol distinto al
+/// de <c>estado_garrafa_id</c>: marca si la garrafa está dada de baja
+/// (soft-delete), mientras que el estado describe la situación operacional
+/// (LLENA_DEPOSITO, EN_CLIENTE, FUERA_SERVICIO, etc.). Solo cambia vía
+/// Delete. Issue #114.
+/// </summary>
 public class CreateGarrafaDto
 {
     [Display(Name = "Código")]
@@ -75,11 +83,19 @@ public class CreateGarrafaDto
 
     public ulong? ClienteId { get; set; }
 
-    public bool Activo { get; set; }
-
     public string? Observaciones { get; set; }
 }
 
+/// <summary>
+/// DTO de edición de garrafa. NO incluye <c>Activo</c>: es estado y solo
+/// cambia vía Delete. El Service lo preserva vía
+/// <c>GarrafaEditRules.PreservarFlagsNoEditables</c>. Issue #114.
+///
+/// <para>El estado operacional de la garrafa (<c>EstadoGarrafaId</c>) sí es
+/// editable — se cambia con la acción dedicada "Cambiar estado" del
+/// Controller, que valida contra la matriz de transiciones. NO se mezcla
+/// con <c>Activo</c>: son dos flags con propósitos distintos.</para>
+/// </summary>
 public class UpdateGarrafaDto
 {
     public ulong Id { get; set; }
@@ -108,8 +124,6 @@ public class UpdateGarrafaDto
     public ulong EstadoGarrafaId { get; set; }
 
     public ulong? ClienteId { get; set; }
-
-    public bool Activo { get; set; }
 
     public string? Observaciones { get; set; }
 }
