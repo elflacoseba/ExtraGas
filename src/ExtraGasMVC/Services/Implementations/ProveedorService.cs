@@ -82,6 +82,9 @@ public class ProveedorService : IProveedorService
             throw new InvalidOperationException("El CUIT ingresado ya está registrado.");
 
         var entity = _mapper.Map<Proveedor>(proveedor);
+        // Issue #114: Activo no viene del DTO. Lo setea el Service en true
+        // porque es estado, no dato de carga del operador.
+        entity.Activo = true;
         entity.CreatedAt = DateTime.UtcNow;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.CreatedBy = createdBy;
