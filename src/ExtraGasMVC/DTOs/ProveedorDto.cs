@@ -28,6 +28,12 @@ public class ProveedorDto
     public bool Activo { get; set; }
 }
 
+/// <summary>
+/// DTO de alta de proveedor. NO incluye <c>Activo</c> (lo setea el Service en
+/// <c>true</c>). El flag <c>Activo</c> de Proveedor solo cambia vía Delete —
+/// el helper <see cref="ProveedorEditRules"/> preserva el patrón en Update.
+/// Issue #114.
+/// </summary>
 public class CreateProveedorDto
 {
     [Display(Name = "Código")]
@@ -95,11 +101,15 @@ public class CreateProveedorDto
 
     [Display(Name = "Observaciones")]
     public string? Observaciones { get; set; }
-
-    [Display(Name = "Activo")]
-    public bool Activo { get; set; }
 }
 
+/// <summary>
+/// DTO de edición de proveedor. NO incluye <c>Activo</c>: el flag es estado y
+/// solo cambia vía Delete. El Service lo preserva vía
+/// <see cref="ProveedorEditRules.PreservarFlagsNoEditables"/>. Issue #114.
+/// (La defensa en UI — checkbox disabled con nota — ya existía; este cambio
+/// cierra la inconsistencia del contrato del DTO).
+/// </summary>
 public class UpdateProveedorDto
 {
     public ulong Id { get; set; }
@@ -169,7 +179,4 @@ public class UpdateProveedorDto
 
     [Display(Name = "Observaciones")]
     public string? Observaciones { get; set; }
-
-    [Display(Name = "Activo")]
-    public bool Activo { get; set; }
 }

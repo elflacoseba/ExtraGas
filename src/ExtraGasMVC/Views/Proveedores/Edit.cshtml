@@ -42,16 +42,22 @@
                     <span asp-validation-for="NombreFantasia" class="text-danger"></span>
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
-                    <div class="form-check">
-                        <input asp-for="Activo" class="form-check-input" type="checkbox" disabled />
-                        <label asp-for="Activo" class="form-check-label"></label>
+                    <div>
+                        <span class="form-label">Estado</span>
+                        <div>
+                            @if ((bool)ViewBag.Activo)
+                            {
+                                <span class="badge text-bg-success">Activo</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">Inactivo</span>
+                            }
+                            <small class="d-block text-secondary mt-1">
+                                Se gestiona desde <strong>Eliminar</strong> del listado.
+                            </small>
+                        </div>
                     </div>
-                </div>
-                <div class="col-12">
-                    <small class="text-secondary">
-                        <i class="bi bi-info-circle me-1"></i>
-                        El estado de activación se gestiona desde <strong>Eliminar</strong>; este formulario no lo modifica.
-                    </small>
                 </div>
             </div>
             <h5 class="mt-4">Contacto</h5>

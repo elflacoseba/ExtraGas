@@ -40,7 +40,9 @@ public class ProveedoresController : BaseController
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
         await LoadViewBagsAsync(ct);
-        return View(new CreateProveedorDto { Activo = true });
+        // Issue #114: CreateProveedorDto ya no expone Activo — lo setea el
+        // Service en true.
+        return View(new CreateProveedorDto());
     }
 
     [HttpPost]
@@ -77,7 +79,12 @@ public class ProveedoresController : BaseController
     {
         var proveedor = await _proveedorService.GetByIdAsync(id, ct);
         if (proveedor is null) return NotFound();
-        
+
+        // Issue #114: UpdateProveedorDto ya no expone Activo (es estado y solo
+        // cambia vía Delete). Lo pasamos por ViewBag para mostrarlo como info
+        // read-only en la vista.
+        ViewBag.Activo = proveedor.Activo;
+
         var updateDto = _mapper.Map<UpdateProveedorDto>(proveedor);
         await LoadViewBagsAsync(ct);
         return View(updateDto);
