@@ -108,16 +108,24 @@
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <label for="Recepcion_Total" class="form-label">Total <span class="text-danger">*</span></label>
+                    <label for="Recepcion_Total" class="form-label">Total</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
+                        @* Total es derivado (Subtotal - Descuento). El operador no lo edita:
+                           el JS lo recalcula en tiempo real cuando cambian Subtotal/Descuento.
+                           No tiene name para que el form NO lo mande al POST — el Service lo
+                           recalcula desde Subtotal/Descuento (defense-in-depth). *@
                         <input id="Recepcion_Total"
-                               name="Total"
-                               type="number" min="0" step="0.01"
+                               type="number"
                                class="form-control"
-                               value="@Model.Recepcion.Total.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
-                               required />
+                               value="@(Model.Recepcion.Subtotal - Model.Recepcion.Descuento).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
+                               readonly
+                               tabindex="-1" />
                     </div>
+                    <small class="text-secondary">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Calculado automáticamente: <code>Subtotal − Descuento</code>.
+                    </small>
                 </div>
                 <div class="col-12">
                     <label for="Recepcion_Observaciones" class="form-label">Observaciones</label>

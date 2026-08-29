@@ -7,6 +7,12 @@ namespace ExtraGasMVC.DTOs;
 /// (issue #45). For each item, when the product is GARRAFA
 /// (<c>maneja_garrafa_individual = TRUE</c>) the <c>CodigosGarrafa</c> list
 /// must contain exactly <c>Cantidad</c> codes.
+///
+/// <para>El <c>Total</c> NO es input: se calcula como <c>Subtotal - Descuento</c>
+/// en el Service vía <see cref="Extensions.RecepcionTotalRules.Calcular"/>.
+/// Si el operador pudiera tipearlo a mano, podría quedar inconsistente
+/// con Subtotal y Descuento — bug clásico de "campo derivado editable".
+/// La vista lo muestra como readonly, recalculado por JS.</para>
 /// </summary>
 public class CrearRecepcionDto
 {
@@ -30,10 +36,6 @@ public class CrearRecepcionDto
     [Display(Name = "Descuento")]
     [Range(0, 9999999999.99, ErrorMessage = "El descuento debe estar entre {1} y {2}.")]
     public decimal Descuento { get; set; }
-
-    [Display(Name = "Total")]
-    [Range(0, 9999999999.99, ErrorMessage = "El total debe estar entre {1} y {2}.")]
-    public decimal Total { get; set; }
 
     [Display(Name = "Observaciones")]
     [StringLength(2000, ErrorMessage = "Las observaciones no pueden superar {1} caracteres.")]
