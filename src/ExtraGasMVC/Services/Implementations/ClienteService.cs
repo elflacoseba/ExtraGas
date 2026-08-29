@@ -2,6 +2,7 @@ using AutoMapper;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Extensions;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -109,7 +110,10 @@ public class ClienteService : IClienteService
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
         var entity = _mapper.Map<Cliente>(cliente);
+        // Issue #114: Activo y FechaAlta no vienen del DTO. Los setea el Service
+        // porque son estado / audit trail, no datos de carga del operador.
         entity.Activo = true;
+        entity.FechaAlta = DateOnly.FromDateTime(DateTime.UtcNow);
         entity.CreatedAt = DateTime.UtcNow;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.CreatedBy = createdBy;
@@ -130,9 +134,17 @@ public class ClienteService : IClienteService
         if (!await IsDniUniqueAsync(cliente.Dni, cliente.Id, ct))
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
+        // Snapshot de Activo y FechaAlta ANTES del AutoMapper: el formulario
+        // de Edit no debe poder modificar ninguno de los dos. Si el operador
+        // los manda distintos (sea por bug del DTO, por curl o por form
+        // antiguo en cache), los restauramos silenciosamente.
+        var activoOriginal = entity.Activo;
+        var fechaAltaOriginal = entity.FechaAlta;
+
         _mapper.Map(cliente, entity);
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = updatedBy;
+        ClienteEditRules.PreservarFlagsNoEditables(entity, activoOriginal, fechaAltaOriginal);
 
         await _context.SaveChangesAsync(ct);
 
