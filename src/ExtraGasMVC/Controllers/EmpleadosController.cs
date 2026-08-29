@@ -48,7 +48,10 @@ public class EmpleadosController : BaseController
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
         await LoadViewBagsAsync(ct);
-        return View(new CreateEmpleadoDto { FechaIngreso = DateOnly.FromDateTime(DateTime.UtcNow), Activo = true });
+        // Issue #114: CreateEmpleadoDto ya no expone Activo — lo setea el
+        // Service en true. FechaIngreso sigue siendo dato del operador
+        // (preinicializado a hoy como UX default).
+        return View(new CreateEmpleadoDto { FechaIngreso = DateOnly.FromDateTime(DateTime.UtcNow) });
     }
 
     [HttpPost]
@@ -87,6 +90,11 @@ public class EmpleadosController : BaseController
         if (empleado is null) return NotFound();
 
         await LoadViewBagsAsync(ct);
+
+        // Issue #114: UpdateEmpleadoDto ya no expone Activo (es estado y
+        // solo cambia vía Delete). Lo pasamos por ViewBag para mostrarlo
+        // como info read-only en la vista.
+        ViewBag.Activo = empleado.Activo;
 
         var updateDto = _mapper.Map<UpdateEmpleadoDto>(empleado);
         return View(updateDto);
