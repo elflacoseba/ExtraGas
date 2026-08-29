@@ -260,25 +260,6 @@ Documento de decisiones (ADR-style) y supuestos del sistema **ExtraGas**.
 
 ---
 
-## 15. Unicidad de `clientes.dni` solo entre activos (columna VIRTUAL `dni_unique`)
-
-**Contexto:** el índice `idx_clientes_dni` era `UNIQUE` sobre la tabla completa (migración `20260606_000001`), sin contemplar soft-delete. Esto provocaba que, tras dar de baja a un cliente con DNI X, cualquier intento de crear otro cliente con el mismo DNI fallara con `ER_DUP_ENTRY (1062)` aunque la app lo permitiera (porque `IsDniUniqueAsync` filtra por `deleted_at IS NULL` vía el QueryFilter global). Issue #105.
-
-**Decisión:** reemplazar el `UNIQUE INDEX idx_clientes_dni` por una columna VIRTUAL `dni_unique` + `UNIQUE INDEX idx_clientes_dni_unique` sobre esa columna. La columna se calcula como `CASE WHEN deleted_at IS NULL THEN dni ELSE NULL END`. Migración `20260829_000001_clientes_dni_unique_soft_delete.sql`.
-
-**Por qué:**
-- MySQL no soporta índices parciales nativos (`UNIQUE WHERE deleted_at IS NULL`). La columna VIRTUAL es el workaround documentado en el ADR #12 (mismo patrón aplicado a `pedido_items.unique_hash`).
-- MySQL trata múltiples `NULL` como distintos en `UNIQUE INDEX`, por lo que el índice permite N soft-deleted con el mismo DNI (todos con `dni_unique = NULL`) y exige exactamente 1 activo por DNI (`dni_unique = dni`).
-- DDL puro: la app no necesita saber de la columna. EF no la modela; la `Configuration` usa `HasIndex(...).HasFilter("deleted_at IS NULL")` solo como documentación de la intención (el filtro real lo implementa la columna VIRTUAL, no EF).
-- Conserva la garantía a nivel BD y la trazabilidad histórica del DNI borrado (no se vacía la columna `dni`).
-
-**Implicancia:**
-- Cualquier futuro índice único sobre columnas con soft-delete en este proyecto debe seguir el mismo patrón (columna VIRTUAL + UNIQUE INDEX), no `UNIQUE` directo sobre la tabla.
-- El `HasFilter` en la Configuration de EF es **metadato**, no se traduce a SQL en MySQL — no genera ni altera el índice real. El índice real es `idx_clientes_dni_unique` sobre `dni_unique`, creado por la migración.
-- La verificación end-to-end (INSERT → soft-delete → INSERT con mismo DNI → OK) requiere MySQL real; los tests automatizados cubren la lógica del service (`IsDniUniqueAsync` filtra por QueryFilter).
-
----
-
 ## Supuestos explícitos (no validados con el usuario)
 
 1. No hay delivery con zonas / tarifas distintas. Un pedido = una dirección.
