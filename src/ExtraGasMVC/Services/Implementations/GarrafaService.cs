@@ -5,6 +5,7 @@ using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.Data.Entities.Views;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Extensions;
 using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -218,6 +219,9 @@ public class GarrafaService : IGarrafaService
             throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafa.Codigo}.");
 
         var entity = _mapper.Map<Garrafa>(garrafa);
+        // Issue #114: Activo no viene del DTO. Lo setea el Service en true
+        // porque es estado (soft-delete), no dato de carga del operador.
+        entity.Activo = true;
         entity.CreatedAt = DateTime.UtcNow;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.CreatedBy = usuarioId;
@@ -238,9 +242,16 @@ public class GarrafaService : IGarrafaService
         if (await _context.Garrafas.AnyAsync(g => g.Codigo == garrafa.Codigo && g.Id != garrafa.Id, ct))
             throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafa.Codigo}.");
 
+        // Snapshot de Activo ANTES del AutoMapper: el formulario de Edit no
+        // debe poder modificarlo. Si el operador lo manda distinto, lo
+        // restauramos silenciosamente. El estado operacional
+        // (estado_garrafa_id) NO se preserva — lo cambia la acción dedicada.
+        var activoOriginal = entity.Activo;
+
         _mapper.Map(garrafa, entity);
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = usuarioId;
+        GarrafaEditRules.PreservarFlagsNoEditables(entity, activoOriginal);
 
         await SaveOrThrowDuplicateAsync(garrafa.Codigo, ct);
 

@@ -118,10 +118,11 @@ public class GarrafasController : BaseController
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
         await LoadViewBagsAsync(ct);
+        // Issue #114: CreateGarrafaDto ya no expone Activo — lo setea el
+        // Service en true.
         return View(new CreateGarrafaDto
         {
             EstadoGarrafaId = 1,
-            Activo = true,
             FechaCompra = DateOnly.FromDateTime(DateTime.UtcNow)
         });
     }
@@ -196,6 +197,11 @@ public class GarrafasController : BaseController
 
         await LoadViewBagsAsync(ct);
 
+        // Issue #114: UpdateGarrafaDto ya no expone Activo (es estado y solo
+        // cambia vía Delete). Lo pasamos por ViewBag para mostrarlo como info
+        // read-only en la vista.
+        ViewBag.Activo = garrafa.Activo;
+
         var updateDto = new UpdateGarrafaDto
         {
             Id = garrafa.Id,
@@ -206,7 +212,6 @@ public class GarrafasController : BaseController
             FechaCompra = garrafa.FechaCompra,
             EstadoGarrafaId = garrafa.EstadoGarrafaId,
             ClienteId = garrafa.ClienteId,
-            Activo = garrafa.Activo,
             Observaciones = garrafa.Observaciones
         };
 
