@@ -18,6 +18,11 @@ public class ClientesController : BaseController
         _mapper = mapper;
     }
 
+    private async Task LoadViewBagsAsync(CancellationToken ct = default)
+    {
+        ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+    }
+
     public async Task<IActionResult> Index(string? busqueda, bool soloActivos = true, int pagina = 1, int tamanio = 25, CancellationToken ct = default)
     {
         var resultado = await _clienteService.SearchAsync(busqueda, soloActivos, pagina, tamanio, ct);
@@ -35,13 +40,13 @@ public class ClientesController : BaseController
         var cliente = await _clienteService.GetByIdAsync(id, ct);
         if (cliente is null) return NotFound();
 
-        ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+        await LoadViewBagsAsync(ct);
         return View(cliente);
     }
 
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
-        ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+        await LoadViewBagsAsync(ct);
         return View(new CreateClienteDto { FechaAlta = DateOnly.FromDateTime(DateTime.UtcNow), Activo = true });
     }
 
@@ -51,7 +56,7 @@ public class ClientesController : BaseController
     {
         if (!ModelState.IsValid)
         {
-            ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(cliente);
         }
         try
@@ -64,13 +69,13 @@ public class ClientesController : BaseController
         catch (InvalidOperationException ex)
         {
             ModelState.AddModelError("Dni", ex.Message);
-            ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(cliente);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear el cliente: {ex.Message}");
-            ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(cliente);
         }
     }
@@ -80,7 +85,7 @@ public class ClientesController : BaseController
         var cliente = await _clienteService.GetByIdAsync(id, ct);
         if (cliente is null) return NotFound();
 
-        ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+        await LoadViewBagsAsync(ct);
 
         var updateDto = _mapper.Map<UpdateClienteDto>(cliente);
         return View(updateDto);
@@ -93,7 +98,7 @@ public class ClientesController : BaseController
         if (id != cliente.Id) return BadRequest();
         if (!ModelState.IsValid)
         {
-            ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(cliente);
         }
         try
@@ -106,13 +111,13 @@ public class ClientesController : BaseController
         catch (InvalidOperationException ex)
         {
             ModelState.AddModelError("Dni", ex.Message);
-            ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(cliente);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar el cliente: {ex.Message}");
-            ViewBag.Provincias = await _clienteService.GetProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(cliente);
         }
     }

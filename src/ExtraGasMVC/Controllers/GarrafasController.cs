@@ -64,7 +64,7 @@ public class GarrafasController : BaseController
     /// concurrentes sobre un único DbContext (mismo motivo que en
     /// <c>RecepcionesController.BuildCreateViewModelAsync</c>).
     /// </summary>
-    private async Task CargarDropdownsFormularioAsync(CancellationToken ct)
+    private async Task LoadViewBagsAsync(CancellationToken ct)
     {
         ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
         ViewBag.Estados = await _garrafaService.GetEstadosAsync(ct);
@@ -117,7 +117,7 @@ public class GarrafasController : BaseController
 
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
-        await CargarDropdownsFormularioAsync(ct);
+        await LoadViewBagsAsync(ct);
         return View(new CreateGarrafaDto
         {
             EstadoGarrafaId = 1,
@@ -132,7 +132,7 @@ public class GarrafasController : BaseController
     {
         if (!ModelState.IsValid)
         {
-            await CargarDropdownsFormularioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(garrafa);
         }
 
@@ -151,7 +151,7 @@ public class GarrafasController : BaseController
             // para mostrar al usuario.
             _logger.LogWarning(ex, "Validación de negocio al crear garrafa {Codigo}", codigoParaLog);
             ModelState.AddModelError(string.Empty, ex.Message);
-            await CargarDropdownsFormularioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(garrafa);
         }
         catch (KeyNotFoundException ex)
@@ -160,7 +160,7 @@ public class GarrafasController : BaseController
             // en el service o por la BD. El mensaje del service es seguro.
             _logger.LogWarning(ex, "Entidad relacionada inexistente al crear garrafa {Codigo}", codigoParaLog);
             ModelState.AddModelError(string.Empty, ex.Message);
-            await CargarDropdownsFormularioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(garrafa);
         }
         catch (DbUpdateException ex)
@@ -170,7 +170,7 @@ public class GarrafasController : BaseController
             _logger.LogError(ex, "Error de base de datos al crear garrafa {Codigo}", codigoParaLog);
             ModelState.AddModelError(string.Empty,
                 "No se pudo guardar la información. Si el problema persiste, contacte al administrador.");
-            await CargarDropdownsFormularioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(garrafa);
         }
         catch (Exception ex)
@@ -178,7 +178,7 @@ public class GarrafasController : BaseController
             _logger.LogError(ex, "Error inesperado al crear garrafa {Codigo}", codigoParaLog);
             ModelState.AddModelError(string.Empty,
                 "Ocurrió un error inesperado al procesar la operación. Intente nuevamente.");
-            await CargarDropdownsFormularioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(garrafa);
         }
     }
@@ -194,7 +194,7 @@ public class GarrafasController : BaseController
         if (garrafa.EstadoCodigo == GarrafaEstados.FueraServicio)
             return RedirectBloqueadoPorEstado(id);
 
-        await CargarDropdownsFormularioAsync(ct);
+        await LoadViewBagsAsync(ct);
 
         var updateDto = new UpdateGarrafaDto
         {
@@ -229,7 +229,7 @@ public class GarrafasController : BaseController
 
         if (!ModelState.IsValid)
         {
-            await CargarDropdownsFormularioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(garrafa);
         }
         try
@@ -245,7 +245,7 @@ public class GarrafasController : BaseController
             // antes de SaveChanges, etc.
             _logger.LogWarning(ex, "Validación de negocio al actualizar garrafa {Id}", garrafa.Id);
             ModelState.AddModelError(string.Empty, ex.Message);
-            await CargarDropdownsFormularioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(garrafa);
         }
         catch (KeyNotFoundException ex)
@@ -263,7 +263,7 @@ public class GarrafasController : BaseController
             _logger.LogError(ex, "Error de base de datos al actualizar garrafa {Id}", garrafa.Id);
             ModelState.AddModelError(string.Empty,
                 "No se pudo guardar la información. Si el problema persiste, contacte al administrador.");
-            await CargarDropdownsFormularioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(garrafa);
         }
         catch (Exception ex)
@@ -271,7 +271,7 @@ public class GarrafasController : BaseController
             _logger.LogError(ex, "Error inesperado al actualizar garrafa {Id}", garrafa.Id);
             ModelState.AddModelError(string.Empty,
                 "Ocurrió un error inesperado al procesar la operación. Intente nuevamente.");
-            await CargarDropdownsFormularioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(garrafa);
         }
     }

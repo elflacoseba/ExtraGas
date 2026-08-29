@@ -51,7 +51,7 @@ public class UsuariosController : BaseController
     {
         if (!ModelState.IsValid)
         {
-            ViewBag.EmpleadosSinUsuario = await _usuarioService.GetEmpleadosSinUsuarioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(dto);
         }
 
@@ -60,7 +60,7 @@ public class UsuariosController : BaseController
         {
             foreach (var err in policyResult.Errors)
                 ModelState.AddModelError(nameof(dto.Password), err);
-            ViewBag.EmpleadosSinUsuario = await _usuarioService.GetEmpleadosSinUsuarioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(dto);
         }
 
@@ -68,7 +68,7 @@ public class UsuariosController : BaseController
         if (existing is not null)
         {
             ModelState.AddModelError("Username", "El nombre de usuario ya esta en uso.");
-            ViewBag.EmpleadosSinUsuario = await _usuarioService.GetEmpleadosSinUsuarioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(dto);
         }
 
@@ -82,7 +82,7 @@ public class UsuariosController : BaseController
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear el usuario: {ex.Message}");
-            ViewBag.EmpleadosSinUsuario = await _usuarioService.GetEmpleadosSinUsuarioAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(dto);
         }
     }
