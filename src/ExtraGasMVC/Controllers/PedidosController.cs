@@ -11,6 +11,13 @@ namespace ExtraGasMVC.Controllers;
 [Authorize(Policy = "OperadorOrAdmin")]
 public class PedidosController : BaseController
 {
+    // CA1869: cache the JsonSerializerOptions instance to avoid allocating
+    // a new one on every deserialization call.
+    private static readonly System.Text.Json.JsonSerializerOptions JsonSerializerOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private readonly IPedidoService _pedidoService;
     private readonly IClienteService _clienteService;
     private readonly IProductoService _productoService;
@@ -265,7 +272,7 @@ public class PedidosController : BaseController
         {
             codigosPorItem = System.Text.Json.JsonSerializer.Deserialize<Dictionary<ulong, List<string>>>(
                 codigosGarrafaJson,
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                JsonSerializerOptions)
                 ?? new Dictionary<ulong, List<string>>();
         }
         catch (System.Text.Json.JsonException)

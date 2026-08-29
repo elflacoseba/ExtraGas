@@ -21,11 +21,11 @@ public class ProductosController : BaseController
         if (soloActivos) productos = productos.Where(p => p.Activo);
         if (!string.IsNullOrWhiteSpace(busqueda))
         {
-            var q = busqueda.Trim().ToLower();
+            var q = busqueda.Trim();
             productos = productos.Where(p =>
-                p.Nombre.ToLower().Contains(q)
-                || p.Codigo.ToLower().Contains(q)
-                || (p.Descripcion ?? string.Empty).ToLower().Contains(q));
+                p.Nombre.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || p.Codigo.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || (p.Descripcion ?? string.Empty).Contains(q, StringComparison.OrdinalIgnoreCase));
         }
         ViewBag.Busqueda = busqueda;
         ViewBag.SoloActivos = soloActivos;

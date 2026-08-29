@@ -29,11 +29,9 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.SlidingExpiration = true;
     });
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("AdminOnly", policy => policy.RequireRole("ADMIN"));
-    options.AddPolicy("OperadorOrAdmin", policy => policy.RequireRole("ADMIN", "OPERADOR"));
-});
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("AdminOnly", policy => policy.RequireRole("ADMIN"))
+    .AddPolicy("OperadorOrAdmin", policy => policy.RequireRole("ADMIN", "OPERADOR"));
 
 // Bind AuthLockoutOptions desde appsettings (sección "Auth:Lockout").
 builder.Services.Configure<AuthLockoutOptions>(

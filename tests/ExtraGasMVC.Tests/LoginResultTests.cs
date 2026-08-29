@@ -47,11 +47,11 @@ public class LoginResultTests
     {
         // Sanity: el enum tiene los valores esperados.
         Assert.Equal(6, Enum.GetValues<LoginFailureReason>().Length);
-        Assert.True(Enum.IsDefined(typeof(LoginFailureReason), LoginFailureReason.None));
-        Assert.True(Enum.IsDefined(typeof(LoginFailureReason), LoginFailureReason.UserNotFound));
-        Assert.True(Enum.IsDefined(typeof(LoginFailureReason), LoginFailureReason.UserInactive));
-        Assert.True(Enum.IsDefined(typeof(LoginFailureReason), LoginFailureReason.UserDeleted));
-        Assert.True(Enum.IsDefined(typeof(LoginFailureReason), LoginFailureReason.InvalidPassword));
-        Assert.True(Enum.IsDefined(typeof(LoginFailureReason), LoginFailureReason.LockedOut));
+        Assert.True(Enum.IsDefined(LoginFailureReason.None));
+        Assert.True(Enum.IsDefined(LoginFailureReason.UserNotFound));
+        Assert.True(Enum.IsDefined(LoginFailureReason.UserInactive));
+        Assert.True(Enum.IsDefined(LoginFailureReason.UserDeleted));
+        Assert.True(Enum.IsDefined(LoginFailureReason.InvalidPassword));
+        Assert.True(Enum.IsDefined(LoginFailureReason.LockedOut));
     }
 }

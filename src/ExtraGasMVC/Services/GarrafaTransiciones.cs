@@ -45,8 +45,8 @@ public static class GarrafaTransiciones
     /// Transition matrix: origin state code → set of allowed destination state codes.
     /// Self-transitions are not represented (they are rejected as no-ops).
     /// </summary>
-    private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> Matriz =
-        new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+    private static readonly Dictionary<string, HashSet<string>> Matriz =
+        new(StringComparer.Ordinal)
         {
             [GarrafaEstados.LlenaDeposito] = new HashSet<string>(StringComparer.Ordinal)
             {
@@ -110,7 +110,7 @@ public static class GarrafaTransiciones
     /// <paramref name="origenCodigo"/>. Returns an empty set when the origin
     /// is unknown or terminal.
     /// </summary>
-    public static IReadOnlySet<string> DestinosPermitidos(string origenCodigo)
+    public static HashSet<string> DestinosPermitidos(string origenCodigo)
     {
         if (string.IsNullOrEmpty(origenCodigo))
             return new HashSet<string>(StringComparer.Ordinal);

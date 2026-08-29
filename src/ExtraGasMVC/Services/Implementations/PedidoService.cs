@@ -499,7 +499,7 @@ public class PedidoService : IPedidoService
         // y que su tipo de línea es ENTREGA/DEVOLUCION.
         ValidarItemsSonGarrafaCanjeable(items);
 
-        // 7) Pre-validar TODOS los códigos antes de escribir nada.
+        // 7) Pre-validar cada código antes de escribir nada.
         var codigosPorItemLimpios = NormalizarYValidarCodigos(items, codigosPorItem);
 
         // 8) Segunda pasada: validar cada código contra existencia, estado y
@@ -508,7 +508,7 @@ public class PedidoService : IPedidoService
         foreach (var item in items)
             await ValidarCodigosContraInventarioAsync(item, codigosPorItemLimpios[item.Id], pedido, ct);
 
-        // 9) Todo validado. Transacción ambiente.
+        // 9) Validación completa. Transacción ambiente.
         await using var transaction = await _context.Database.BeginTransactionAsync(ct);
         try
         {

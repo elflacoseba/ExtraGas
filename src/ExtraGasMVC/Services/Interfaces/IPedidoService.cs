@@ -49,7 +49,7 @@ public interface IPedidoService
     /// abre una transacción ambiente y delega en
     /// <c>IGarrafaService.RegistrarMovimientoPorCanjeAsync</c>. Finalmente
     /// actualiza el estado del pedido a CONFIRMADO dentro de la misma
-    /// transacción. Cualquier falla rollbackea todo.
+    /// transacción. Cualquier falla hace rollback completo.
     /// </summary>
     /// <param name="codigosPorItem">
     /// Diccionario <c>itemId → códigos físicos</c>. Solo incluye items GARRAFA
