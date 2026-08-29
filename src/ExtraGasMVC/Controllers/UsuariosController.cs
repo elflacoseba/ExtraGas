@@ -42,7 +42,9 @@ public class UsuariosController : BaseController
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
         await LoadViewBagsAsync(ct);
-        return View(new CreateUsuarioDto { Activo = true });
+        // Issue #114: CreateUsuarioDto ya no expone Activo — lo setea el
+        // Service en true.
+        return View(new CreateUsuarioDto());
     }
 
     [HttpPost]
@@ -97,7 +99,6 @@ public class UsuariosController : BaseController
             Id = usuario.Id,
             Email = usuario.Email,
             RolId = usuario.RolId,
-            Activo = usuario.Activo
         };
 
         // TempData de la password temporal se consume en este render: Peek para leer
@@ -108,6 +109,10 @@ public class UsuariosController : BaseController
         if (temporaryPassword is not null) TempData.Remove("TemporaryPassword");
         if (temporaryPasswordUsername is not null) TempData.Remove("TemporaryPasswordUsername");
 
+        // Issue #114: UpdateUsuarioDto ya no expone Activo (es estado y solo
+        // cambia vía Delete). Lo pasamos por ViewBag para mostrarlo como info
+        // read-only en la vista.
+        ViewBag.Activo = usuario.Activo;
         ViewBag.TemporaryPassword = temporaryPassword;
         ViewBag.TemporaryPasswordUsername = temporaryPasswordUsername;
         ViewBag.Usuario = usuario;
@@ -128,23 +133,23 @@ public class UsuariosController : BaseController
             return View(dto);
         }
 
-        // Reglas sobre el propio usuario logueado. La autoridad es el server
-        // (la UI deshabilita los controles pero no es barrera).
-        //   - No puede desactivarse: dejaria la app sin admin (o sin su
-        //     propia cuenta) sin posibilidad de re-entrar.
-        //   - No puede cambiarse el rol: podria auto-degradarse y perder
-        //     permisos para volver a entrar (la policy [Authorize(Role =
-        //     ADMIN)] del propio controller lo bloquearia).
-        // Mismo patron que Delete y ResetPassword, que ya comparan
-        // id == currentUserId.
+        // Issue #114: la regla "no puede desactivarse a sí mismo" que vivía
+        // acá quedó obsoleta — UpdateUsuarioDto ya no expone Activo, por lo
+        // que el operador ya no puede desactivarse desde este formulario.
+        // La protección real está en Delete (que también compara
+        // id == currentUserId y rechaza TempData["Error"]).
+
+        // Regla que sí sigue vigente: no puede cambiarse el propio rol.
+        // Podria auto-degradarse y perder permisos para volver a entrar
+        // (la policy [Authorize(Role = ADMIN)] del propio controller lo
+        // bloquearia). La autoridad es el server — la UI deshabilita el
+        // select pero no es barrera.
         var currentUserId = GetCurrentUserId();
         if (id == currentUserId)
         {
             var current = await _usuarioService.GetByIdAsync(id, ct);
             if (current is null) return NotFound();
 
-            if (!dto.Activo)
-                ModelState.AddModelError(nameof(dto.Activo), "No puede desactivarse a si mismo.");
             if (dto.RolId != current.RolId)
                 ModelState.AddModelError(nameof(dto.RolId), "No puede cambiar su propio rol.");
 

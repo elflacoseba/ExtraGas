@@ -141,7 +141,7 @@ public sealed class UsuariosCreateViewBagTests
         Email = "nuevo@test.local",
         RolId = 1,
         Password = "Valida123!",
-        Activo = true,
+        // Issue #114: Activo ya no se setea desde el DTO — lo hace el Service.
     };
 
     private static FakeUsuarioService NewUsuarioService(
