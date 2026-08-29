@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ExtraGasMVC.Extensions;
 
 namespace ExtraGasMVC.DTOs;
 
@@ -34,7 +35,7 @@ public class CreateProveedorDto
 
     [Display(Name = "Razón social")]
     [Required(ErrorMessage = "La razón social es obligatoria.")]
-    [StringLength(200, ErrorMessage = "La razón social no puede superar {1} caracteres.")]
+    [StringLength(150, ErrorMessage = "La razón social no puede superar {1} caracteres.")]
     public string RazonSocial { get; set; } = null!;
 
     [Display(Name = "Nombre de fantasía")]
@@ -42,7 +43,7 @@ public class CreateProveedorDto
 
     [Display(Name = "CUIT")]
     [Required(ErrorMessage = "El CUIT es obligatorio.")]
-    [RegularExpression(@"^[0-9]{11}$", ErrorMessage = "El CUIT debe contener 11 dígitos numéricos.")]
+    [Cuit(ErrorMessage = "El CUIT debe contener 11 dígitos numéricos.")]
     public string Cuit { get; set; } = null!;
 
     [Display(Name = "Teléfono principal")]
@@ -108,7 +109,7 @@ public class UpdateProveedorDto
 
     [Display(Name = "Razón social")]
     [Required(ErrorMessage = "La razón social es obligatoria.")]
-    [StringLength(200, ErrorMessage = "La razón social no puede superar {1} caracteres.")]
+    [StringLength(150, ErrorMessage = "La razón social no puede superar {1} caracteres.")]
     public string RazonSocial { get; set; } = null!;
 
     [Display(Name = "Nombre de fantasía")]
@@ -116,7 +117,7 @@ public class UpdateProveedorDto
 
     [Display(Name = "CUIT")]
     [Required(ErrorMessage = "El CUIT es obligatorio.")]
-    [RegularExpression(@"^[0-9]{11}$", ErrorMessage = "El CUIT debe contener 11 dígitos numéricos.")]
+    [Cuit(ErrorMessage = "El CUIT debe contener 11 dígitos numéricos.")]
     public string Cuit { get; set; } = null!;
 
     [Display(Name = "Teléfono principal")]

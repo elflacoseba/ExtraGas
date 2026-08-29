@@ -2,6 +2,7 @@ using AutoMapper;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Extensions;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -101,9 +102,16 @@ public class ProveedorService : IProveedorService
         if (!await IsCuitUniqueAsync(proveedor.Cuit, id, ct))
             throw new InvalidOperationException("El CUIT ingresado ya está registrado.");
 
+        // Snapshot del flag Activo ANTES del AutoMapper: la regla "doble flag
+        // acoplado" prohíbe modificar Activo vía Edit (solo Delete lo cambia).
+        // Si el operador lo manda distinto en el form, lo restauramos sin
+        // lanzar excepción — más amigable que un 400.
+        var activoOriginal = entity.Activo;
+
         _mapper.Map(proveedor, entity);
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = updatedBy;
+        ProveedorEditRules.PreservarFlagsNoEditables(entity, activoOriginal);
 
         await _context.SaveChangesAsync(ct);
 
