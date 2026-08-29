@@ -2,6 +2,15 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ExtraGasMVC.DTOs;
 
+/// <summary>
+/// DTO de salida para <see cref="Data.Entities.Producto"/>. Incluye el campo
+/// operativo <c>Activo</c> que NO es editable desde ningún formulario: se
+/// expone solo para display (Details, Index, listados).
+///
+/// <para>Issue #114 (replicado en Productos): <c>Activo</c> solo cambia vía
+/// Delete. <c>ManejaGarrafaIndividual</c> sí es editable — es config de
+/// negocio del producto (define cómo se factura y rastrea).</para>
+/// </summary>
 public class ProductoDto
 {
     public ulong Id { get; set; }
@@ -17,6 +26,11 @@ public class ProductoDto
     public bool Activo { get; set; }
 }
 
+/// <summary>
+/// DTO de alta de producto. NO incluye <c>Activo</c> (lo setea el Service en
+/// <c>true</c>). Sin esto el operador podía crear un producto inactivo desde
+/// el formulario — un estado operacional incoherente. Issue #114.
+/// </summary>
 public class CreateProductoDto
 {
     [Display(Name = "Código")]
@@ -49,9 +63,15 @@ public class CreateProductoDto
     public decimal PrecioActual { get; set; }
 
     public bool ManejaGarrafaIndividual { get; set; }
-    public bool Activo { get; set; }
 }
 
+/// <summary>
+/// DTO de edición de producto. NO incluye <c>Activo</c>: es estado y solo
+/// cambia vía Delete. Editarlo desde el form producía estados zombie
+/// (<c>Activo=false</c> con <c>DeletedAt=null</c>). El Service lo preserva
+/// vía <c>ProductoEditRules.PreservarFlagsNoEditables</c>. Issue #114.
+/// <c>ManejaGarrafaIndividual</c> sí es editable (config de negocio).
+/// </summary>
 public class UpdateProductoDto
 {
     public ulong Id { get; set; }
@@ -86,5 +106,4 @@ public class UpdateProductoDto
     public decimal PrecioActual { get; set; }
 
     public bool ManejaGarrafaIndividual { get; set; }
-    public bool Activo { get; set; }
 }
