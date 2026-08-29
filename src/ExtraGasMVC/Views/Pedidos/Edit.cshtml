@@ -108,7 +108,7 @@
                     <small class="text-secondary">Calculado automáticamente a partir de los items.</small>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="Pedido.Descuento" class="form-label">Descuento</label>
+                    <label for="js-descuento" class="form-label">Descuento</label>
                     <div class="input-group">
                         <input asp-for="Pedido.Descuento" id="js-descuento" type="number" step="0.01" min="0" max="100" class="form-control" disabled="@(esFinal || soloObservaciones)" />
                         <span class="input-group-text"><i class="bi bi-percent"></i></span>
