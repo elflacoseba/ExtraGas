@@ -27,12 +27,12 @@
     <div class="card-header">
         <form method="get" class="row g-2 align-items-end">
             <div class="col-md-3">
-                <label class="form-label small mb-1">Número</label>
-                <input type="text" name="numero" value="@numero" class="form-control" placeholder="PED-2026-00001" />
+                <label for="filtroNumero" class="form-label small mb-1">Número</label>
+                <input type="text" id="filtroNumero" name="numero" value="@numero" class="form-control" placeholder="PED-2026-00001" />
             </div>
             <div class="col-md-3">
-                <label class="form-label small mb-1">Estado</label>
-                <select name="estadoId" class="form-select">
+                <label for="filtroEstado" class="form-label small mb-1">Estado</label>
+                <select id="filtroEstado" name="estadoId" class="form-select">
                     <option value="">Todos</option>
                     @foreach (var e in estados)
                     {
@@ -41,12 +41,12 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <label class="form-label small mb-1">Desde</label>
-                <input type="date" name="desde" value="@(desde?.ToString("yyyy-MM-dd"))" class="form-control" />
+                <label for="filtroDesde" class="form-label small mb-1">Desde</label>
+                <input type="date" id="filtroDesde" name="desde" value="@(desde?.ToString("yyyy-MM-dd"))" class="form-control" />
             </div>
             <div class="col-md-2">
-                <label class="form-label small mb-1">Hasta</label>
-                <input type="date" name="hasta" value="@(hasta?.ToString("yyyy-MM-dd"))" class="form-control" />
+                <label for="filtroHasta" class="form-label small mb-1">Hasta</label>
+                <input type="date" id="filtroHasta" name="hasta" value="@(hasta?.ToString("yyyy-MM-dd"))" class="form-control" />
             </div>
             <div class="col-md-2 d-flex gap-1">
                 <button type="submit" class="btn btn-primary flex-fill"><i class="bi bi-search me-1"></i>Filtrar</button>

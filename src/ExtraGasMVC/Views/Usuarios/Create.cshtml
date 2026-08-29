@@ -36,7 +36,7 @@
                     <span asp-validation-for="Email" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Rol</label> <span class="text-danger">*</span>
+                    <label asp-for="RolId" class="form-label">Rol</label> <span class="text-danger">*</span>
                     <select asp-for="RolId" class="form-select" required>
                         <option value="">-- Seleccionar rol --</option>
                         @if (roles != null)
@@ -55,8 +55,8 @@
                     <span asp-validation-for="Password" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Confirmar contraseña</label> <span class="text-danger">*</span>
-                    <input type="password" name="confirmPassword" class="form-control" required />
+                    <label for="confirmPassword" class="form-label">Confirmar contraseña</label> <span class="text-danger">*</span>
+                    <input type="password" id="confirmPassword" name="confirmPassword" class="form-control" required />
                 </div>
                 <div class="col-md-4 d-flex align-items-end">
                     <div class="form-check">
