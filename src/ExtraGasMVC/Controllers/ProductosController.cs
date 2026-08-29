@@ -42,7 +42,9 @@ public class ProductosController : BaseController
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
         await LoadViewBagsAsync(ct);
-        return View(new CreateProductoDto { Activo = true, UnidadVenta = "UNIDAD" });
+        // Issue #114: CreateProductoDto ya no expone Activo — lo setea el
+        // Service en true. UnidadVenta queda como default de UI.
+        return View(new CreateProductoDto { UnidadVenta = "UNIDAD" });
     }
 
     [HttpPost]
@@ -84,8 +86,12 @@ public class ProductosController : BaseController
             UnidadVenta = producto.UnidadVenta,
             PrecioActual = producto.PrecioActual,
             ManejaGarrafaIndividual = producto.ManejaGarrafaIndividual,
-            Activo = producto.Activo
         };
+
+        // Issue #114: UpdateProductoDto ya no expone Activo (es estado y
+        // solo cambia vía Delete). Lo pasamos por ViewBag para mostrarlo
+        // como info read-only en la vista.
+        ViewBag.Activo = producto.Activo;
 
         await LoadViewBagsAsync(ct);
         return View(updateDto);
@@ -119,29 +125,15 @@ public class ProductosController : BaseController
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(ulong id, CancellationToken ct = default)
     {
-        var producto = await _productoService.GetByIdAsync(id, ct);
-        if (producto is null)
-        {
-            TempData["Error"] = "No se encontró el producto.";
-            return RedirectToAction(nameof(Index));
-        }
-        
-        var updateDto = new UpdateProductoDto
-        {
-            Id = producto.Id,
-            Codigo = producto.Codigo,
-            Nombre = producto.Nombre,
-            Descripcion = producto.Descripcion,
-            TipoProductoId = producto.TipoProductoId,
-            CapacidadKg = producto.CapacidadKg,
-            UnidadVenta = producto.UnidadVenta,
-            PrecioActual = producto.PrecioActual,
-            ManejaGarrafaIndividual = producto.ManejaGarrafaIndividual,
-            Activo = false
-        };
-        
-        await _productoService.UpdateAsync(updateDto, GetCurrentUserId(), ct);
-        TempData["Success"] = "Producto desactivado.";
+        // Issue #114: antes este Delete implementaba soft-delete a mano vía
+        // UpdateAsync con Activo=false — un anti-patrón que dependía de que
+        // Activo fuera editable. Con el fix, el soft-delete se delega al
+        // Service (DeleteAsync), que setea DeletedAt + Activo=false en una
+        // sola operación consistente con el resto de los módulos.
+        var ok = await _productoService.DeleteAsync(id, ct);
+        TempData[ok ? "Success" : "Error"] = ok
+            ? "Producto desactivado correctamente."
+            : "No se encontró el producto.";
         return RedirectToAction(nameof(Index));
     }
 

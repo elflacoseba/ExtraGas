@@ -62,9 +62,19 @@
                     </div>
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
-                    <div class="form-check">
-                        <input asp-for="Activo" class="form-check-input" type="checkbox" />
-                        <label asp-for="Activo" class="form-check-label">Producto activo</label>
+                    <span class="form-label">Estado</span>
+                    <div>
+                        @if ((bool)ViewBag.Activo)
+                        {
+                            <span class="badge text-bg-success">Activo</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-secondary">Inactivo</span>
+                        }
+                        <small class="d-block text-secondary mt-1">
+                            Cambiá con Eliminar del listado.
+                        </small>
                     </div>
                 </div>
                 <div class="col-12">

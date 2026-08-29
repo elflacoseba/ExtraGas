@@ -2,6 +2,7 @@ using AutoMapper;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Extensions;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -86,6 +87,9 @@ public class ProductoService : IProductoService
     public async Task<ProductoDto> CreateAsync(CreateProductoDto producto, ulong? usuarioId, CancellationToken ct = default)
     {
         var entity = _mapper.Map<Producto>(producto);
+        // Issue #114: Activo no viene del DTO. Lo setea el Service en true
+        // porque es estado, no dato de carga del operador.
+        entity.Activo = true;
         entity.CreatedAt = DateTime.UtcNow;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.CreatedBy = usuarioId;
@@ -103,9 +107,16 @@ public class ProductoService : IProductoService
         if (entity == null)
             throw new KeyNotFoundException($"Producto con Id {producto.Id} no encontrado.");
 
+        // Snapshot de Activo ANTES del AutoMapper: el formulario de Edit no
+        // debe poder modificarlo. Si el operador lo manda distinto (sea por
+        // bug del DTO, por curl o por form antiguo en cache), lo restauramos
+        // silenciosamente. ManejaGarrafaIndividual NO se preserva — es config.
+        var activoOriginal = entity.Activo;
+
         _mapper.Map(producto, entity);
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = usuarioId;
+        ProductoEditRules.PreservarFlagsNoEditables(entity, activoOriginal);
 
         await _context.SaveChangesAsync(ct);
 
@@ -118,9 +129,15 @@ public class ProductoService : IProductoService
         if (producto == null)
             return false;
 
+        // Issue #114 (replicado): soft-delete completo — marca DeletedAt Y
+        // baja Activo. Mantiene la invariante "Activo=false implica
+        // DeletedAt != null" que las vistas y la consulta de activos esperan.
+        // Antes solo se seteaba DeletedAt, dejando Activo=true: un zombie.
         producto.DeletedAt = DateTime.UtcNow;
+        producto.Activo = false;
+        producto.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(ct);
-        
+
         return true;
     }
 }
