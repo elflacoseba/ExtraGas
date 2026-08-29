@@ -27,6 +27,13 @@ public class PagosController : Controller
         _context = context;
     }
 
+    private async Task LoadViewBagsAsync(CancellationToken ct = default)
+    {
+        ViewBag.Pedidos = await _pedidoService.GetPendientesAsync(ct);
+        ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
+        ViewBag.FormasPago = await _context.FormasPago.AsNoTracking().ToListAsync(ct);
+    }
+
     public async Task<IActionResult> Index(ulong? pedidoId, int pagina = 1, int tamanio = 25, CancellationToken ct = default)
     {
         var pagos = await _pagoService.GetAllAsync(ct);
@@ -51,9 +58,7 @@ public class PagosController : Controller
 
     public async Task<IActionResult> Create(ulong? pedidoId, CancellationToken ct = default)
     {
-        ViewBag.Pedidos = await _pedidoService.GetPendientesAsync(ct);
-        ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-        ViewBag.FormasPago = await _context.FormasPago.AsNoTracking().ToListAsync(ct);
+        await LoadViewBagsAsync(ct);
         return View(new CreatePagoDto { Fecha = DateTime.UtcNow, PedidoId = pedidoId ?? 0, FormaPagoId = 1 });
     }
 
@@ -63,9 +68,7 @@ public class PagosController : Controller
     {
         if (!ModelState.IsValid)
         {
-            ViewBag.Pedidos = await _pedidoService.GetPendientesAsync(ct);
-            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-            ViewBag.FormasPago = await _context.FormasPago.AsNoTracking().ToListAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(pago);
         }
         try
@@ -77,9 +80,7 @@ public class PagosController : Controller
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo registrar el pago: {ex.Message}");
-            ViewBag.Pedidos = await _pedidoService.GetPendientesAsync(ct);
-            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-            ViewBag.FormasPago = await _context.FormasPago.AsNoTracking().ToListAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(pago);
         }
     }
@@ -88,10 +89,8 @@ public class PagosController : Controller
     {
         var pago = await _pagoService.GetByIdAsync(id, ct);
         if (pago is null) return NotFound();
-        ViewBag.Pedidos = await _pedidoService.GetPendientesAsync(ct);
-        ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-        ViewBag.FormasPago = await _context.FormasPago.AsNoTracking().ToListAsync(ct);
-        
+            await LoadViewBagsAsync(ct);
+
         var updateDto = new UpdatePagoDto
         {
             Id = pago.Id,
@@ -114,9 +113,7 @@ public class PagosController : Controller
         if (id != pago.Id) return BadRequest();
         if (!ModelState.IsValid)
         {
-            ViewBag.Pedidos = await _pedidoService.GetPendientesAsync(ct);
-            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-            ViewBag.FormasPago = await _context.FormasPago.AsNoTracking().ToListAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(pago);
         }
         try
@@ -128,9 +125,7 @@ public class PagosController : Controller
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar el pago: {ex.Message}");
-            ViewBag.Pedidos = await _pedidoService.GetPendientesAsync(ct);
-            ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
-            ViewBag.FormasPago = await _context.FormasPago.AsNoTracking().ToListAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(pago);
         }
     }

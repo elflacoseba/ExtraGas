@@ -41,7 +41,7 @@ public class ProductosController : BaseController
 
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
-        await PopulateTiposProductoAsync(ct);
+        await LoadViewBagsAsync(ct);
         return View(new CreateProductoDto { Activo = true, UnidadVenta = "UNIDAD" });
     }
 
@@ -51,7 +51,7 @@ public class ProductosController : BaseController
     {
         if (!ModelState.IsValid)
         {
-            await PopulateTiposProductoAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(producto);
         }
         try
@@ -63,7 +63,7 @@ public class ProductosController : BaseController
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear el producto: {ex.Message}");
-            await PopulateTiposProductoAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(producto);
         }
     }
@@ -87,7 +87,7 @@ public class ProductosController : BaseController
             Activo = producto.Activo
         };
 
-        await PopulateTiposProductoAsync(ct);
+        await LoadViewBagsAsync(ct);
         return View(updateDto);
     }
 
@@ -98,7 +98,7 @@ public class ProductosController : BaseController
         if (id != producto.Id) return BadRequest();
         if (!ModelState.IsValid)
         {
-            await PopulateTiposProductoAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(producto);
         }
         try
@@ -110,7 +110,7 @@ public class ProductosController : BaseController
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar el producto: {ex.Message}");
-            await PopulateTiposProductoAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(producto);
         }
     }
@@ -145,7 +145,7 @@ public class ProductosController : BaseController
         return RedirectToAction(nameof(Index));
     }
 
-    private async Task PopulateTiposProductoAsync(CancellationToken ct)
+    private async Task LoadViewBagsAsync(CancellationToken ct)
     {
         ViewBag.TiposProducto = await _productoService.GetTiposProductoAsync(ct);
     }

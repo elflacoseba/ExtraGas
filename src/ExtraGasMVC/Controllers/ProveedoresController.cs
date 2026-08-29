@@ -33,13 +33,13 @@ public class ProveedoresController : BaseController
     {
         var proveedor = await _proveedorService.GetByIdAsync(id, ct);
         if (proveedor is null) return NotFound();
-        await CargarProvinciasAsync(ct);
+        await LoadViewBagsAsync(ct);
         return View(proveedor);
     }
 
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
-        await CargarProvinciasAsync(ct);
+        await LoadViewBagsAsync(ct);
         return View(new CreateProveedorDto { Activo = true });
     }
 
@@ -49,7 +49,7 @@ public class ProveedoresController : BaseController
     {
         if (!ModelState.IsValid)
         {
-            await CargarProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(proveedor);
         }
         try
@@ -62,13 +62,13 @@ public class ProveedoresController : BaseController
         catch (InvalidOperationException ex)
         {
             ModelState.AddModelError("Cuit", ex.Message);
-            await CargarProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(proveedor);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear el proveedor: {ex.Message}");
-            await CargarProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(proveedor);
         }
     }
@@ -79,7 +79,7 @@ public class ProveedoresController : BaseController
         if (proveedor is null) return NotFound();
         
         var updateDto = _mapper.Map<UpdateProveedorDto>(proveedor);
-        await CargarProvinciasAsync(ct);
+        await LoadViewBagsAsync(ct);
         return View(updateDto);
     }
 
@@ -90,7 +90,7 @@ public class ProveedoresController : BaseController
         if (id != proveedor.Id) return BadRequest();
         if (!ModelState.IsValid)
         {
-            await CargarProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(proveedor);
         }
         try
@@ -103,13 +103,13 @@ public class ProveedoresController : BaseController
         catch (InvalidOperationException ex)
         {
             ModelState.AddModelError("Cuit", ex.Message);
-            await CargarProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(proveedor);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar el proveedor: {ex.Message}");
-            await CargarProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(proveedor);
         }
     }
@@ -124,7 +124,7 @@ public class ProveedoresController : BaseController
         return RedirectToAction(nameof(Index));
     }
 
-    private async Task CargarProvinciasAsync(CancellationToken ct = default)
+    private async Task LoadViewBagsAsync(CancellationToken ct = default)
     {
         ViewBag.Provincias = await _proveedorService.GetProvinciasAsync(ct);
     }

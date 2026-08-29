@@ -18,6 +18,11 @@ public class EmpleadosController : BaseController
         _mapper = mapper;
     }
 
+    private async Task LoadViewBagsAsync(CancellationToken ct = default)
+    {
+        ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+    }
+
     public async Task<IActionResult> Index(string? busqueda, bool soloActivos = false, int pagina = 1, int tamanio = 25, CancellationToken ct = default)
     {
         var resultado = await _empleadoService.SearchAsync(busqueda, soloActivos, pagina, tamanio, ct);
@@ -36,13 +41,13 @@ public class EmpleadosController : BaseController
         var empleado = await _empleadoService.GetByIdAsync(id, ct);
         if (empleado is null) return NotFound();
 
-        ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+        await LoadViewBagsAsync(ct);
         return View(empleado);
     }
 
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
-        ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+        await LoadViewBagsAsync(ct);
         return View(new CreateEmpleadoDto { FechaIngreso = DateOnly.FromDateTime(DateTime.UtcNow), Activo = true });
     }
 
@@ -52,7 +57,7 @@ public class EmpleadosController : BaseController
     {
         if (!ModelState.IsValid)
         {
-            ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(dto);
         }
         try
@@ -65,13 +70,13 @@ public class EmpleadosController : BaseController
         catch (InvalidOperationException ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(dto);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo crear el empleado: {ex.Message}");
-            ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(dto);
         }
     }
@@ -81,7 +86,7 @@ public class EmpleadosController : BaseController
         var empleado = await _empleadoService.GetByIdAsync(id, ct);
         if (empleado is null) return NotFound();
 
-        ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+        await LoadViewBagsAsync(ct);
 
         var updateDto = _mapper.Map<UpdateEmpleadoDto>(empleado);
         return View(updateDto);
@@ -95,7 +100,7 @@ public class EmpleadosController : BaseController
 
         if (!ModelState.IsValid)
         {
-            ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(dto);
         }
         try
@@ -108,13 +113,13 @@ public class EmpleadosController : BaseController
         catch (InvalidOperationException ex)
         {
             ModelState.AddModelError(string.Empty, ex.Message);
-            ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(dto);
         }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar el empleado: {ex.Message}");
-            ViewBag.Provincias = await _empleadoService.GetProvinciasAsync(ct);
+            await LoadViewBagsAsync(ct);
             return View(dto);
         }
     }
