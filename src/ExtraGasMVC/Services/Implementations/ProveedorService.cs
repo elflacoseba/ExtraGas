@@ -36,29 +36,8 @@ public class ProveedorService : IProveedorService
         var proveedor = await _context.Proveedores
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Cuit == cuit, ct);
-        
+
         return proveedor is null ? null : _mapper.Map<ProveedorDto>(proveedor);
-    }
-
-    public async Task<IEnumerable<ProveedorDto>> GetAllAsync(CancellationToken ct = default)
-    {
-        var proveedores = await _context.Proveedores
-            .AsNoTracking()
-            .OrderBy(p => p.RazonSocial)
-            .ToListAsync(ct);
-        
-        return _mapper.Map<IEnumerable<ProveedorDto>>(proveedores);
-    }
-
-    public async Task<IEnumerable<ProveedorDto>> GetActivosAsync(CancellationToken ct = default)
-    {
-        var proveedores = await _context.Proveedores
-            .AsNoTracking()
-            .Where(p => p.Activo)
-            .OrderBy(p => p.RazonSocial)
-            .ToListAsync(ct);
-        
-        return _mapper.Map<IEnumerable<ProveedorDto>>(proveedores);
     }
 
     public async Task<SearchResultDto<ProveedorDto>> SearchAsync(string? busqueda, bool soloActivos, int pagina, int tamanio, CancellationToken ct = default)
@@ -72,11 +51,11 @@ public class ProveedorService : IProveedorService
 
         if (!string.IsNullOrWhiteSpace(busqueda))
         {
-            var q = busqueda.Trim().ToLower();
+            var q = busqueda.Trim();
             query = query.Where(p =>
-                p.RazonSocial.ToLower().Contains(q)
-                || p.Cuit.ToLower().Contains(q)
-                || (p.NombreFantasia != null && p.NombreFantasia.ToLower().Contains(q)));
+                p.RazonSocial.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || p.Cuit.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || (p.NombreFantasia != null && p.NombreFantasia.Contains(q, StringComparison.OrdinalIgnoreCase)));
         }
 
         var total = await query.CountAsync(ct);

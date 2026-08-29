@@ -106,7 +106,7 @@ public class ChangePasswordTempDataFlowTests
 
     private class InMemoryTempDataProvider : ITempDataProvider
     {
-        public IDictionary<string, object?> Store { get; } = new Dictionary<string, object?>();
+        public Dictionary<string, object?> Store { get; } = new();
 
         public IDictionary<string, object?> LoadTempData(HttpContext context) => Store;
 

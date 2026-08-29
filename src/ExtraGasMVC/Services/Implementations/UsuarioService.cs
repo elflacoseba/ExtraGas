@@ -122,10 +122,10 @@ public class UsuarioService : IUsuarioService
 
         if (!string.IsNullOrWhiteSpace(busqueda))
         {
-            var q = busqueda.Trim().ToLower();
+            var q = busqueda.Trim();
             query = query.Where(u =>
-                u.Username.ToLower().Contains(q)
-                || (u.Email != null && u.Email.ToLower().Contains(q)));
+                u.Username.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || (u.Email != null && u.Email.Contains(q, StringComparison.OrdinalIgnoreCase)));
         }
 
         if (rolId.HasValue)
@@ -599,7 +599,7 @@ public class UsuarioService : IUsuarioService
     /// el auditor existe. Sin excepción si el auditor fue soft-deleted.
     /// </summary>
     private static void AplicarAudit(
-        UsuarioDto dto, Usuario usuario, IReadOnlyDictionary<ulong, string> auditUsers)
+        UsuarioDto dto, Usuario usuario, Dictionary<ulong, string> auditUsers)
     {
         if (usuario.CreatedBy.HasValue && auditUsers.TryGetValue(usuario.CreatedBy.Value, out var creador))
             dto.CreadoPor = creador;
@@ -613,7 +613,7 @@ public class UsuarioService : IUsuarioService
     /// al Usuario. Sin excepción si el usuario no tiene empleado.
     /// </summary>
     private static void AplicarEmpleado(
-        UsuarioDto dto, IReadOnlyDictionary<ulong, Empleado> empleadosByUsuarioId)
+        UsuarioDto dto, Dictionary<ulong, Empleado> empleadosByUsuarioId)
     {
         if (!empleadosByUsuarioId.TryGetValue(dto.Id, out var empleado)) return;
 

@@ -40,10 +40,10 @@ public class EmpleadoService : IEmpleadoService
 
         if (!string.IsNullOrWhiteSpace(busqueda))
         {
-            var q = busqueda.Trim().ToLower();
+            var q = busqueda.Trim();
             query = query.Where(e =>
-                e.Nombre.ToLower().Contains(q)
-                || e.Apellido.ToLower().Contains(q)
+                e.Nombre.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || e.Apellido.Contains(q, StringComparison.OrdinalIgnoreCase)
                 || (e.Dni != null && e.Dni.Contains(q))
                 || (e.Cuil != null && e.Cuil.Contains(q))
                 || (e.Telefono != null && e.Telefono.Contains(q)));

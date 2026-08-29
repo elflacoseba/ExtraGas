@@ -57,8 +57,8 @@ public class AuditoriaLoginService : IAuditoriaLoginService
 
         if (!string.IsNullOrWhiteSpace(busqueda))
         {
-            var q = busqueda.Trim().ToLower();
-            query = query.Where(a => a.UsernameIntentado.ToLower().Contains(q));
+            var q = busqueda.Trim();
+            query = query.Where(a => a.UsernameIntentado.Contains(q, StringComparison.OrdinalIgnoreCase));
         }
 
         if (!string.IsNullOrWhiteSpace(ip))
