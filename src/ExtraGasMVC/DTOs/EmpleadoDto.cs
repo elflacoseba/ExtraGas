@@ -49,18 +49,41 @@ public class EmpleadoDtoBase
 
     public ulong? UsuarioId { get; set; }
 
-    public bool Activo { get; set; }
-
     public string? Observaciones { get; set; }
 }
 
+/// <summary>
+/// DTO de salida para <see cref="Data.Entities.Empleado"/>. Incluye el campo
+/// operativo <c>Activo</c> que NO es editable desde ningún formulario: se
+/// expone solo para display (Details, Index, listados).
+///
+/// <para>Issue #114 (replicado en Empleados): <c>Activo</c> solo cambia vía
+/// Delete. <c>FechaIngreso</c> sí es editable — es un dato de negocio del
+/// empleado (nullable, lo carga el operador al alta y puede corregirlo
+/// después), a diferencia de <c>Cliente.FechaAlta</c> que es audit trail.</para>
+/// </summary>
 public class EmpleadoDto : EmpleadoDtoBase
 {
     public ulong Id { get; set; }
+
+    [Display(Name = "Activo")]
+    public bool Activo { get; set; }
 }
 
+/// <summary>
+/// DTO de alta de empleado. NO incluye <c>Activo</c> (lo setea el Service en
+/// <c>true</c>). Sin esto el operador podía crear un empleado inactivo desde
+/// el formulario — un estado operacional incoherente. Issue #114.
+/// </summary>
 public class CreateEmpleadoDto : EmpleadoDtoBase { }
 
+/// <summary>
+/// DTO de edición de empleado. NO incluye <c>Activo</c>: es estado y solo
+/// cambia vía Delete. Editarlo desde el form producía estados zombie
+/// (<c>Activo=false</c> con <c>DeletedAt=null</c>). El Service lo preserva
+/// vía <c>EmpleadoEditRules.PreservarFlagsNoEditables</c>. Issue #114.
+/// <c>FechaIngreso</c> sí es editable (dato de negocio).
+/// </summary>
 public class UpdateEmpleadoDto : EmpleadoDtoBase
 {
     public ulong Id { get; set; }

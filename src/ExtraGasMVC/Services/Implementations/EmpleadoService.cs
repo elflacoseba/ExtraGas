@@ -2,6 +2,7 @@ using AutoMapper;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Extensions;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -73,6 +74,9 @@ public class EmpleadoService : IEmpleadoService
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
         var empleado = _mapper.Map<Empleado>(dto);
+        // Issue #114: Activo no viene del DTO. Lo setea el Service en true
+        // porque es estado, no dato de carga del operador.
+        empleado.Activo = true;
         empleado.CreatedAt = DateTime.UtcNow;
         empleado.UpdatedAt = DateTime.UtcNow;
         empleado.CreatedBy = createdBy;
@@ -93,9 +97,16 @@ public class EmpleadoService : IEmpleadoService
         if (!await IsDniUniqueAsync(dto.Dni, dto.Id, ct))
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
+        // Snapshot de Activo ANTES del AutoMapper: el formulario de Edit no
+        // debe poder modificarlo. Si el operador lo manda distinto (sea por
+        // bug del DTO, por curl o por form antiguo en cache), lo restauramos
+        // silenciosamente. FechaIngreso NO se preserva — es dato de negocio.
+        var activoOriginal = empleado.Activo;
+
         _mapper.Map(dto, empleado);
         empleado.UpdatedAt = DateTime.UtcNow;
         empleado.UpdatedBy = updatedBy;
+        EmpleadoEditRules.PreservarFlagsNoEditables(empleado, activoOriginal);
 
         await _context.SaveChangesAsync(ct);
 
