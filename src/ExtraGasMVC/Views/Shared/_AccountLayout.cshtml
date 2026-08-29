@@ -11,12 +11,14 @@
 
     <link rel="preload" href="~/lib/admin-lte/css/adminlte.min.css" as="style" />
     <link rel="stylesheet" href="~/lib/admin-lte/css/adminlte.min.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@@fontsource/source-sans-3@5.0.12/index.css" crossorigin="anonymous" media="print" onload="this.media = 'all'" />
+    <link rel="stylesheet" href="~/lib/sweetalert2/sweetalert2.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/@@fontsource/source-sans-3@5.0.12/index.css" crossorigin="anonymous" media="print" onload="this.media = 'all'" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" crossorigin="anonymous" />
 </head>
 <body class="login-page bg-body-secondary">
     @RenderBody()
     <script src="~/lib/admin-lte/js/adminlte.min.js"></script>
+    <script src="~/lib/sweetalert2/sweetalert2.min.js"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
