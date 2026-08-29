@@ -540,47 +540,84 @@ public class UsuarioService : IUsuarioService
 
     private async Task EnrichBatchAsync(List<UsuarioDto> dtos, List<Usuario> usuarios, CancellationToken ct)
     {
-        var auditUserIds = new HashSet<ulong>();
+        var auditUsers = await LoadAuditUsersAsync(usuarios, ct);
+        var empleadosByUsuarioId = await LoadEmpleadosByUsuarioIdAsync(dtos, ct);
 
+        foreach (var dto in dtos)
+        {
+            var usuario = usuarios.First(u => u.Id == dto.Id);
+            AplicarAudit(dto, usuario, auditUsers);
+            AplicarEmpleado(dto, empleadosByUsuarioId);
+        }
+    }
+
+    /// <summary>
+    /// Recolecta los IDs de CreatedBy/UpdatedBy de todos los usuarios y
+    /// devuelve un diccionario Id → Username para resolver auditores en
+    /// una sola query. Devuelve diccionario vacío si no hay IDs.
+    /// </summary>
+    private async Task<Dictionary<ulong, string>> LoadAuditUsersAsync(
+        IEnumerable<Usuario> usuarios, CancellationToken ct)
+    {
+        var auditUserIds = new HashSet<ulong>();
         foreach (var usuario in usuarios)
         {
             if (usuario.CreatedBy.HasValue) auditUserIds.Add(usuario.CreatedBy.Value);
             if (usuario.UpdatedBy.HasValue) auditUserIds.Add(usuario.UpdatedBy.Value);
         }
 
-        var auditUsers = auditUserIds.Count > 0
-            ? await _context.Usuarios
-                .AsNoTracking()
-                .IgnoreQueryFilters()
-                .Where(u => auditUserIds.Contains(u.Id))
-                .ToDictionaryAsync(u => u.Id, u => u.Username, ct)
-            : new Dictionary<ulong, string>();
+        if (auditUserIds.Count == 0) return new Dictionary<ulong, string>();
 
+        return await _context.Usuarios
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(u => auditUserIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Username, ct);
+    }
+
+    /// <summary>
+    /// Devuelve los empleados vinculados a cada Usuario en un diccionario
+    /// UsuarioId → Empleado. Diccionario vacío si ningún usuario tiene
+    /// empleado vinculado.
+    /// </summary>
+    private async Task<Dictionary<ulong, Empleado>> LoadEmpleadosByUsuarioIdAsync(
+        IEnumerable<UsuarioDto> dtos, CancellationToken ct)
+    {
         var usuarioIds = dtos.Select(d => d.Id).ToList();
-        var empleados = usuarioIds.Count > 0
-            ? await _context.Empleados
-                .AsNoTracking()
-                .Where(e => e.UsuarioId.HasValue && usuarioIds.Contains(e.UsuarioId!.Value))
-                .ToListAsync(ct)
-            : new List<Empleado>();
+        if (usuarioIds.Count == 0) return new Dictionary<ulong, Empleado>();
 
-        var empleadosDict = empleados.ToDictionary(e => e.UsuarioId!.Value);
+        var empleados = await _context.Empleados
+            .AsNoTracking()
+            .Where(e => e.UsuarioId.HasValue && usuarioIds.Contains(e.UsuarioId!.Value))
+            .ToListAsync(ct);
 
-        foreach (var dto in dtos)
-        {
-            var usuario = usuarios.First(u => u.Id == dto.Id);
+        return empleados.ToDictionary(e => e.UsuarioId!.Value);
+    }
 
-            if (usuario.CreatedBy.HasValue && auditUsers.TryGetValue(usuario.CreatedBy.Value, out var creador))
-                dto.CreadoPor = creador;
+    /// <summary>
+    /// Copia el username del auditor (CreatedBy / UpdatedBy) en el DTO si
+    /// el auditor existe. Sin excepción si el auditor fue soft-deleted.
+    /// </summary>
+    private static void AplicarAudit(
+        UsuarioDto dto, Usuario usuario, IReadOnlyDictionary<ulong, string> auditUsers)
+    {
+        if (usuario.CreatedBy.HasValue && auditUsers.TryGetValue(usuario.CreatedBy.Value, out var creador))
+            dto.CreadoPor = creador;
 
-            if (usuario.UpdatedBy.HasValue && auditUsers.TryGetValue(usuario.UpdatedBy.Value, out var actualizador))
-                dto.ActualizadoPor = actualizador;
+        if (usuario.UpdatedBy.HasValue && auditUsers.TryGetValue(usuario.UpdatedBy.Value, out var actualizador))
+            dto.ActualizadoPor = actualizador;
+    }
 
-            if (empleadosDict.TryGetValue(dto.Id, out var empleado))
-            {
-                dto.EmpleadoId = empleado.Id;
-                dto.EmpleadoNombre = $"{empleado.Apellido}, {empleado.Nombre}";
-            }
-        }
+    /// <summary>
+    /// Copia el EmpleadoId y el nombre formateado del empleado vinculado
+    /// al Usuario. Sin excepción si el usuario no tiene empleado.
+    /// </summary>
+    private static void AplicarEmpleado(
+        UsuarioDto dto, IReadOnlyDictionary<ulong, Empleado> empleadosByUsuarioId)
+    {
+        if (!empleadosByUsuarioId.TryGetValue(dto.Id, out var empleado)) return;
+
+        dto.EmpleadoId = empleado.Id;
+        dto.EmpleadoNombre = $"{empleado.Apellido}, {empleado.Nombre}";
     }
 }

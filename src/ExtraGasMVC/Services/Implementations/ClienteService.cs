@@ -103,40 +103,40 @@ public class ClienteService : IClienteService
         };
     }
 
-    public async Task<ClienteDto> CreateAsync(CreateClienteDto clienteDto, ulong? createdBy, CancellationToken ct = default)
+    public async Task<ClienteDto> CreateAsync(CreateClienteDto cliente, ulong? createdBy, CancellationToken ct = default)
     {
-        if (!await IsDniUniqueAsync(clienteDto.Dni, ct))
+        if (!await IsDniUniqueAsync(cliente.Dni, ct))
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
-        var cliente = _mapper.Map<Cliente>(clienteDto);
-        cliente.Activo = true;
-        cliente.CreatedAt = DateTime.UtcNow;
-        cliente.UpdatedAt = DateTime.UtcNow;
-        cliente.CreatedBy = createdBy;
-        cliente.UpdatedBy = createdBy;
+        var entity = _mapper.Map<Cliente>(cliente);
+        entity.Activo = true;
+        entity.CreatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.CreatedBy = createdBy;
+        entity.UpdatedBy = createdBy;
 
-        _context.Clientes.Add(cliente);
+        _context.Clientes.Add(entity);
         await _context.SaveChangesAsync(ct);
 
-        return _mapper.Map<ClienteDto>(cliente);
+        return _mapper.Map<ClienteDto>(entity);
     }
 
-    public async Task<ClienteDto> UpdateAsync(UpdateClienteDto clienteDto, ulong? updatedBy, CancellationToken ct = default)
+    public async Task<ClienteDto> UpdateAsync(UpdateClienteDto cliente, ulong? updatedBy, CancellationToken ct = default)
     {
-        var cliente = await _context.Clientes.FindAsync(new object[] { clienteDto.Id }, ct);
-        if (cliente == null)
-            throw new KeyNotFoundException($"Cliente con Id {clienteDto.Id} no encontrado.");
+        var entity = await _context.Clientes.FindAsync(new object[] { cliente.Id }, ct);
+        if (entity == null)
+            throw new KeyNotFoundException($"Cliente con Id {cliente.Id} no encontrado.");
 
-        if (!await IsDniUniqueAsync(clienteDto.Dni, clienteDto.Id, ct))
+        if (!await IsDniUniqueAsync(cliente.Dni, cliente.Id, ct))
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
-        _mapper.Map(clienteDto, cliente);
-        cliente.UpdatedAt = DateTime.UtcNow;
-        cliente.UpdatedBy = updatedBy;
+        _mapper.Map(cliente, entity);
+        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedBy = updatedBy;
 
         await _context.SaveChangesAsync(ct);
 
-        return _mapper.Map<ClienteDto>(cliente);
+        return _mapper.Map<ClienteDto>(entity);
     }
 
     public async Task<bool> DeleteAsync(ulong id, ulong? updatedBy, CancellationToken ct = default)
