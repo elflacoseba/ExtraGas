@@ -139,6 +139,23 @@ public class ClienteService : IClienteService
         return _mapper.Map<ClienteDto>(entity);
     }
 
+    /// <summary>
+    /// Helper testeable: indica si el DNI es único entre los clientes que la query
+    /// entregue. La query se construye fuera (típicamente con QueryFilter global
+    /// activo, que filtra soft-deleted) y el helper solo evalúa la proyección.
+    /// Marcado <c>internal</c> para que los tests lo consuman vía InternalsVisibleTo
+    /// sin exponerlo al resto de la app.
+    /// Issue #105: este helper es la pieza de lógica que el bug rompía a nivel BD
+    /// (la app pasaba la validación pero el UNIQUE INDEX rechazaba el INSERT).
+    /// </summary>
+    internal static bool DniEsUnicoSobre(IQueryable<Cliente> clientes, string? dni)
+    {
+        if (string.IsNullOrWhiteSpace(dni))
+            return true;
+
+        return !clientes.Any(c => c.Dni == dni);
+    }
+
     public async Task<bool> DeleteAsync(ulong id, ulong? updatedBy, CancellationToken ct = default)
     {
         var cliente = await _context.Clientes.FindAsync(new object[] { id }, ct);
@@ -188,23 +205,15 @@ public class ClienteService : IClienteService
         }) ?? [];
     }
 
-    private async Task<bool> IsDniUniqueAsync(string? dni, CancellationToken ct)
+    private Task<bool> IsDniUniqueAsync(string? dni, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(dni))
-            return true;
-
-        return !await _context.Clientes
-            .AsNoTracking()
-            .AnyAsync(c => c.Dni == dni, ct);
+        var query = _context.Clientes.AsNoTracking();
+        return Task.FromResult(DniEsUnicoSobre(query, dni));
     }
 
-    private async Task<bool> IsDniUniqueAsync(string? dni, ulong excludeId, CancellationToken ct)
+    private Task<bool> IsDniUniqueAsync(string? dni, ulong excludeId, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(dni))
-            return true;
-
-        return !await _context.Clientes
-            .AsNoTracking()
-            .AnyAsync(c => c.Dni == dni && c.Id != excludeId, ct);
+        var query = _context.Clientes.AsNoTracking().Where(c => c.Id != excludeId);
+        return Task.FromResult(DniEsUnicoSobre(query, dni));
     }
 }

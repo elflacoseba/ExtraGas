@@ -108,7 +108,14 @@ public class ClienteConfiguration : IEntityTypeConfiguration<Cliente>
 
         builder.HasIndex(c => new { c.Apellido, c.Nombre }).HasDatabaseName("idx_clientes_apellido");
         builder.HasIndex(c => c.TelefonoPrincipal).HasDatabaseName("idx_clientes_telefono");
-        builder.HasIndex(c => c.Dni).IsUnique().HasDatabaseName("idx_clientes_dni");
+        // Issue #105: la unicidad del DNI entre clientes ACTIVOS la gestiona una columna
+        // VIRTUAL `dni_unique` + UNIQUE INDEX en BD (migración 20260829_000001). EF no modela
+        // columnas generadas VIRTUAL; el HasIndex siguiente documenta la intención
+        // (índice sobre dni filtrado por soft-delete) sin pretender replicar la semántica
+        // — el índice real es idx_clientes_dni_unique y vive solo a nivel BD.
+        builder.HasIndex(c => c.Dni)
+            .HasDatabaseName("idx_clientes_dni_lookup")
+            .HasFilter("deleted_at IS NULL");
         builder.HasIndex(c => c.Codigo).HasDatabaseName("idx_clientes_codigo");
         builder.HasIndex(c => c.DeletedAt).HasDatabaseName("idx_clientes_deleted_at");
 
