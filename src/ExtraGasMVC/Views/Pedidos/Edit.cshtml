@@ -75,7 +75,7 @@
                     <span asp-validation-for="Pedido.EmpleadoId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Estado</label>
+                    <p class="form-label mb-0">Estado</p>
                     <div>
                         <span class="badge fs-6" style="background-color: @estadoColor">@estadoNombre</span>
                     </div>
@@ -100,15 +100,15 @@
             <h5 class="mt-4">Totales</h5>
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label class="form-label">Subtotal</label>
+                    <label for="js-subtotal" class="form-label">Subtotal</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
-                        <input type="text" class="form-control bg-light" value="@Model.Subtotal.ToArs()" readonly tabindex="-1" />
+                        <input type="text" id="js-subtotal" class="form-control bg-light" value="@Model.Subtotal.ToArs()" readonly tabindex="-1" />
                     </div>
                     <small class="text-secondary">Calculado automáticamente a partir de los items.</small>
                 </div>
                 <div class="col-md-4">
-                    <label asp-for="Pedido.Descuento" class="form-label"></label>
+                    <label for="js-descuento" class="form-label">Descuento</label>
                     <div class="input-group">
                         <input asp-for="Pedido.Descuento" id="js-descuento" type="number" step="0.01" min="0" max="100" class="form-control" disabled="@(esFinal || soloObservaciones)" />
                         <span class="input-group-text"><i class="bi bi-percent"></i></span>
@@ -116,7 +116,7 @@
                     <span asp-validation-for="Pedido.Descuento" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Total</label>
+                    <label for="js-total" class="form-label">Total</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
                         <input type="text" id="js-total" class="form-control bg-light" value="@Model.Total.ToArs()" readonly tabindex="-1" />
@@ -217,8 +217,8 @@
                         <input type="hidden" name="PedidoId" value="@Model.Pedido.Id" />
                         <div class="row g-3 align-items-end">
                             <div class="col-md-5">
-                                <label class="form-label">Producto <span class="text-danger">*</span></label>
-                                <select name="ProductoId" class="form-select" required>
+                                <label for="addItemProductoId" class="form-label">Producto <span class="text-danger">*</span></label>
+                                <select id="addItemProductoId" name="ProductoId" class="form-select" required>
                                     <option value="">-- Seleccione producto --</option>
                                     @foreach (var p in Model.Productos)
                                     {
@@ -227,16 +227,16 @@
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label">Tipo <span class="text-danger">*</span></label>
-                                <select name="TipoLinea" class="form-select" required>
+                                <label for="addItemTipoLinea" class="form-label">Tipo <span class="text-danger">*</span></label>
+                                <select id="addItemTipoLinea" name="TipoLinea" class="form-select" required>
                                     <option value="VENTA">Venta</option>
                                     <option value="ENTREGA">Entrega</option>
                                     <option value="DEVOLUCION">Devolución</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label">Cantidad <span class="text-danger">*</span></label>
-                                <input name="Cantidad" type="number" step="0.01" min="0.01" class="form-control" value="1" required />
+                                <label for="addItemCantidad" class="form-label">Cantidad <span class="text-danger">*</span></label>
+                                <input id="addItemCantidad" name="Cantidad" type="number" step="0.01" min="0.01" class="form-control" value="1" required />
                             </div>
                             <div class="col-md-2 d-grid">
                                 <button type="submit" class="btn btn-success">
@@ -357,12 +357,13 @@
                             ? $" {ig.CapacidadKg:0.##}kg"
                             : string.Empty;
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">
+                            <label for="canje-textarea-@ig.ItemId" class="form-label fw-semibold">
                                 @(ig.ProductoNombre)@capacidadLabel
                                 <span class="badge text-bg-@(ig.TipoLinea == "ENTREGA" ? "primary" : "warning") ms-1">@tipoLabel</span>
                                 <span class="text-secondary small ms-2">Cantidad esperada: @ig.CantidadEsperada</span>
                             </label>
-                            <textarea class="form-control js-canje-textarea"
+                            <textarea id="canje-textarea-@ig.ItemId"
+                                      class="form-control js-canje-textarea"
                                       data-item-id="@ig.ItemId"
                                       data-esperada="@ig.CantidadEsperada"
                                       rows="@Math.Max(2, ig.CantidadEsperada)"

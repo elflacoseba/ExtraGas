@@ -155,7 +155,7 @@
             items.push({
                 productoId: pid,
                 productoNombre: p ? p.nombre : '',
-                manejaGarrafaIndividual: !!(p && p.manejaGarrafaIndividual),
+                manejaGarrafaIndividual: !!(p?.manejaGarrafaIndividual),
                 cantidad: Number(tr.querySelector('.js-cantidad').value) || 0,
                 precioUnitario: Number(tr.querySelector('.js-precio').value) || 0,
                 codigosGarrafa: splitCodigos(tr.querySelector('.js-codigos').value),
@@ -178,7 +178,7 @@
     /// cantidad vs códigos, dedupe) se aplican solo si el producto tiene
     /// tracking individual.
     function validarItem(it, idx) {
-        if (!(it.cantidad > 0)) return 'Item ' + idx + ': la cantidad debe ser mayor a 0.';
+        if ((it.cantidad <= 0)) return 'Item ' + idx + ': la cantidad debe ser mayor a 0.';
         if (it.precioUnitario < 0) return 'Item ' + idx + ': el precio unitario no puede ser negativo.';
         if (!it.manejaGarrafaIndividual) return null;
         return validarCodigosGarrafa(it, idx);
@@ -234,9 +234,9 @@
 
     function leerTotales() {
         return {
-            subtotal: Number((document.getElementById('Recepcion_Subtotal') || {}).value) || 0,
-            descuento: Number((document.getElementById('Recepcion_Descuento') || {}).value) || 0,
-            total: Number((document.getElementById('Recepcion_Total') || {}).value) || 0,
+            subtotal: Number(document.getElementById('Recepcion_Subtotal')?.value) || 0,
+            descuento: Number(document.getElementById('Recepcion_Descuento')?.value) || 0,
+            total: Number(document.getElementById('Recepcion_Total')?.value) || 0,
         };
     }
 
