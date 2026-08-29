@@ -47,7 +47,9 @@ public class ClientesController : BaseController
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
         await LoadViewBagsAsync(ct);
-        return View(new CreateClienteDto { FechaAlta = DateOnly.FromDateTime(DateTime.UtcNow), Activo = true });
+        // Issue #114: CreateClienteDto ya no expone FechaAlta ni Activo — los
+        // setea el Service en CreateAsync con la fecha del alta y Activo=true.
+        return View(new CreateClienteDto());
     }
 
     [HttpPost]
@@ -86,6 +88,12 @@ public class ClientesController : BaseController
         if (cliente is null) return NotFound();
 
         await LoadViewBagsAsync(ct);
+
+        // Issue #114: UpdateClienteDto ya no expone Activo ni FechaAlta (son
+        // audit trail / estado y solo cambian vía Delete/Restore). Los pasamos
+        // por ViewBag para mostrarlos como info read-only en la vista.
+        ViewBag.FechaAlta = cliente.FechaAlta;
+        ViewBag.Activo = cliente.Activo;
 
         var updateDto = _mapper.Map<UpdateClienteDto>(cliente);
         return View(updateDto);

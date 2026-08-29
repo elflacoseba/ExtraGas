@@ -69,13 +69,6 @@ public class ClienteDtoBase
     [Display(Name = "Provincia")]
     public ulong? ProvinciaId { get; set; }
 
-    [Display(Name = "Fecha de alta")]
-    [Required(ErrorMessage = "La fecha de alta es obligatoria.")]
-    public DateOnly FechaAlta { get; set; }
-
-    [Display(Name = "Activo")]
-    public bool Activo { get; set; }
-
     [Display(Name = "Referencias")]
     public string? Referencias { get; set; }
 
@@ -83,13 +76,40 @@ public class ClienteDtoBase
     public string? Observaciones { get; set; }
 }
 
+/// <summary>
+/// DTO de salida para <see cref="Data.Entities.Cliente"/>. Incluye los campos
+/// operativos (<c>Activo</c>, <c>FechaAlta</c>) que NO son editables desde
+/// ningún formulario: se exponen solo para display (Details, Index, listados).
+/// Issue #114: <c>Activo</c> solo cambia vía Delete/Restore; <c>FechaAlta</c>
+/// es audit trail del alta y no debe retrocederse.
+/// </summary>
 public class ClienteDto : ClienteDtoBase
 {
     public ulong Id { get; set; }
+
+    [Display(Name = "Fecha de alta")]
+    public DateOnly FechaAlta { get; set; }
+
+    [Display(Name = "Activo")]
+    public bool Activo { get; set; }
 }
 
+/// <summary>
+/// DTO de alta de cliente. NO incluye <c>Activo</c> (lo setea el Service en
+/// <c>true</c>) ni <c>FechaAlta</c> (lo setea el Service con la fecha del
+/// momento del alta). Sin esto el operador podía crear un cliente inactivo
+/// desde el formulario — un estado operacional incoherente. Issue #114.
+/// </summary>
 public class CreateClienteDto : ClienteDtoBase { }
 
+/// <summary>
+/// DTO de edición de cliente. NO incluye <c>Activo</c> ni <c>FechaAlta</c>:
+/// ambos son audit trail / estado y solo cambian vía Delete/Restore
+/// (<c>Activo</c>) o quedan fijos desde el alta (<c>FechaAlta</c>).
+/// Editarlos desde el form producía estados zombie
+/// (<c>Activo=false</c> con <c>DeletedAt=null</c>). El Service los preserva
+/// vía <c>ClienteEditRules.PreservarFlagsNoEditables</c>. Issue #114.
+/// </summary>
 public class UpdateClienteDto : ClienteDtoBase
 {
     public ulong Id { get; set; }
