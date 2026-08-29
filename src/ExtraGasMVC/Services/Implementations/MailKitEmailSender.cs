@@ -39,7 +39,6 @@ public class MailKitEmailSender : IEmailSender
             message.To.Add(MailboxAddress.Parse(to));
             message.Subject = subject;
 
-            // Por ahora usamos texto plano (textBody) como cuerpo principal;
             // htmlBody queda disponible para una version futura con BodyBuilder.TextPart/HtmlPart.
             var bodyText = textBody ?? htmlBody;
             message.Body = new TextPart("plain")
