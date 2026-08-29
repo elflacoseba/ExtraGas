@@ -23,6 +23,11 @@ public class UsuarioDto
     public string? EmpleadoNombre { get; set; }
 }
 
+/// <summary>
+/// DTO de alta de usuario. NO incluye <c>Activo</c> (lo setea el Service en
+/// <c>true</c>). Sin esto el operador podía crear un usuario inactivo desde
+/// el formulario — un estado operacional incoherente. Issue #114.
+/// </summary>
 public class CreateUsuarioDto
 {
     [Required(ErrorMessage = "El nombre de usuario es obligatorio.")]
@@ -41,11 +46,17 @@ public class CreateUsuarioDto
     [Required(ErrorMessage = "El rol es obligatorio.")]
     public ulong RolId { get; set; }
 
-    public bool Activo { get; set; } = true;
-
     public ulong? EmpleadoId { get; set; }
 }
 
+/// <summary>
+/// DTO de edición de usuario. NO incluye <c>Activo</c>: es estado y solo
+/// cambia vía Delete (la regla "no puede desactivarse a sí mismo" del
+/// controller queda redundante: el propio Controller de Delete ya bloquea
+/// la auto-eliminación). Editarlo desde el form producía estados zombie
+/// (<c>Activo=false</c> con <c>DeletedAt=null</c>). El Service lo preserva
+/// vía <c>UsuarioEditRules.PreservarFlagsNoEditables</c>. Issue #114.
+/// </summary>
 public class UpdateUsuarioDto
 {
     public ulong Id { get; set; }
@@ -56,8 +67,6 @@ public class UpdateUsuarioDto
 
     [Required(ErrorMessage = "El rol es obligatorio.")]
     public ulong RolId { get; set; }
-
-    public bool Activo { get; set; }
 }
 
 public class ChangePasswordDto

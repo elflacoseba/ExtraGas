@@ -81,23 +81,21 @@
                     <span asp-validation-for="RolId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4 d-flex align-items-end">
-                    <div class="form-check">
-                        @* Si es el propio usuario logueado, deshabilitamos el checkbox:
-                           la regla de negocio "no puede desactivarse a si mismo" la
-                           enforza el server en Edit POST, pero la UI debe reflejarlo
-                           para no tentar al usuario. Un campo hidden preserva el
-                           valor al submittar (un checkbox disabled no envia nada). *@
-                        @if (currentUserId.HasValue && currentUserId.Value == Model.Id)
-                        {
-                            <input asp-for="Activo" class="form-check-input" type="checkbox" disabled />
-                            <label class="form-check-label" for="Activo">Usuario activo (no puede desactivarse a si mismo)</label>
-                            <input type="hidden" name="Activo" value="@(Model.Activo ? "true" : "false")" />
-                        }
-                        else
-                        {
-                            <input asp-for="Activo" class="form-check-input" type="checkbox" />
-                            <label asp-for="Activo" class="form-check-label">Usuario activo</label>
-                        }
+                    <div>
+                        <span class="form-label">Estado</span>
+                        <div>
+                            @if ((bool)ViewBag.Activo)
+                            {
+                                <span class="badge text-bg-success">Activo</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">Inactivo</span>
+                            }
+                            <small class="d-block text-secondary mt-1">
+                                Cambiá con Eliminar del listado.
+                            </small>
+                        </div>
                     </div>
                 </div>
             </div>

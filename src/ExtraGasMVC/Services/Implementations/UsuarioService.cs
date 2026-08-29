@@ -6,6 +6,7 @@ using ExtraGasMVC.Configuration;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Extensions;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
@@ -248,6 +249,9 @@ public class UsuarioService : IUsuarioService
     public async Task<UsuarioDto> CreateAsync(CreateUsuarioDto dto, ulong? createdBy, CancellationToken ct = default)
     {
         var usuario = _mapper.Map<Usuario>(dto);
+        // Issue #114: Activo no viene del DTO. Lo setea el Service en true
+        // porque es estado, no dato de carga del operador.
+        usuario.Activo = true;
         usuario.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
         usuario.CreatedAt = DateTime.UtcNow;
         usuario.UpdatedAt = DateTime.UtcNow;
@@ -280,9 +284,15 @@ public class UsuarioService : IUsuarioService
         if (usuario is null)
             throw new KeyNotFoundException($"Usuario con Id {dto.Id} no encontrado.");
 
+        // Snapshot de Activo ANTES del AutoMapper: el formulario de Edit no
+        // debe poder modificarlo. Si llega por bug del DTO, curl o form
+        // antiguo en cache, lo restauramos silenciosamente.
+        var activoOriginal = usuario.Activo;
+
         _mapper.Map(dto, usuario);
         usuario.UpdatedAt = DateTime.UtcNow;
         usuario.UpdatedBy = updatedBy;
+        UsuarioEditRules.PreservarFlagsNoEditables(usuario, activoOriginal);
 
         await _context.SaveChangesAsync(ct);
 
