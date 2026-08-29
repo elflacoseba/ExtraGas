@@ -146,6 +146,22 @@
         if (btnConfirm) btnConfirm.disabled = conProducto === 0;
     }
 
+    /// Recalcula el campo Total (read-only) en función de Subtotal y
+    /// Descuento. El Service lo calcula también — el JS es solo UX para
+    /// que el operador vea el resultado sin esperar al POST.
+    /// Defensivo: si Subtotal/Descuento están vacíos, trata como 0.
+    function actualizarTotalMonetario() {
+        var subtotalEl = document.getElementById('Recepcion_Subtotal');
+        var descuentoEl = document.getElementById('Recepcion_Descuento');
+        var totalEl = document.getElementById('Recepcion_Total');
+        if (!subtotalEl || !descuentoEl || !totalEl) return;
+
+        var subtotal = parseFloat(subtotalEl.value) || 0;
+        var descuento = parseFloat(descuentoEl.value) || 0;
+        var total = Math.max(0, subtotal - descuento);
+        totalEl.value = total.toFixed(2);
+    }
+
     function itemsFromForm() {
         var items = [];
         tbody.querySelectorAll('tr[data-row]').forEach(function (tr) {
@@ -292,6 +308,15 @@
     if (btnAdd) btnAdd.addEventListener('click', function () { agregarFila(); });
     if (dataPreCargada.length > 0) dataPreCargada.forEach(function (it) { agregarFila(it); });
     actualizarTotal();
+
+    // Listeners para recalcular el Total (read-only) cuando cambian Subtotal o
+    // Descuento. El input Total no se postea (no tiene name); el Service lo
+    // recalcula desde Subtotal/Descuento en el POST. Esto es solo UX.
+    var subtotalEl = document.getElementById('Recepcion_Subtotal');
+    var descuentoEl = document.getElementById('Recepcion_Descuento');
+    if (subtotalEl) subtotalEl.addEventListener('input', actualizarTotalMonetario);
+    if (descuentoEl) descuentoEl.addEventListener('input', actualizarTotalMonetario);
+    actualizarTotalMonetario();
 
     window.__recepciones = { agregarFila: agregarFila, itemsFromForm: itemsFromForm };
 })();

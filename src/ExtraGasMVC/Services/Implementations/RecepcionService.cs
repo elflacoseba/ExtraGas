@@ -2,6 +2,7 @@ using ExtraGasMVC.Constants;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Extensions;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
@@ -33,6 +34,19 @@ public class RecepcionService : IRecepcionService
         if (dto.Items is null || dto.Items.Count == 0)
             throw new InvalidOperationException("La recepción debe incluir al menos un item.");
 
+        // El Total NO viene del DTO (es derivado). Lo calcula el Service para
+        // mantener la invariante contable aunque un cliente envíe un valor
+        // distinto. RecepcionTotalRules valida que Subtotal >= Descuento.
+        decimal total;
+        try
+        {
+            total = RecepcionTotalRules.Calcular(dto.Subtotal, dto.Descuento);
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            throw new InvalidOperationException(ex.Message);
+        }
+
         var empleadoId = await ResolverEmpleadoIdAsync(usuarioId, ct)
             ?? throw new InvalidOperationException(
                 "No se pudo resolver el operador: el usuario autenticado no tiene un empleado activo vinculado.");
@@ -50,7 +64,7 @@ public class RecepcionService : IRecepcionService
             {
                 Fecha = dto.Fecha, ProveedorId = dto.ProveedorId, EmpleadoId = empleadoId,
                 NumeroFacturaProveedor = dto.NumeroFacturaProveedor,
-                Subtotal = dto.Subtotal, Descuento = dto.Descuento, Total = dto.Total,
+                Subtotal = dto.Subtotal, Descuento = dto.Descuento, Total = total,
                 Observaciones = dto.Observaciones,
                 CreatedAt = now, UpdatedAt = now, CreatedBy = usuarioId, UpdatedBy = usuarioId,
             };
