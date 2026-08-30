@@ -316,6 +316,49 @@ Notas sobre el server:
 
 `sonarqube({ action: "analyze" })` sigue siendo válido para **validación rápida sin coverage** (typos, code smells en código nuevo). NO mezclar ambos flujos en la misma rama — el segundo `analyze` resetea las métricas del server.
 
+### Quality Gate custom (desvía de "Sonar way")
+
+El proyecto **NO usa el Quality Gate built-in "Sonar way"** — usa una copia llamada **`Sonar way - extragas`** con la condición `new_coverage` relajada de **80% → 65%**. El resto de las condiciones se mantienen idénticas al built-in:
+
+- `new_violations > 0` (bloqueante)
+- `new_duplicated_lines_density > 3%` (bloqueante)
+- `new_security_hotspots_reviewed < 100%` (bloqueante)
+
+**Por qué:** el gate built-in exige 80% de cobertura en código nuevo (CAYC). El proyecto está en una etapa temprana y ese umbral no es realista todavía — `new_coverage` viene rondando 60-70%. Subir el threshold vuelve a ser aspiración cuando el coverage real lo justifique.
+
+**Esto vive server-side, no en el repo.** Si se reinstala el server o se migra el proyecto, hay que recrearlo. Para hacerlo:
+
+```bash
+# 1. Copiar el gate built-in (el id cambia cada vez, hay que capturarlo del response)
+curl -s -u "${SONAR_USER}:${SONAR_PASSWORD}" -X POST \
+  "${SONAR_HOST_URL}/api/qualitygates/copy" \
+  -d "name=Sonar way - extragas" \
+  -d "sourceName=Sonar way"
+# → devuelve { "id": "<gate-id>", "name": "Sonar way - extragas" }
+
+# 2. Obtener el id de la condición new_coverage
+GATE_ID="<gate-id>"
+curl -s -u "${SONAR_USER}:${SONAR_PASSWORD}" \
+  "${SONAR_HOST_URL}/api/qualitygates/show?name=Sonar%20way%20-%20extragas"
+# → buscar el objeto con "metric": "new_coverage" y copiar su "id"
+
+# 3. Cambiar el threshold a 65
+curl -s -u "${SONAR_USER}:${SONAR_PASSWORD}" -X POST \
+  "${SONAR_HOST_URL}/api/qualitygates/update_condition" \
+  -d "id=<condition-id>" \
+  -d "metric=new_coverage" \
+  -d "op=LT" \
+  -d "error=65"
+
+# 4. Asociar el proyecto al gate nuevo
+curl -s -u "${SONAR_USER}:${SONAR_PASSWORD}" -X POST \
+  "${SONAR_HOST_URL}/api/qualitygates/select" \
+  -d "projectKey=extragas" \
+  -d "gateName=Sonar way - extragas"
+```
+
+**Auth:** para la API REST alcanza con `SONAR_USER` + `SONAR_PASSWORD`. La restricción de "solo `SONAR_TOKEN`" aplica únicamente a `dotnet-sonarscanner end`, no a las llamadas REST.
+
 ## Recursos
 
 - Skill `database-designer` en `.agents/skills/database-designer/` — usar para optimizaciones, índices y migraciones futuras.
