@@ -75,10 +75,26 @@
                         <td class="text-end">
                             <a asp-action="Details" asp-route-id="@p.Id" class="btn btn-sm btn-info"><i class="bi bi-eye"></i></a>
                             <a asp-action="Edit" asp-route-id="@p.Id" class="btn btn-sm btn-primary"><i class="bi bi-pencil"></i></a>
-                            <form asp-action="Delete" asp-route-id="@p.Id" method="post" class="d-inline js-confirm-form" data-name="este producto" data-action="desactivar">
-                                @Html.AntiForgeryToken()
-                                <button type="button" class="btn btn-sm btn-danger" onclick="confirmarAccion(this)"><i class="bi bi-trash"></i></button>
-                            </form>
+                            @if (p.Activo)
+                            {
+                                // Issue #145 Slice 2: solo Activos ven Delete.
+                                // Inactivos (soft-deleted) ven Restaurar.
+                                // Restore es AdminOnly — la policy se enforza en
+                                // el Controller; el boton se muestra a todos los
+                                // usuarios de la tabla pero el POST falla con 403
+                                // si el caller no es Admin.
+                                <form asp-action="Delete" asp-route-id="@p.Id" method="post" class="d-inline js-confirm-form" data-name="este producto" data-action="desactivar">
+                                    @Html.AntiForgeryToken()
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmarAccion(this)"><i class="bi bi-trash"></i></button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form asp-action="Restore" asp-route-id="@p.Id" method="post" class="d-inline js-confirm-form" data-name="este producto" data-action="reactivar">
+                                    @Html.AntiForgeryToken()
+                                    <button type="button" class="btn btn-sm btn-success" title="Restaurar" onclick="confirmarAccion(this)"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                </form>
+                            }
                         </td>
                     </tr>
                 }

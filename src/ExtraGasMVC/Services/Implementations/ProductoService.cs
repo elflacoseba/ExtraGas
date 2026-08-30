@@ -12,11 +12,19 @@ public class ProductoService : IProductoService
 {
     private readonly ExtraGasDbContext _context;
     private readonly IMapper _mapper;
+    // Issue #145 Slice 2: ILogger<ProductoService> inyectado para trazabilidad
+    // del restore (operación privilegiada, AdminOnly). ASP.NET Core registra
+    // ILogger<T> por convencion; no hace falta tocar Program.cs.
+    private readonly ILogger<ProductoService> _logger;
 
-    public ProductoService(ExtraGasDbContext context, IMapper mapper)
+    public ProductoService(
+        ExtraGasDbContext context,
+        IMapper mapper,
+        ILogger<ProductoService> logger)
     {
         _context = context;
         _mapper = mapper;
+        _logger = logger;
     }
 
     public async Task<ProductoDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
@@ -137,6 +145,46 @@ public class ProductoService : IProductoService
         producto.Activo = false;
         producto.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(ct);
+
+        return true;
+    }
+
+    public async Task<bool> RestoreAsync(ulong id, ulong? updatedBy, CancellationToken ct = default)
+    {
+        // Patrón tomado de PedidoService.RestoreAsync (línea 296). Usamos
+        // IgnoreQueryFilters() porque el QueryFilter global oculta los
+        // registros soft-deleted — sin esto no encontraríamos el producto
+        // desde la papelera.
+        var producto = await _context.Productos
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == id, ct);
+
+        if (producto == null)
+            return false;
+
+        // Producto ya activo: nada que restaurar. Devolvemos false para que el
+        // Controller mapee TempData[Error] en lugar de un falso Success.
+        // Coherente con el spec de task 2.1 (RestoreAsync_OnAlreadyActive_ReturnsFalse).
+        if (producto.DeletedAt == null)
+            return false;
+
+        // Producto retiene la columna Activo (a diferencia de Cliente post-#115
+        // donde se deriva de DeletedAt). Setear explícitamente Activo=true
+        // preserva la invariante "Activo=false implica DeletedAt != null"
+        // (definida por #114, replicada en Productos por #121). Sin este set
+        // quedaría un zombie: DeletedAt=null + Activo=false.
+        producto.DeletedAt = null;
+        producto.Activo = true;
+        producto.UpdatedAt = DateTime.UtcNow;
+        producto.UpdatedBy = updatedBy;
+        await _context.SaveChangesAsync(ct);
+
+        // Trazabilidad: RestoreAsync es AdminOnly y revierte un soft-delete,
+        // operación que el auditor quiere ver en logs. No loggeamos el caso
+        // "no encontrado" porque es flujo esperado (404 desde la papelera).
+        _logger.LogInformation(
+            "Producto {ProductoId} reactivado por {UpdatedBy}",
+            producto.Id, updatedBy);
 
         return true;
     }
