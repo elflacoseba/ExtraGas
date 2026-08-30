@@ -125,7 +125,7 @@ dotnet sonarscanner begin \
     /d:sonar.sources="src" \
     /d:sonar.tests="tests" \
     /d:sonar.test.inclusions="**/*Tests.cs,**/*Tests.csproj" \
-    /d:sonar.cs.cobertura.reportPaths="tests/ExtraGasMVC.Tests/TestResults/*/coverage.cobertura.xml" \
+    /d:sonar.cs.cobertura.reportsPaths="tests/ExtraGasMVC.Tests/TestResults/*/coverage.cobertura.xml" \
     ${SONAR_AUTH}
 
 echo "[3/5] dotnet build"
