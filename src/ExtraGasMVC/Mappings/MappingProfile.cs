@@ -58,9 +58,6 @@ public class MappingProfile : Profile
     private static string? NombreCompletoCliente(Pedido s)
         => s.Cliente != null ? s.Cliente.Apellido + ", " + s.Cliente.Nombre : null;
 
-    private static string? NombreCompletoEmpleado(Pedido s)
-        => s.Empleado != null ? s.Empleado.Apellido + ", " + s.Empleado.Nombre : null;
-
     private static string? NombreEstado(Pedido s)
         => s.EstadoPedido != null ? s.EstadoPedido.Nombre : null;
 
@@ -185,6 +182,11 @@ public class MappingProfile : Profile
 
     private static string? CodigoGarrafa(MovimientoGarrafa s)
         => s.Garrafa != null ? s.Garrafa.Codigo : null;
+
+    // Sobrecargas de NombreCompletoEmpleado agrupadas (SonarQube csharpsquid:S4136).
+    // Antes estaban dispersas con ~130 lineas entre una y otra (issue #136).
+    private static string? NombreCompletoEmpleado(Pedido s)
+        => s.Empleado != null ? s.Empleado.Apellido + ", " + s.Empleado.Nombre : null;
 
     private static string? NombreCompletoEmpleado(MovimientoGarrafa s)
         => s.Empleado != null ? s.Empleado.Apellido + ", " + s.Empleado.Nombre : null;

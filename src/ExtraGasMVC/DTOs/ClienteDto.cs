@@ -102,22 +102,36 @@ public class ClienteDto : ClienteDtoBase
 }
 
 /// <summary>
-/// DTO de alta de cliente. NO incluye <c>Activo</c> (lo setea el Service en
-/// <c>true</c>) ni <c>FechaAlta</c> (lo setea el Service con la fecha del
-/// momento del alta). Sin esto el operador podía crear un cliente inactivo
-/// desde el formulario — un estado operacional incoherente. Issue #114.
-/// </summary>
-public class CreateClienteDto : ClienteDtoBase { }
+    /// DTO de alta de cliente. NO incluye <c>Activo</c> (lo setea el Service en
+    /// <c>true</c>) ni <c>FechaAlta</c> (lo setea el Service con la fecha del
+    /// momento del alta). Sin esto el operador podía crear un cliente inactivo
+    /// desde el formulario — un estado operacional incoherente. Issue #114.
+    /// <para>
+    /// Es una subclase vacía a propósito: el Controller usa el tipo concreto
+    /// (<see cref="CreateClienteDto"/> vs <see cref="UpdateClienteDto"/>) para
+    /// discriminar Create de Edit sin agregar un flag mágico. Issue #136.
+    /// </para>
+    /// </summary>
+    // NOSONAR (S2094): subclase marker intencional para diferenciar Create de Edit
+    // en el binding del Controller. Ver XMLDoc arriba.
+    public class CreateClienteDto : ClienteDtoBase { }
 
-/// <summary>
-/// DTO de edición de cliente. NO incluye <c>Activo</c> ni <c>FechaAlta</c>:
-/// ambos son audit trail / estado y solo cambian vía Delete/Restore
-/// (<c>Activo</c>) o quedan fijos desde el alta (<c>FechaAlta</c>).
-/// Editarlos desde el form producía estados zombie
-/// (<c>Activo=false</c> con <c>DeletedAt=null</c>). El Service los preserva
-/// vía <c>ClienteEditRules.PreservarFlagsNoEditables</c>. Issue #114.
-/// </summary>
-public class UpdateClienteDto : ClienteDtoBase
-{
-    public ulong Id { get; set; }
-}
+    /// <summary>
+    /// DTO de edición de cliente. NO incluye <c>Activo</c> ni <c>FechaAlta</c>:
+    /// ambos son audit trail / estado y solo cambian vía Delete/Restore
+    /// (<c>Activo</c>) o quedan fijos desde el alta (<c>FechaAlta</c>).
+    /// Editarlos desde el form producía estados zombie
+    /// (<c>Activo=false</c> con <c>DeletedAt=null</c>). El Service los preserva
+    /// vía <c>ClienteEditRules.PreservarFlagsNoEditables</c>. Issue #114.
+    /// <para>
+    /// <c>Id</c> es <see cref="ulong"/>? (no <see cref="ulong"/>) para que el
+    /// model binder rechace un POST sin el campo (S6964 / under-posting):
+    /// con un value-type no-nullable el modelo se llenaba con 0 silencioso
+    /// y la validación <c>if (id != cliente.Id)</c> del Controller comparaba
+    /// 0 contra el id de la ruta, devolviendo 400 ininteligible. Issue #136.
+    /// </para>
+    /// </summary>
+    public class UpdateClienteDto : ClienteDtoBase
+    {
+        public ulong? Id { get; set; }
+    }

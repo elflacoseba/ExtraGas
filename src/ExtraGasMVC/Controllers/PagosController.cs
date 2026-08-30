@@ -93,7 +93,7 @@ public class PagosController : Controller
     {
         var pago = await _pagoService.GetByIdAsync(id, ct);
         if (pago is null) return NotFound();
-            await LoadViewBagsAsync(ct);
+        await LoadViewBagsAsync(ct);
 
         var updateDto = new UpdatePagoDto
         {
