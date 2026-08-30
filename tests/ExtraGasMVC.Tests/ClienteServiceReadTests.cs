@@ -10,7 +10,7 @@ using Xunit;
 namespace ExtraGasMVC.Tests;
 
 /// <summary>
-/// Tests de regresión de los métodos de lectura de <see cref="ClienteService"/>.
+/// Tests de regresion de los métodos de lectura de <see cref="ClienteService"/>.
 /// Issue #112: GetByIdAsync / GetAllAsync / GetByDniAsync / GetActivosAsync no
 /// tenían cobertura dedicada. Estos tests blindan:
 ///   - Devolución de null cuando el cliente no existe (no lanzar excepción).
@@ -19,6 +19,9 @@ namespace ExtraGasMVC.Tests;
 ///
 /// GetDeletedAsync ya tiene cobertura en <see cref="ClienteServiceTests"/>
 /// (Issue #111); no se duplica acá.
+///
+/// Issue #115: el flag `Activo` se eliminó de la entity. Los tests verifican
+/// el estado del cliente vía <c>DeletedAt</c> (única fuente de verdad).
 /// </summary>
 public class ClienteServiceReadTests
 {
@@ -183,38 +186,29 @@ public class ClienteServiceReadTests
     // ====================================================================
 
     [Fact]
-    public async Task GetActivosAsync_DevuelveSoloClientesConActivoTrue()
+    public async Task GetActivosAsync_DevuelveSoloClientesSinDeletedAt()
     {
-        // El método filtra por Activo=true a nivel SQL. Un cliente con
-        // Activo=false pero DeletedAt=null (estado zombie, evitado por
-        // DeleteAsync) no debería existir, pero si existiera por una
-        // migración mala, este test lo excluye igual.
-        var dbName = nameof(GetActivosAsync_DevuelveSoloClientesConActivoTrue);
+        // Issue #115: el flag `Activo` desapareció. El método devuelve los
+        // clientes que el QueryFilter global considera "visibles"
+        // (DeletedAt IS NULL). Verificamos que un cliente soft-deleted vía
+        // DeleteAsync queda fuera del listado. El escenario "zombie"
+        // (Activo=false con DeletedAt=null) ya no es posible a nivel código
+        // ni a nivel BD: la columna activo se eliminó.
+        var dbName = nameof(GetActivosAsync_DevuelveSoloClientesSinDeletedAt);
         var (service, context) = NewService(dbName);
 
         await service.CreateAsync(NewCreateDto("Juan", "Perez", "11111111"), createdBy: 1);
         await service.CreateAsync(NewCreateDto("Ana", "Gomez", "22222222"), createdBy: 1);
 
-        // Sembramos un cliente con Activo=false a mano (sin DeletedAt) para
-        // simular el escenario que el método debe excluir.
-        var zombie = new Data.Entities.Cliente
-        {
-            Nombre = "Zombie",
-            Apellido = "Zombie",
-            TelefonoPrincipal = "0000000000",
-            Dni = "99999999",
-            Activo = false,
-            FechaAlta = DateOnly.FromDateTime(DateTime.UtcNow),
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow,
-        };
-        context.Clientes.Add(zombie);
-        await context.SaveChangesAsync();
+        // Cliente soft-deleted vía el método del Service (que respeta la BD
+        // y setea DeletedAt). GetActivosAsync NO debe traerlo.
+        var softDeleted = await service.CreateAsync(NewCreateDto("Zombie", "ZombieAp", "99999999"), createdBy: 1);
+        await service.DeleteAsync(softDeleted.Id, updatedBy: 1);
 
         var activos = await service.GetActivosAsync();
 
         activos.Should().HaveCount(2);
-        activos.Select(c => c.Id).Should().NotContain(zombie.Id);
+        activos.Select(c => c.Id).Should().NotContain(softDeleted.Id);
     }
 
     [Fact]

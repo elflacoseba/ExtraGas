@@ -81,8 +81,11 @@ public class ClienteDtoBase
 /// DTO de salida para <see cref="Data.Entities.Cliente"/>. Incluye los campos
 /// operativos (<c>Activo</c>, <c>FechaAlta</c>) que NO son editables desde
 /// ningún formulario: se exponen solo para display (Details, Index, listados).
-/// Issue #114: <c>Activo</c> solo cambia vía Delete/Restore; <c>FechaAlta</c>
-/// es audit trail del alta y no debe retrocederse.
+/// Issue #114: <c>FechaAlta</c> es audit trail del alta y no debe retrocederse.
+/// <para>Issue #115: <c>Activo</c> es ahora un getter derivado de
+/// <c>DeletedAt == null</c> (no se persiste). Una sola fuente de verdad para
+/// el estado del cliente — coincide con el QueryFilter global de EF y con las
+/// vistas SQL que filtran por <c>deleted_at IS NULL</c>.</para>
 /// <para>Issue #111: <c>DeletedAt</c> se expone para que la pantalla
 /// /Clientes/Papelera muestre la fecha de baja. Es null para clientes
 /// activos (la mayoria del tiempo) y no es editable.</para>
@@ -94,18 +97,26 @@ public class ClienteDto : ClienteDtoBase
     [Display(Name = "Fecha de alta")]
     public DateOnly FechaAlta { get; set; }
 
+    /// <summary>
+    /// Estado operativo derivado: true si el cliente NO está soft-deleted.
+    /// Issue #115: getter-only (sin setter) — AutoMapper lo ignora por
+    /// convención porque no hay forma de asignarlo desde el entity. La
+    /// única fuente de verdad es <see cref="DeletedAt"/>.
+    /// </summary>
     [Display(Name = "Activo")]
-    public bool Activo { get; set; }
+    public bool Activo => DeletedAt == null;
 
     [Display(Name = "Fecha de baja")]
     public DateTime? DeletedAt { get; set; }
 }
 
 /// <summary>
-    /// DTO de alta de cliente. NO incluye <c>Activo</c> (lo setea el Service en
-    /// <c>true</c>) ni <c>FechaAlta</c> (lo setea el Service con la fecha del
-    /// momento del alta). Sin esto el operador podía crear un cliente inactivo
-    /// desde el formulario — un estado operacional incoherente. Issue #114.
+    /// DTO de alta de cliente. NO incluye <c>FechaAlta</c> (lo setea el Service
+    /// con la fecha del momento del alta). <c>Activo</c> ya no existe como
+    /// campo en ningún DTO — el estado se deriva de <c>DeletedAt</c> (Issue
+    /// #115). Sin esto el operador podía crear un cliente con fecha de alta
+    /// retroactiva desde el formulario — un estado operacional incoherente.
+    /// Issue #114.
     /// <para>
     /// Es una subclase vacía a propósito: el Controller usa el tipo concreto
     /// (<see cref="CreateClienteDto"/> vs <see cref="UpdateClienteDto"/>) para
@@ -115,12 +126,11 @@ public class ClienteDto : ClienteDtoBase
     public class CreateClienteDto : ClienteDtoBase { } // NOSONAR S2094: subclase marker para Create vs Edit en el Controller
 
     /// <summary>
-    /// DTO de edición de cliente. NO incluye <c>Activo</c> ni <c>FechaAlta</c>:
-    /// ambos son audit trail / estado y solo cambian vía Delete/Restore
-    /// (<c>Activo</c>) o quedan fijos desde el alta (<c>FechaAlta</c>).
-    /// Editarlos desde el form producía estados zombie
-    /// (<c>Activo=false</c> con <c>DeletedAt=null</c>). El Service los preserva
-    /// vía <c>ClienteEditRules.PreservarFlagsNoEditables</c>. Issue #114.
+    /// DTO de edición de cliente. NO incluye <c>FechaAlta</c> — es audit trail
+    /// del alta y debe quedar fijo. <c>Activo</c> no es un campo editable:
+    /// tras el Issue #115 se deriva de <c>DeletedAt</c> directamente. El
+    /// Service preserva <c>FechaAlta</c> vía
+    /// <c>ClienteEditRules.PreservarFechaAlta</c>. Issue #114.
     /// <para>
     /// <c>Id</c> es <see cref="ulong"/>? (no <see cref="ulong"/>) para que el
     /// model binder rechace un POST sin el campo (S6964 / under-posting):

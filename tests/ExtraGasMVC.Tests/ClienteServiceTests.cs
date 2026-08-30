@@ -13,9 +13,11 @@ namespace ExtraGasMVC.Tests;
 
 /// <summary>
 /// Tests de integracion del Service de Cliente contra DbContext InMemory.
-/// Cubren las lineas nuevas introducidas por el issue #114:
-/// - CreateAsync setea Activo=true y FechaAlta=hoy (no del DTO)
-/// - UpdateAsync preserva Activo y FechaAlta desde la BD (defense-in-depth)
+/// Cubren las lineas nuevas introducidas por los issues #114 y #115:
+/// - CreateAsync setea FechaAlta=hoy (no del DTO). El flag Activo
+///   desapareció del modelo tras #115; el estado se deriva de DeletedAt.
+/// - UpdateAsync preserva FechaAlta desde la BD (defense-in-depth). Activo
+///   ya no se preserva porque no existe como propiedad editable.
 ///
 /// Los helpers estaticos (ClienteEditRules) tienen tests dedicados en
 /// <see cref="ClienteEditRulesTests"/>; aca se valida la integracion
@@ -58,7 +60,7 @@ public class ClienteServiceTests
         Apellido = c.Apellido,
         Dni = c.Dni,
         TelefonoPrincipal = c.TelefonoPrincipal,
-        // Sin Activo ni FechaAlta: el DTO ya no los expone.
+        // Sin FechaAlta: el DTO ya no la expone. Issue #115: Activo tampoco.
     };
 
     /// <summary>
@@ -72,53 +74,61 @@ public class ClienteServiceTests
         Apellido = c.Apellido,
         Dni = c.Dni,
         TelefonoPrincipal = c.TelefonoPrincipal,
+        // Sin FechaAlta: el DTO ya no la expone.
     };
 
     [Fact]
-    public async Task CreateAsync_SeteaActivoTrueYFechaAltaHoy_AunqueDtoNoLosTenga()
+    public async Task CreateAsync_NuevoCliente_TieneDeletedAtNullYFechaAltaHoy()
     {
-        var (service, context) = NewService(nameof(CreateAsync_SeteaActivoTrueYFechaAltaHoy_AunqueDtoNoLosTenga));
+        // Issue #115: un cliente recién creado está implícitamente "activo"
+        // (DeletedAt == null). El Service setea FechaAlta con la fecha del
+        // alta, no del DTO.
+        var (service, context) = NewService(nameof(CreateAsync_NuevoCliente_TieneDeletedAtNullYFechaAltaHoy));
         var dto = NewCreateDto();
 
         var antes = DateOnly.FromDateTime(DateTime.UtcNow);
 var creado = await service.CreateAsync(dto, createdBy: 1);
         var despues = DateOnly.FromDateTime(DateTime.UtcNow);
 
-        creado.Activo.Should().BeTrue();
+        creado.DeletedAt.Should().BeNull("un cliente recién creado no puede estar soft-deleted");
+        creado.Activo.Should().BeTrue("Activo es derivado de DeletedAt == null (Issue #115)");
         creado.FechaAlta.Should().BeOnOrAfter(antes).And.BeOnOrBefore(despues);
     }
 
     [Fact]
-    public async Task CreateAsync_NoRespetaActivoFalseNiFechaAltaPasada_DelDto()
+    public async Task CreateAsync_NoRespetaFechaAltaPasada_DelDto()
     {
-        // El operador podria mandar Activo=false y FechaAlta retroactiva si el
-        // DTO los expusiera. Verifica que el Service los ignora y setea los
-        // valores correctos. (Ya no se puede mandar por el DTO, pero este
-        // test documenta la garantia a nivel Service.)
-        var (service, _) = NewService(nameof(CreateAsync_NoRespetaActivoFalseNiFechaAltaPasada_DelDto));
+        // El operador podría mandar FechaAlta retroactiva si el DTO lo
+        // expusiera. Verifica que el Service lo ignora y setea hoy. (Ya no
+        // se puede mandar por el DTO, pero este test documenta la garantía
+        // a nivel Service.) Issue #115: el flag Activo desapareció del
+        // modelo; el test ya no lo verifica.
+        var (service, _) = NewService(nameof(CreateAsync_NoRespetaFechaAltaPasada_DelDto));
         var dto = new CreateClienteDto
         {
             Nombre = "Juan", Apellido = "Perez", Dni = "11111111",
             TelefonoPrincipal = "1144556677",
-            // Activo y FechaAlta no existen en el DTO: el compilador no
-            // permite setearlos. Lo que verificamos es que el Service pone
-            // sus defaults independientemente del resto del DTO.
+            // FechaAlta no existe en el DTO: el compilador no permite
+            // setearlo. Lo que verificamos es que el Service pone hoy
+            // independientemente del resto del DTO.
         };
 
 var creado = await service.CreateAsync(dto, createdBy: 1);
 
-        creado.Activo.Should().BeTrue();
+        creado.DeletedAt.Should().BeNull();
         creado.FechaAlta.Should().Be(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(0),
             "FechaAlta debe ser hoy, no un valor retroactivo que el DTO pueda cargar");
     }
 
     [Fact]
-    public async Task UpdateAsync_PreservaActivoYFechaAlta_DesdeLaBD_AunqueDtoNoLosTenga()
+    public async Task UpdateAsync_PreservaFechaAlta_DesdeLaBD_AunqueDtoNoLaTenga()
     {
-        // Cliente creado con Activo=true, FechaAlta=hoy. El operador intenta
-        // "desactivarlo" mandando DTO con Activo=false — el DTO ya no lo
-        // expone, pero defense-in-depth: el Service preserva desde la BD.
-        var (service, context) = NewService(nameof(UpdateAsync_PreservaActivoYFechaAlta_DesdeLaBD_AunqueDtoNoLosTenga));
+        // Cliente creado con FechaAlta=hoy. El operador intenta retrocederla
+        // mandando DTO con FechaAlta distinta — el DTO ya no la expone,
+        // pero defense-in-depth: el Service preserva desde la BD. Issue
+        // #115: el flag Activo ya no existe en la entity, así que este
+        // test solo verifica la preservación de FechaAlta.
+        var (service, context) = NewService(nameof(UpdateAsync_PreservaFechaAlta_DesdeLaBD_AunqueDtoNoLaTenga));
 var creado = await service.CreateAsync(NewCreateDto(), createdBy: 1);
         var fechaAltaOriginal = creado.FechaAlta;
 
@@ -130,11 +140,10 @@ var creado = await service.CreateAsync(NewCreateDto(), createdBy: 1);
             Dni = creado.Dni,
             TelefonoPrincipal = creado.TelefonoPrincipal,
         };
-        // Activo y FechaAlta NO estan en UpdateClienteDto.
+        // FechaAlta NO está en UpdateClienteDto.
 
         var actualizado = await service.UpdateAsync(updateDto, updatedBy: 2);
 
-        actualizado.Activo.Should().BeTrue("Activo debe preservarse desde la BD aunque el DTO no lo traiga");
         actualizado.FechaAlta.Should().Be(fechaAltaOriginal,
             "FechaAlta debe preservarse desde la BD aunque el DTO no la traiga");
 actualizado.Nombre.Should().Be("Juan Modificado", "el resto de los campos si se actualizan");
@@ -187,9 +196,12 @@ actualizado.Nombre.Should().Be("Juan Modificado", "el resto de los campos si se 
     // ====================================================================
 
     [Fact]
-    public async Task DeleteAsync_Y_RestoreAsync_RoundTrip_DevuelveClienteActivoSinDeletedAt()
+    public async Task DeleteAsync_Y_RestoreAsync_RoundTrip_DevuelveClienteSinDeletedAt()
     {
-        var (service, context) = NewService(nameof(DeleteAsync_Y_RestoreAsync_RoundTrip_DevuelveClienteActivoSinDeletedAt));
+        // Issue #115: el flag Activo desapareció. El estado se deriva de
+        // DeletedAt. El test verifica el round-trip del soft-delete solo
+        // sobre DeletedAt.
+        var (service, context) = NewService(nameof(DeleteAsync_Y_RestoreAsync_RoundTrip_DevuelveClienteSinDeletedAt));
 
         // Arrange: crear un cliente
         var dto = NewCreateDto();
@@ -202,16 +214,14 @@ actualizado.Nombre.Should().Be("Juan Modificado", "el resto de los campos si se 
         // Verificar que el cliente esta soft-deleted en BD
         var entity = await context.Clientes.IgnoreQueryFilters().FirstAsync(c => c.Id == creado.Id);
         entity.DeletedAt.Should().NotBeNull();
-        entity.Activo.Should().BeFalse();
 
         // Act 2: restore
         var restored = await service.RestoreAsync(creado.Id, updatedBy: 1);
         restored.Should().BeTrue();
 
-        // Assert: DeletedAt es null y Activo es true otra vez
+        // Assert: DeletedAt es null otra vez
         var afterRestore = await context.Clientes.IgnoreQueryFilters().FirstAsync(c => c.Id == creado.Id);
         afterRestore.DeletedAt.Should().BeNull();
-        afterRestore.Activo.Should().BeTrue();
     }
 
     [Fact]

@@ -58,9 +58,14 @@ public class ClienteService : IClienteService
 
     public async Task<IEnumerable<ClienteDto>> GetActivosAsync(CancellationToken ct = default)
     {
+        // Issue #115: el flag `Activo` se eliminó. El DbSet `Clientes` ya
+        // viene filtrado por el QueryFilter global (`DeletedAt == null`), así
+        // que un `Where(c => c.Activo)` adicional sería redundante. El nombre
+        // del método se conserva por compatibilidad con los callers
+        // (Home/Pagos/Garrafas/Pedidos) — "clientes activos" = "no
+        // soft-deleted".
         var clientes = await _context.Clientes
             .AsNoTracking()
-            .Where(c => c.Activo)
             .OrderBy(c => c.Apellido)
             .ThenBy(c => c.Nombre)
             .ToListAsync(ct);
@@ -76,8 +81,12 @@ public class ClienteService : IClienteService
             .AsNoTracking()
             .AsQueryable();
 
-        if (soloActivos)
-            query = query.Where(c => c.Activo);
+        // Issue #115: el flag `Activo` se eliminó. El QueryFilter global ya
+        // excluye soft-deleted, así que `soloActivos=true` es el estado
+        // natural de la query. Mantenemos el parámetro por compatibilidad
+        // con la firma pública y la query del Index (default true), pero
+        // no se traduce a ningún filtro SQL — es un no-op legacy.
+        _ = soloActivos;
 
         if (!string.IsNullOrWhiteSpace(busqueda))
         {
@@ -127,9 +136,10 @@ public class ClienteService : IClienteService
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
         var entity = _mapper.Map<Cliente>(cliente);
-        // Issue #114: Activo y FechaAlta no vienen del DTO. Los setea el Service
-        // porque son estado / audit trail, no datos de carga del operador.
-        entity.Activo = true;
+        // Issue #114 + #115: el DTO ya no expone FechaAlta ni Activo. El
+        // Service setea FechaAlta con la fecha del alta (audit trail). El
+        // flag `Activo` se eliminó de la entity: un cliente recién creado
+        // está implícitamente "activo" porque `DeletedAt = null`.
         entity.FechaAlta = DateOnly.FromDateTime(DateTime.UtcNow);
         entity.Dni = dniNormalizado;                // Issue #113
         entity.TelefonoPrincipal = telNormalizado!; // Issue #113 (es requerido, no null)
@@ -178,11 +188,12 @@ public class ClienteService : IClienteService
         if (!await IsDniUniqueAsync(dniNormalizado, clienteId))
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
-        // Snapshot de Activo y FechaAlta ANTES del AutoMapper: el formulario
-        // de Edit no debe poder modificar ninguno de los dos. Si el operador
-        // los manda distintos (sea por bug del DTO, por curl o por form
-        // antiguo en cache), los restauramos silenciosamente.
-        var activoOriginal = entity.Activo;
+        // Snapshot de FechaAlta ANTES del AutoMapper: el formulario de Edit
+        // no debe poder modificarlo. Issue #114. Si el operador lo manda
+        // distinto (sea por bug del DTO, por curl o por form antiguo en
+        // cache), lo restauramos silenciosamente. Issue #115: el flag
+        // `Activo` ya no se preserva porque dejó de existir — el estado
+        // del cliente se deriva de `DeletedAt`, que el Edit no toca.
         var fechaAltaOriginal = entity.FechaAlta;
 
         _mapper.Map(cliente, entity);
@@ -190,7 +201,7 @@ public class ClienteService : IClienteService
         entity.TelefonoPrincipal = StringNormalizer.NormalizarTelefono(cliente.TelefonoPrincipal)!; // Issue #113
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = updatedBy;
-        ClienteEditRules.PreservarFlagsNoEditables(entity, activoOriginal, fechaAltaOriginal);
+        ClienteEditRules.PreservarFechaAlta(entity, fechaAltaOriginal);
 
         await SaveOrThrowDuplicateDniAsync(ct);
 
@@ -223,8 +234,9 @@ public class ClienteService : IClienteService
         if (cliente == null)
             return false;
 
+        // Issue #115: solo se persiste `DeletedAt`. El flag `Activo` se
+        // deriva de `DeletedAt IS NULL`, así que no hace falta tocarlo.
         cliente.DeletedAt = DateTime.UtcNow;
-        cliente.Activo = false;
         cliente.UpdatedAt = DateTime.UtcNow;
         cliente.UpdatedBy = updatedBy;
         await _context.SaveChangesAsync(ct);
@@ -241,8 +253,11 @@ public class ClienteService : IClienteService
         if (cliente == null)
             return false;
 
+        // Issue #115: limpiar `DeletedAt` alcanza para reactivar — el flag
+        // `Activo` se deriva de `DeletedAt IS NULL`. Mantener un set
+        // explícito de `Activo = true` (como antes) sería sincronizar dos
+        // fuentes de verdad, justo lo que este refactor elimina.
         cliente.DeletedAt = null;
-        cliente.Activo = true;
         cliente.UpdatedAt = DateTime.UtcNow;
         cliente.UpdatedBy = updatedBy;
         await _context.SaveChangesAsync(ct);

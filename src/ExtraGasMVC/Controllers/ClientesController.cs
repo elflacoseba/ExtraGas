@@ -88,11 +88,15 @@ public class ClientesController : BaseController
 
         await LoadViewBagsAsync(ct);
 
-        // Issue #114: UpdateClienteDto ya no expone Activo ni FechaAlta (son
-        // audit trail / estado y solo cambian vía Delete/Restore). Los pasamos
-        // por ViewBag para mostrarlos como info read-only en la vista.
+        // Issue #114 + #115: UpdateClienteDto ya no expone FechaAlta ni Activo
+        // (son audit trail / estado y solo cambian vía Delete/Restore — o
+        // directamente no son editables, derivado de DeletedAt tras #115).
+        // Los pasamos por ViewBag para mostrarlos como info read-only en la vista.
         ViewBag.FechaAlta = cliente.FechaAlta;
-        ViewBag.Activo = cliente.Activo;
+        // Issue #115: la vista lee "Activo" como `DeletedAt == null`. Le
+        // pasamos DeletedAt para que pueda decidir el badge correcto sin
+        // volver a calcular.
+        ViewBag.DeletedAt = cliente.DeletedAt;
 
         var updateDto = _mapper.Map<UpdateClienteDto>(cliente);
         return View(updateDto);

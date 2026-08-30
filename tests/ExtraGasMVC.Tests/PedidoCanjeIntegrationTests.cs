@@ -359,7 +359,6 @@ public class PedidoCanjeIntegrationTests : IClassFixture<PedidoCanjeMySqlFixture
             Apellido = "Cliente",
             TelefonoPrincipal = "1144449999",
             FechaAlta = fechaCompra,
-            Activo = true,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -482,7 +481,6 @@ public class PedidoCanjeIntegrationTests : IClassFixture<PedidoCanjeMySqlFixture
             Dni = "11222333",
             TelefonoPrincipal = "1144556677",
             FechaAlta = fechaCompra,
-            Activo = true,
             CreatedAt = now,
             UpdatedAt = now,
         };

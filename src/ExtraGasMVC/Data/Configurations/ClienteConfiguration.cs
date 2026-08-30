@@ -64,10 +64,10 @@ public class ClienteConfiguration : IEntityTypeConfiguration<Cliente>
             .HasColumnType("date")
             .IsRequired();
 
-        builder.Property(c => c.Activo)
-            .HasColumnName("activo")
-            .HasColumnType("tinyint(1)")
-            .HasDefaultValue(true);
+        // Issue #115: la columna `activo` se eliminó de `clientes`. El estado
+        // operativo del cliente se deriva de `DeletedAt IS NULL` (ver
+        // ClienteDto.Activo, QueryFilter global y vistas SQL). El EF ya no
+        // modela el flag.
 
         builder.Property(c => c.CreatedAt)
             .HasColumnName("created_at")

@@ -21,7 +21,9 @@ public class Cliente
     public string? Referencias { get; set; }
     public string? Observaciones { get; set; }
     public DateOnly FechaAlta { get; set; }
-    public bool Activo { get; set; }
+    // Issue #115: el flag `activo` se eliminó. El estado operativo del
+    // cliente se deriva de `DeletedAt IS NULL` (visto en ClienteDto.Activo,
+    // en los QueryFilters de EF y en las vistas SQL). Una sola fuente de verdad.
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public ulong? CreatedBy { get; set; }

@@ -75,7 +75,8 @@
                         <td>@c.TelefonoPrincipal</td>
                         <td>@(c.Ciudad ?? "-")</td>
                         <td class="text-center">
-                            @if (c.Activo)
+                            @* Issue #115: Activo es ahora derivado de DeletedAt. La query del Index nunca trae soft-deleted (QueryFilter global) salvo que soloActivos=false; en ese caso DeletedAt != null y se muestra "Inactivo". *@
+                            @if (c.DeletedAt == null)
                             {
                                 <span class="badge text-bg-success">Activo</span>
                             }
@@ -91,7 +92,7 @@
                             <a asp-action="Edit" asp-route-id="@c.Id" class="btn btn-sm btn-primary" title="Editar">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            @if (c.Activo)
+                            @if (c.DeletedAt == null)
                             {
                                 <form asp-action="Delete" asp-route-id="@c.Id" method="post" class="d-inline js-confirm-form" data-name="este cliente">
                                     @Html.AntiForgeryToken()
