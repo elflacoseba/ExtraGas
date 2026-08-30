@@ -296,6 +296,22 @@ No ejecutar comandos costosos solo por costumbre.
 | MEDIANA | analizar → planificar → implementar → probar → validar |
 | GRANDE | OpenSpec/SDD completo |
 
+## SonarQube (issue #134)
+
+El plugin `opencode-sonarqube` usa el **scanner Java** estándar, que NO integra con MSBuild ni levanta `coverage.opencover.xml` → reporta `new_coverage: 0%` aunque los tests corran.
+
+**Para cobertura real y Quality Gate usable:**
+
+```bash
+# Una vez (si no está): dotnet tool install -g dotnet-sonarscanner
+export SONAR_TOKEN="squ_..."      # generar en el server (User > Security > Generate Tokens)
+./scripts/sonar-analyze.sh        # flujo begin/build/test/end con MSBuild integration
+```
+
+El script `scripts/sonar-analyze.sh` envuelve `dotnet-sonarscanner 11.x`, mueve `sonar-project.properties` durante el flujo (el scanner .NET se queja si está en la raíz), y deja todo el coverage en `tests/.../TestResults/*/coverage.opencover.xml`.
+
+`sonarqube({ action: "analyze" })` sigue siendo válido para **validación rápida sin coverage** (typos, code smells en código nuevo). NO mezclar ambos flujos en la misma rama — el segundo `analyze` resetea las métricas del server.
+
 ## Recursos
 
 - Skill `database-designer` en `.agents/skills/database-designer/` — usar para optimizaciones, índices y migraciones futuras.
