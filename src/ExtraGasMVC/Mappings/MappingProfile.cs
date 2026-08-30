@@ -32,11 +32,32 @@ public class MappingProfile : Profile
         CreateMap<VSaldoCliente, VSaldoClienteDto>().ReverseMap();
     }
 
+    // Issue #118: auditoría es responsabilidad del Service, no del mapeo.
+    // Los miembros FechaAlta / CreatedAt / UpdatedAt / CreatedBy / UpdatedBy /
+    // DeletedAt NO se exponen en los DTOs de escritura (CreateClienteDto /
+    // UpdateClienteDto), así que AutoMapper hoy no los pisa "por accidente".
+    // Pero esa salvaguarda es implícita: si mañana alguien agrega uno de esos
+    // campos al DTO o un `.MapFrom(...)` acá, el Service pierde la auditoría
+    // silenciosamente. El `.Ignore()` explícito documenta el contrato y bloquea
+    // el camino. El Service setea esos campos después del Map (ClienteService
+    // líneas 160-166 en CreateAsync y 233-234 + ClienteEditRules en UpdateAsync).
     private void ConfigureCliente()
     {
         CreateMap<Cliente, ClienteDto>().ReverseMap();
-        CreateMap<CreateClienteDto, Cliente>();
-        CreateMap<UpdateClienteDto, Cliente>();
+        CreateMap<CreateClienteDto, Cliente>()
+            .ForMember(d => d.FechaAlta, o => o.Ignore())
+            .ForMember(d => d.CreatedAt, o => o.Ignore())
+            .ForMember(d => d.UpdatedAt, o => o.Ignore())
+            .ForMember(d => d.CreatedBy, o => o.Ignore())
+            .ForMember(d => d.UpdatedBy, o => o.Ignore())
+            .ForMember(d => d.DeletedAt, o => o.Ignore());
+        CreateMap<UpdateClienteDto, Cliente>()
+            .ForMember(d => d.FechaAlta, o => o.Ignore())
+            .ForMember(d => d.CreatedAt, o => o.Ignore())
+            .ForMember(d => d.UpdatedAt, o => o.Ignore())
+            .ForMember(d => d.CreatedBy, o => o.Ignore())
+            .ForMember(d => d.UpdatedBy, o => o.Ignore())
+            .ForMember(d => d.DeletedAt, o => o.Ignore());
         CreateMap<ClienteDto, UpdateClienteDto>();
     }
 
