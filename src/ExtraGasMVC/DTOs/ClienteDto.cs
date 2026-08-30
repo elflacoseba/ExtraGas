@@ -112,9 +112,7 @@ public class ClienteDto : ClienteDtoBase
     /// discriminar Create de Edit sin agregar un flag mágico. Issue #136.
     /// </para>
     /// </summary>
-    // NOSONAR (S2094): subclase marker intencional para diferenciar Create de Edit
-    // en el binding del Controller. Ver XMLDoc arriba.
-    public class CreateClienteDto : ClienteDtoBase { }
+    public class CreateClienteDto : ClienteDtoBase { } // NOSONAR S2094: subclase marker para Create vs Edit en el Controller
 
     /// <summary>
     /// DTO de edición de cliente. NO incluye <c>Activo</c> ni <c>FechaAlta</c>:
