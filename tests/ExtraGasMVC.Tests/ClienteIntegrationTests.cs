@@ -7,6 +7,7 @@ using ExtraGasMVC.Services.Implementations;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
 using MySqlConnector;
 using Testcontainers.MySql;
 using Xunit;
@@ -125,7 +126,7 @@ public class ClienteIntegrationTests : IClassFixture<ClienteMySqlFixture>
         var mapperConfig = new MapperConfiguration(cfg => cfg.AddProfile<MappingProfile>());
         var mapper = mapperConfig.CreateMapper();
         var cache = new MemoryCache(new MemoryCacheOptions());
-        return new ClienteService(context, mapper, cache);
+        return new ClienteService(context, mapper, cache, NullLogger<ClienteService>.Instance);
     }
 
     private static CreateClienteDto NewDto(string dni) => new()

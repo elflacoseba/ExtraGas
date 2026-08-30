@@ -5,6 +5,7 @@ using ExtraGasMVC.Mappings;
 using ExtraGasMVC.Services.Implementations;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ExtraGasMVC.Tests;
@@ -35,7 +36,7 @@ public class ClienteServiceReadTests
         var mapper = mapperConfig.CreateMapper();
         var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
             new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
-        var service = new ClienteService(context, mapper, cache);
+        var service = new ClienteService(context, mapper, cache, NullLogger<ClienteService>.Instance);
         return (service, context);
     }
 
