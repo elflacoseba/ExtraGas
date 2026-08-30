@@ -241,6 +241,55 @@ public class ClienteService : IClienteService
         return true;
     }
 
+    /// <summary>
+    /// Lista clientes soft-deleted para la pantalla /Clientes/Papelera.
+    /// Issue #111: usa IgnoreQueryFilters() porque el QueryFilter global oculta
+    /// los DeletedAt != null. Filtra adicionalmente por DeletedAt != null para
+    /// quedarse solo con soft-deleted. Soporta busqueda con la misma logica que
+    /// <see cref="SearchAsync"/> (Issue #113: normaliza DNI/telefono) para que
+    /// el operador pueda encontrar un cliente especifico dentro de la papelera.
+    /// </summary>
+    public async Task<PagedResult<ClienteDto>> GetDeletedAsync(
+        string? busqueda, int pagina, int tamanio, CancellationToken ct = default)
+    {
+        var query = _context.Clientes
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(c => c.DeletedAt != null);
+
+        if (!string.IsNullOrWhiteSpace(busqueda))
+        {
+            // Issue #113: normalizamos query para que el operador pueda tipear
+            // " 12345678 " o "+54 11 4455-6677" y matchear contra valores canónicos.
+            var q = busqueda.Trim();
+            var dniNormalizado = StringNormalizer.NormalizarDni(q) ?? q;
+            var telNormalizado = StringNormalizer.NormalizarTelefono(q) ?? q;
+            query = query.Where(c =>
+                c.Nombre.Contains(q)
+                || c.Apellido.Contains(q)
+                || (c.Dni != null && c.Dni.Contains(dniNormalizado))
+                || (c.CuitCuil != null && c.CuitCuil.Contains(q))
+                || c.TelefonoPrincipal.Contains(telNormalizado));
+        }
+
+        var total = await query.CountAsync(ct);
+
+        var clientes = await query
+            .OrderBy(c => c.Apellido)
+            .ThenBy(c => c.Nombre)
+            .Skip((pagina - 1) * tamanio)
+            .Take(tamanio)
+            .ToListAsync(ct);
+
+        return new PagedResult<ClienteDto>
+        {
+            Items = _mapper.Map<List<ClienteDto>>(clientes),
+            Total = total,
+            Page = pagina,
+            PageSize = tamanio
+        };
+    }
+
     public async Task<List<ProvinciaDto>> GetProvinciasAsync(CancellationToken ct = default)
     {
         return await _cache.GetOrCreateAsync(ProvinciasCacheKey, async entry =>

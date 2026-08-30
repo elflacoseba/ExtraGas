@@ -181,4 +181,72 @@ actualizado.Nombre.Should().Be("Juan Modificado", "el resto de los campos si se 
         await act.Should().ThrowAsync<ClienteSoftDeletedException>()
             .Where(ex => ex.ClienteId == creado.Id);
     }
+
+    // ====================================================================
+    // Issue #111: papelera de clientes soft-deleted
+    // ====================================================================
+
+    [Fact]
+    public async Task DeleteAsync_Y_RestoreAsync_RoundTrip_DevuelveClienteActivoSinDeletedAt()
+    {
+        var (service, context) = NewService(nameof(DeleteAsync_Y_RestoreAsync_RoundTrip_DevuelveClienteActivoSinDeletedAt));
+
+        // Arrange: crear un cliente
+        var dto = NewCreateDto();
+        var creado = await service.CreateAsync(dto, createdBy: 1);
+
+        // Act 1: soft-delete
+        var deleted = await service.DeleteAsync(creado.Id, updatedBy: 1);
+        deleted.Should().BeTrue();
+
+        // Verificar que el cliente esta soft-deleted en BD
+        var entity = await context.Clientes.IgnoreQueryFilters().FirstAsync(c => c.Id == creado.Id);
+        entity.DeletedAt.Should().NotBeNull();
+        entity.Activo.Should().BeFalse();
+
+        // Act 2: restore
+        var restored = await service.RestoreAsync(creado.Id, updatedBy: 1);
+        restored.Should().BeTrue();
+
+        // Assert: DeletedAt es null y Activo es true otra vez
+        var afterRestore = await context.Clientes.IgnoreQueryFilters().FirstAsync(c => c.Id == creado.Id);
+        afterRestore.DeletedAt.Should().BeNull();
+        afterRestore.Activo.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetDeletedAsync_DevuelveSoloSoftDeleted_InclusoSiActivoEsFalse()
+    {
+        var (service, context) = NewService(nameof(GetDeletedAsync_DevuelveSoloSoftDeleted_InclusoSiActivoEsFalse));
+
+        // Arrange: 2 clientes normales + 1 soft-deleted
+        await service.CreateAsync(NewCreateDto("11111111"), createdBy: 1);
+        await service.CreateAsync(NewCreateDto("22222222"), createdBy: 1);
+        var tercero = await service.CreateAsync(NewCreateDto("33333333"), createdBy: 1);
+        await service.DeleteAsync(tercero.Id, updatedBy: 1);
+
+        // Act
+        var resultado = await service.GetDeletedAsync(busqueda: null, pagina: 1, tamanio: 25);
+
+        // Assert: solo el tercero aparece, y DeletedAt != null
+        resultado.Total.Should().Be(1);
+        resultado.Items.Should().HaveCount(1);
+        resultado.Items[0].Id.Should().Be(tercero.Id);
+    }
+
+    [Fact]
+    public async Task GetDeletedAsync_RespetaFiltroDeBusqueda()
+    {
+        var (service, _) = NewService(nameof(GetDeletedAsync_RespetaFiltroDeBusqueda));
+
+        await service.CreateAsync(NewCreateDto(dni: "11111111"), createdBy: 1);
+        await service.CreateAsync(NewCreateDto(dni: "22222222"), createdBy: 1);
+        var tercero = await service.CreateAsync(NewCreateDto(dni: "33333333"), createdBy: 1);
+        await service.DeleteAsync(tercero.Id, updatedBy: 1);
+
+        var resultado = await service.GetDeletedAsync(busqueda: "33333333", pagina: 1, tamanio: 25);
+
+        resultado.Total.Should().Be(1);
+        resultado.Items[0].Id.Should().Be(tercero.Id);
+    }
 }
