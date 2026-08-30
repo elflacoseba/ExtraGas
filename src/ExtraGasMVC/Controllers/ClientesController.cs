@@ -1,5 +1,6 @@
 using AutoMapper;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Services.Exceptions;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -116,11 +117,28 @@ public class ClientesController : BaseController
             TempData["Success"] = $"Cliente {cliente.Nombre} {cliente.Apellido} actualizado.";
             return RedirectToAction(nameof(Index));
         }
+        catch (ClienteSoftDeletedException ex)
+        {
+            // Issue #108: el cliente está soft-deleted. Mostramos el mensaje
+            // específico (que viene de la excepción) y redirigimos a Index.
+            // Distinct de KeyNotFoundException porque la solución es distinta:
+            // restaurar en lugar de crear uno nuevo.
+            TempData["Error"] = ex.Message;
+            return RedirectToAction(nameof(Index));
+        }
         catch (InvalidOperationException ex)
         {
+            // Típicamente: DNI ya registrado (issue #105).
             ModelState.AddModelError("Dni", ex.Message);
             await LoadViewBagsAsync(ct);
             return View(cliente);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            // Issue #108: el cliente no existe (o fue purgado). Redirigimos a
+            // Index con el mensaje que viene del Service.
+            TempData["Error"] = ex.Message;
+            return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
         {
