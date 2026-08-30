@@ -1,8 +1,14 @@
+using AutoMapper;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Mappings;
+using ExtraGasMVC.Services.Implementations;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using MySqlConnector;
+using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
 using Testcontainers.MySql;
 using Xunit;
 
@@ -179,6 +185,77 @@ public class ProductoPrecioHistoricoIntegrationTests
             await _fixture.DropDatabaseAsync(dbName);
         }
     }
+
+    // ====================================================================
+    // Issue #145 Slice 3: integración end-to-end del hook contra MySQL real.
+    // El unit test con InMemory ya cubre la lógica del hook; este test
+    // valida que el Service funciona contra Pomelo + FKs reales + el
+    // default CURRENT_TIMESTAMP del ChangedAt. Si la migración no se aplicó,
+    // SaveChangesAsync tira InvalidOperationException con "Unknown table" —
+    // eso es exactamente lo que queremos cazar antes del deploy.
+    // ====================================================================
+
+    [Fact]
+    public async Task UpdateAsync_PriceChange_PersisteFilaConFKRealAUsuarios()
+    {
+        var context = await _fixture.NewDbContextAsync(
+            nameof(UpdateAsync_PriceChange_PersisteFilaConFKRealAUsuarios));
+        try
+        {
+            // Seed mínimo: un producto con precio=1000 y un usuario (operator).
+            // Las FKs de producto_precios_historico apuntan a ambos.
+            var producto = new Producto
+            {
+                Codigo = "GAS-10",
+                Nombre = "Garrafa 10kg",
+                TipoProductoId = 1,
+                UnidadVenta = "UNIDAD",
+                PrecioActual = 1000m,
+                ManejaGarrafaIndividual = true,
+                Activo = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                CreatedBy = 1,
+                UpdatedBy = 1,
+            };
+            context.Productos.Add(producto);
+            await context.SaveChangesAsync();
+
+            var mapper = new MapperConfiguration(cfg => cfg.AddProfile<MappingProfile>()).CreateMapper();
+            var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance);
+
+            // Update con cambio de precio 1000 → 1500 + motivo.
+            var dto = new UpdateProductoDto
+            {
+                Id = producto.Id,
+                Codigo = producto.Codigo,
+                Nombre = producto.Nombre,
+                TipoProductoId = producto.TipoProductoId,
+                UnidadVenta = producto.UnidadVenta,
+                PrecioActual = 1500m,
+                ManejaGarrafaIndividual = producto.ManejaGarrafaIndividual,
+                MotivoCambioPrecio = "Ajuste por inflacion",
+            };
+
+            var actualizado = await service.UpdateAsync(dto, usuarioId: 1, ct: default);
+
+            actualizado.PrecioActual.Should().Be(1500m);
+
+            var fila = await context.ProductoPreciosHistorico
+                .AsNoTracking()
+                .FirstAsync(p => p.ProductoId == producto.Id);
+            fila.PrecioAnterior.Should().Be(1000m, "snapshot antes del Map");
+            fila.PrecioNuevo.Should().Be(1500m, "valor post-update");
+            fila.MotivoCambioPrecio.Should().Be("Ajuste por inflacion");
+            fila.ChangedBy.Should().Be(1UL, "FK a usuarios.id válida — operator sembrado");
+            fila.ChangedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1),
+                "ChangedAt usa CURRENT_TIMESTAMP por default del schema");
+        }
+        finally
+        {
+            await _fixture.DropDatabaseAsyncForDbContext(context);
+        }
+    }
 }
 
 /// <summary>
@@ -318,6 +395,49 @@ public class ProductoPrecioHistoricoMySqlFixture : IAsyncLifetime
             nombres.Add(reader.GetString(0));
         }
         return nombres;
+    }
+
+    /// <summary>
+    /// Crea una base fresca + aplica el schema mínimo + crea un DbContext
+    /// Pomelo conectado. Usado por el test de Slice 3 (hook end-to-end) que
+    /// necesita ejecutar <c>ProductoService.UpdateAsync</c> contra MySQL real
+    /// para validar que la FK <c>changed_by → usuarios.id</c> se cumple cuando
+    /// el operator existe, y que el row insertado es legible vía EF.
+    /// </summary>
+    public async Task<ExtraGasDbContext> NewDbContextAsync(string testName)
+    {
+        _ = testName;
+        var dbName = DatabasePrefix + Guid.NewGuid().ToString("N");
+
+        await using (var conn = new MySqlConnection(_rootConnectionString))
+        {
+            await conn.OpenAsync();
+            await using var create = conn.CreateCommand();
+            create.CommandText = $"CREATE DATABASE `{dbName}` " +
+                                 "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;";
+            await create.ExecuteNonQueryAsync();
+        }
+
+        await ApplyMigrationAsync(dbName);
+
+        var connString = GetConnectionString(dbName);
+        var serverVersion = ServerVersion.Create(
+            new Version(8, 0, 0), ServerType.MySql);
+        var options = new DbContextOptionsBuilder<ExtraGasDbContext>()
+            .UseMySql(connString, serverVersion)
+            .Options;
+        return new ExtraGasDbContext(options);
+    }
+
+    /// <summary>
+    /// Cierra un DbContext abierto por <see cref="NewDbContextAsync"/> y
+    /// elimina su base efímera. Helper para el patrón using en el test.
+    /// </summary>
+    public async Task DropDatabaseAsyncForDbContext(ExtraGasDbContext context)
+    {
+        var dbName = context.Database.GetDbConnection().Database;
+        await context.DisposeAsync();
+        await DropDatabaseAsync(dbName);
     }
 
     private static string LoadMigrationSql()
