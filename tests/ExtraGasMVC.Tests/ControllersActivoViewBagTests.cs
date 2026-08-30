@@ -176,6 +176,7 @@ public class ControllersActivoViewBagTests
         public Task<bool> DeleteAsync(ulong id, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> RestoreAsync(ulong id, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<ProvinciaDto>> GetProvinciasAsync(CancellationToken ct = default) => Task.FromResult(new List<ProvinciaDto>());
+        public Task<IEnumerable<VSaldoClienteDto>> GetSaldosAsync(CancellationToken ct = default) => Task.FromResult<IEnumerable<VSaldoClienteDto>>(new List<VSaldoClienteDto>());
     }
 
     private sealed class FakeEmpleadoService : IEmpleadoService

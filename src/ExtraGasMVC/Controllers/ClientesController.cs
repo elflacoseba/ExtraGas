@@ -172,9 +172,15 @@ public class ClientesController : BaseController
         return RedirectToAction(nameof(Index));
     }
 
+    // Issue #109: CuentasCorrientes usaba GetAllAsync (trae TODOS los clientes
+    // con su dirección completa) y la vista no mostraba saldo ni pedidos
+    // pendientes. Si la vista disparaba queries adicionales por cliente era
+    // un N+1 garantizado. Ahora delegamos en GetSaldosAsync, que proyecta la
+    // vista SQL v_saldo_clientes (cliente + saldo + pedidos pendientes en
+    // una sola fila agregada en MySQL).
     public async Task<IActionResult> CuentasCorrientes(CancellationToken ct = default)
     {
-        var clientes = await _clienteService.GetAllAsync(ct);
-        return View(clientes);
+        var saldos = await _clienteService.GetSaldosAsync(ct);
+        return View(saldos);
     }
 }

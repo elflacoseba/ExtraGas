@@ -1,5 +1,6 @@
 using AutoMapper;
 using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.Data.Entities.Views;
 using ExtraGasMVC.DTOs;
 
 namespace ExtraGasMVC.Mappings;
@@ -21,6 +22,14 @@ public class MappingProfile : Profile
         ConfigureUsuario();
         ConfigureProvincia();
         ConfigureEmpleado();
+        ConfigureVSaldoCliente();
+    }
+
+    // Issue #109: mapping de la vista v_saldo_clientes para evitar N+1 en
+    // CuentasCorrientes. AutoMapper proyecta las 5 columnas 1:1 (mismo nombre).
+    private void ConfigureVSaldoCliente()
+    {
+        CreateMap<VSaldoCliente, VSaldoClienteDto>().ReverseMap();
     }
 
     private void ConfigureCliente()

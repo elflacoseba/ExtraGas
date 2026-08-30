@@ -266,6 +266,8 @@ public class ClientesControllerEditNotFoundTests
 
         public Task<List<ProvinciaDto>> GetProvinciasAsync(CancellationToken ct = default)
             => Task.FromResult(new List<ProvinciaDto>());
+        public Task<IEnumerable<VSaldoClienteDto>> GetSaldosAsync(CancellationToken ct = default)
+            => Task.FromResult<IEnumerable<VSaldoClienteDto>>(new List<VSaldoClienteDto>());
 
         // Metodos no usados por estos tests:
         public Task<ClienteDto?> GetByIdAsync(ulong id, CancellationToken ct = default) => throw new NotImplementedException();
