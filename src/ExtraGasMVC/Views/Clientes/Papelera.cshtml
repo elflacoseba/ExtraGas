@@ -1,0 +1,110 @@
+@model ExtraGasMVC.Models.ViewModels.PagedResult<ExtraGasMVC.DTOs.ClienteDto>
+@{
+    ViewData["Title"] = "Papelera de clientes";
+    var busqueda = ViewBag.Busqueda as string;
+    var pagina = Model.Page;
+    var tamanio = Model.PageSize;
+    var total = Model.Total;
+    var totalPaginas = Model.TotalPages;
+}
+@section PageHeader {
+    <div class="row mb-3">
+        <div class="col-12">
+            <h4 class="mb-1">Papelera de clientes</h4>
+            <p class="text-secondary mb-2">Clientes eliminados que pueden recuperarse. La papelera muestra unicamente los soft-deleted (no se borran de la BD).</p>
+            <a asp-action="Index" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i> Volver al listado
+            </a>
+            <a asp-action="Create" class="btn btn-primary float-end">
+                <i class="bi bi-plus-circle me-1"></i> Nuevo cliente
+            </a>
+        </div>
+    </div>
+}
+
+<div class="card">
+    <div class="card-header">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-9">
+                <label class="form-label small mb-1" for="busqueda">Buscar</label>
+                <input type="text" id="busqueda" name="busqueda" value="@busqueda" class="form-control" placeholder="Nombre, apellido, DNI, CUIT o teléfono" />
+            </div>
+            <div class="col-md-3 d-grid gap-2 d-md-flex">
+                <button type="submit" class="btn btn-primary flex-fill">
+                    <i class="bi bi-search me-1"></i> Buscar
+                </button>
+                <a asp-action="Papelera" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Nombre completo</th>
+                    <th>DNI / CUIT</th>
+                    <th>Teléfono</th>
+                    <th>Ciudad</th>
+                    <th class="text-center">Estado</th>
+                    <th class="text-end" style="width: 200px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Items.Any())
+                {
+                    <tr><td colspan="7" class="text-center py-4 text-secondary">No hay clientes en la papelera.</td></tr>
+                }
+                @foreach (var c in Model.Items)
+                {
+                    <tr>
+                        <td><code>@(c.Codigo ?? "-")</code></td>
+                        <td><strong>@c.Apellido, @c.Nombre</strong></td>
+                        <td>@(c.Dni ?? c.CuitCuil ?? "-")</td>
+                        <td>@c.TelefonoPrincipal</td>
+                        <td>@(c.Ciudad ?? "-")</td>
+                        <td class="text-center">
+                            <span class="badge text-bg-secondary">Eliminado</span>
+                            @if (c.DeletedAt.HasValue)
+                            {
+                                <small class="d-block text-secondary">@c.DeletedAt.Value.ToString("dd/MM/yyyy")</small>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <form asp-action="Restore" asp-route-id="@c.Id" method="post" class="d-inline js-confirm-form" data-name="este cliente" data-action="reactivar">
+                                @Html.AntiForgeryToken()
+                                <button type="button" class="btn btn-sm btn-success" title="Restaurar" onclick="confirmarAccion(this)">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i> Restaurar
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer clearfix">
+        <div class="float-end">
+            <small class="text-secondary me-2">@total cliente@(total == 1 ? "" : "s") en la papelera</small>
+        </div>
+        @if (totalPaginas > 1)
+        {
+            <nav>
+                <ul class="pagination pagination-sm m-0 float-end">
+                    @for (var i = 1; i <= totalPaginas; i++)
+                    {
+                        <li class="page-item @(i == pagina ? "active" : "")">
+                            <a class="page-link"
+                               asp-action="Papelera"
+                               asp-route-busqueda="@busqueda"
+                               asp-route-pagina="@i"
+                               asp-route-tamanio="@tamanio">@i</a>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        }
+    </div>
+</div>

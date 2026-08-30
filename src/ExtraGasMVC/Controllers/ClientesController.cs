@@ -180,4 +180,14 @@ public class ClientesController : BaseController
         var saldos = await _clienteService.GetSaldosAsync(ct);
         return View(saldos);
     }
+
+    // Issue #111: ruta dedicada a la papelera de clientes soft-deleted. La Index
+    // los oculta porque el QueryFilter global los filtra; aca los listamos via
+    // IgnoreQueryFilters() y exponemos el boton Restaurar (ya existente en Restore POST).
+    public async Task<IActionResult> Papelera(string? busqueda, int pagina = 1, int tamanio = 25, CancellationToken ct = default)
+    {
+        var resultado = await _clienteService.GetDeletedAsync(busqueda, pagina, tamanio, ct);
+        ViewBag.Busqueda = busqueda;
+        return View(resultado);
+    }
 }

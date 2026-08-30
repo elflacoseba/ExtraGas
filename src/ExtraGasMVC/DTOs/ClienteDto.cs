@@ -83,6 +83,9 @@ public class ClienteDtoBase
 /// ningún formulario: se exponen solo para display (Details, Index, listados).
 /// Issue #114: <c>Activo</c> solo cambia vía Delete/Restore; <c>FechaAlta</c>
 /// es audit trail del alta y no debe retrocederse.
+/// <para>Issue #111: <c>DeletedAt</c> se expone para que la pantalla
+/// /Clientes/Papelera muestre la fecha de baja. Es null para clientes
+/// activos (la mayoria del tiempo) y no es editable.</para>
 /// </summary>
 public class ClienteDto : ClienteDtoBase
 {
@@ -93,6 +96,9 @@ public class ClienteDto : ClienteDtoBase
 
     [Display(Name = "Activo")]
     public bool Activo { get; set; }
+
+    [Display(Name = "Fecha de baja")]
+    public DateTime? DeletedAt { get; set; }
 }
 
 /// <summary>

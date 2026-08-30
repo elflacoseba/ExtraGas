@@ -19,6 +19,15 @@ public interface IClienteService
     Task<List<ProvinciaDto>> GetProvinciasAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Lista clientes soft-deleted (papelera) para la pantalla /Clientes/Papelera.
+    /// Usa IgnoreQueryFilters() porque el global query filter oculta los DeletedAt != null.
+    /// Devuelve TODOS los soft-deleted, activos o no.
+    /// Issue #111.
+    /// </summary>
+    Task<PagedResult<ClienteDto>> GetDeletedAsync(
+        string? busqueda, int pagina, int tamanio, CancellationToken ct = default);
+
+    /// <summary>
     /// Saldos agregados por cliente para la pantalla CuentasCorrientes.
     /// Lee la vista <c>v_saldo_clientes</c> (una sola query) en lugar de
     /// cargar todos los clientes y resolver saldo/pedidos en la vista (N+1).

@@ -171,6 +171,7 @@ public class ControllersActivoViewBagTests
         public Task<ClienteDto?> GetByDniAsync(string dni, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IEnumerable<ClienteDto>> GetActivosAsync(CancellationToken ct = default) => Task.FromResult<IEnumerable<ClienteDto>>(new List<ClienteDto>());
         public Task<PagedResult<ClienteDto>> SearchAsync(string? b, bool s, int p, int t, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<PagedResult<ClienteDto>> GetDeletedAsync(string? b, int p, int t, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ClienteDto> CreateAsync(CreateClienteDto d, ulong? c, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ClienteDto> UpdateAsync(UpdateClienteDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> DeleteAsync(ulong id, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
