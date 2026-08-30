@@ -20,7 +20,7 @@ public class ClienteDtoBase
 
     [Display(Name = "DNI")]
     [StringLength(15, ErrorMessage = "El DNI no puede superar {1} caracteres.")]
-    [RegularExpression("^[0-9]+$", ErrorMessage = "El DNI debe ser numérico.")]
+    [RegularExpression("^[0-9 .\\-]*$", ErrorMessage = "El DNI debe ser numérico (se admiten espacios, puntos y guiones como separadores).")]
     public string? Dni { get; set; }
 
     [Display(Name = "Cuit/Cuil")]
@@ -31,6 +31,7 @@ public class ClienteDtoBase
     [Display(Name = "Teléfono principal")]
     [Required(ErrorMessage = "El teléfono principal es obligatorio.")]
     [StringLength(25, ErrorMessage = "El teléfono no puede superar {1} caracteres.")]
+    [RegularExpression("^[0-9 +()\\-.]*$", ErrorMessage = "El teléfono admite dígitos, espacios y separadores (+, -, paréntesis, puntos).")]
     public string TelefonoPrincipal { get; set; } = null!;
 
     [Display(Name = "Teléfono secundario")]

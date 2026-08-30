@@ -80,13 +80,21 @@ public class ClienteService : IClienteService
 
         if (!string.IsNullOrWhiteSpace(busqueda))
         {
+            // Issue #113: normalizamos query para que el operador pueda tipear
+            // " 12345678 " o "+54 11 4455-6677" y matchear contra valores canónicos.
+            // Asumimos que los DNIs/teléfonos en BD están normalizados (garantizado
+            // por CreateAsync/UpdateAsync a partir de este fix). Datos viejos con
+            // separadores en BD NO matchearán; por criterio de aceptación de la issue
+            // esos registros conviven sin migrarse.
             var q = busqueda.Trim();
+            var dniNormalizado = StringNormalizer.NormalizarDni(q) ?? q;
+            var telNormalizado = StringNormalizer.NormalizarTelefono(q) ?? q;
             query = query.Where(c =>
                 c.Nombre.Contains(q)
                 || c.Apellido.Contains(q)
-                || (c.Dni != null && c.Dni.Contains(q))
+                || (c.Dni != null && c.Dni.Contains(dniNormalizado))
                 || (c.CuitCuil != null && c.CuitCuil.Contains(q))
-                || c.TelefonoPrincipal.Contains(q));
+                || c.TelefonoPrincipal.Contains(telNormalizado));
         }
 
         var total = await query.CountAsync(ct);
@@ -109,7 +117,12 @@ public class ClienteService : IClienteService
 
     public async Task<ClienteDto> CreateAsync(CreateClienteDto cliente, ulong? createdBy, CancellationToken ct = default)
     {
-        if (!await IsDniUniqueAsync(cliente.Dni, ct))
+        // Issue #113: normalizamos DNI y teléfono para que unicidad y storage
+        // operen sobre el valor canónico (sin espacios, puntos ni guiones).
+        var dniNormalizado = StringNormalizer.NormalizarDni(cliente.Dni);
+        var telNormalizado = StringNormalizer.NormalizarTelefono(cliente.TelefonoPrincipal);
+
+        if (!await IsDniUniqueAsync(dniNormalizado, ct))
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
         var entity = _mapper.Map<Cliente>(cliente);
@@ -117,6 +130,8 @@ public class ClienteService : IClienteService
         // porque son estado / audit trail, no datos de carga del operador.
         entity.Activo = true;
         entity.FechaAlta = DateOnly.FromDateTime(DateTime.UtcNow);
+        entity.Dni = dniNormalizado;                // Issue #113
+        entity.TelefonoPrincipal = telNormalizado!; // Issue #113 (es requerido, no null)
         entity.CreatedAt = DateTime.UtcNow;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.CreatedBy = createdBy;
@@ -146,7 +161,11 @@ public class ClienteService : IClienteService
         if (entity.DeletedAt != null)
             throw new ClienteSoftDeletedException(cliente.Id);
 
-        if (!await IsDniUniqueAsync(cliente.Dni, cliente.Id, ct))
+        // Issue #113: normalizamos el DNI antes de validar unicidad y antes
+        // de pisar el entity. Si el operador tipea " 12.345.678 " debe matchear
+        // con el cliente cuyo DNI canónico es "12345678".
+        var dniNormalizado = StringNormalizer.NormalizarDni(cliente.Dni);
+        if (!await IsDniUniqueAsync(dniNormalizado, cliente.Id, ct))
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
         // Snapshot de Activo y FechaAlta ANTES del AutoMapper: el formulario
@@ -157,6 +176,8 @@ public class ClienteService : IClienteService
         var fechaAltaOriginal = entity.FechaAlta;
 
         _mapper.Map(cliente, entity);
+        entity.Dni = dniNormalizado;                                                     // Issue #113
+        entity.TelefonoPrincipal = StringNormalizer.NormalizarTelefono(cliente.TelefonoPrincipal)!; // Issue #113
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = updatedBy;
         ClienteEditRules.PreservarFlagsNoEditables(entity, activoOriginal, fechaAltaOriginal);
@@ -177,10 +198,13 @@ public class ClienteService : IClienteService
     /// </summary>
     internal static bool DniEsUnicoSobre(IQueryable<Cliente> clientes, string? dni)
     {
-        if (string.IsNullOrWhiteSpace(dni))
+        // Issue #113: normalizamos el DNI recibido para que el chequeo de
+        // unicidad evalúe contra el valor canónico almacenado en BD.
+        var dniNormalizado = StringNormalizer.NormalizarDni(dni);
+        if (string.IsNullOrWhiteSpace(dniNormalizado))
             return true;
 
-        return !clientes.Any(c => c.Dni == dni);
+        return !clientes.Any(c => c.Dni == dniNormalizado);
     }
 
     public async Task<bool> DeleteAsync(ulong id, ulong? updatedBy, CancellationToken ct = default)
