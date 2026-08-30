@@ -23,10 +23,7 @@ public class ProveedoresController : BaseController
         var resultado = await _proveedorService.SearchAsync(busqueda, soloActivos, pagina, tamanio, ct);
         ViewBag.Busqueda = busqueda;
         ViewBag.SoloActivos = soloActivos;
-        ViewBag.Pagina = resultado.Pagina;
-        ViewBag.Tamanio = resultado.Tamanio;
-        ViewBag.Total = resultado.Total;
-        return View(resultado.Items);
+        return View(resultado);
     }
 
     public async Task<IActionResult> Details(ulong id, CancellationToken ct = default)

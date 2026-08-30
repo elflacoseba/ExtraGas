@@ -1,5 +1,6 @@
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -43,10 +44,13 @@ public class PagosController : Controller
         var items = pagos.OrderByDescending(p => p.Fecha)
             .Skip((pagina - 1) * tamanio).Take(tamanio).ToList();
         ViewBag.PedidoId = pedidoId;
-        ViewBag.Pagina = pagina;
-        ViewBag.Tamanio = tamanio;
-        ViewBag.Total = total;
-        return View(items);
+        return View(new PagedResult<PagoDto>
+        {
+            Items = items,
+            Total = total,
+            Page = pagina,
+            PageSize = tamanio
+        });
     }
 
     public async Task<IActionResult> Details(ulong id, CancellationToken ct = default)

@@ -1,11 +1,12 @@
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 
 namespace ExtraGasMVC.Services.Interfaces;
 
 public interface IEmpleadoService
 {
     Task<EmpleadoDto?> GetByIdAsync(ulong id, CancellationToken ct = default);
-    Task<SearchResultDto<EmpleadoDto>> SearchAsync(
+    Task<PagedResult<EmpleadoDto>> SearchAsync(
         string? busqueda, bool soloActivos,
         int pagina, int tamanio, CancellationToken ct = default);
     Task<EmpleadoDto> CreateAsync(CreateEmpleadoDto dto, ulong? createdBy, CancellationToken ct = default);

@@ -1,4 +1,5 @@
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services;
 
 namespace ExtraGasMVC.Services.Interfaces;
@@ -18,7 +19,7 @@ public interface IAuditoriaLoginService
         string? userAgent,
         CancellationToken ct = default);
 
-    Task<SearchResultDto<AuditoriaLoginListDto>> SearchAsync(
+    Task<PagedResult<AuditoriaLoginListDto>> SearchAsync(
         string? busqueda,
         string? ip,
         bool soloFallidos,

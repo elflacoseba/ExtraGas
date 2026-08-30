@@ -25,11 +25,8 @@ public class UsuariosController : BaseController
         ViewBag.Busqueda = busqueda;
         ViewBag.RolId = rolId;
         ViewBag.SoloActivos = soloActivos;
-        ViewBag.Pagina = resultado.Pagina;
-        ViewBag.Tamanio = resultado.Tamanio;
-        ViewBag.Total = resultado.Total;
 
-        return View(resultado.Items);
+        return View(resultado);
     }
 
     public async Task<IActionResult> Details(ulong id, CancellationToken ct = default)

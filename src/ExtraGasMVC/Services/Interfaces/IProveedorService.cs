@@ -1,4 +1,5 @@
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 
 namespace ExtraGasMVC.Services.Interfaces;
 
@@ -11,5 +12,5 @@ public interface IProveedorService
     Task<ProveedorDto> UpdateAsync(ulong id, UpdateProveedorDto proveedor, ulong? updatedBy, CancellationToken ct = default);
     Task<bool> DeleteAsync(ulong id, ulong? updatedBy, CancellationToken ct = default);
     Task<IEnumerable<ProvinciaDto>> GetProvinciasAsync(CancellationToken ct = default);
-    Task<SearchResultDto<ProveedorDto>> SearchAsync(string? busqueda, bool soloActivos, int pagina, int tamanio, CancellationToken ct = default);
+    Task<PagedResult<ProveedorDto>> SearchAsync(string? busqueda, bool soloActivos, int pagina, int tamanio, CancellationToken ct = default);
 }

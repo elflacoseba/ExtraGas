@@ -170,7 +170,7 @@ public class ControllersActivoViewBagTests
             => Task.FromResult<IEnumerable<ClienteDto>>(new[] { _cliente! });
         public Task<ClienteDto?> GetByDniAsync(string dni, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IEnumerable<ClienteDto>> GetActivosAsync(CancellationToken ct = default) => Task.FromResult<IEnumerable<ClienteDto>>(new List<ClienteDto>());
-        public Task<SearchResultDto<ClienteDto>> SearchAsync(string? b, bool s, int p, int t, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<PagedResult<ClienteDto>> SearchAsync(string? b, bool s, int p, int t, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ClienteDto> CreateAsync(CreateClienteDto d, ulong? c, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ClienteDto> UpdateAsync(UpdateClienteDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> DeleteAsync(ulong id, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
@@ -185,7 +185,7 @@ public class ControllersActivoViewBagTests
         public FakeEmpleadoService(EmpleadoDto? empleado) { _empleado = empleado; }
         public Task<EmpleadoDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
             => Task.FromResult(_empleado);
-        public Task<SearchResultDto<EmpleadoDto>> SearchAsync(string? b, bool s, int p, int t, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<PagedResult<EmpleadoDto>> SearchAsync(string? b, bool s, int p, int t, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<EmpleadoDto> CreateAsync(CreateEmpleadoDto d, ulong? c, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<EmpleadoDto> UpdateAsync(UpdateEmpleadoDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> DeleteAsync(ulong id, CancellationToken ct = default) => throw new NotImplementedException();
@@ -236,7 +236,7 @@ public class ControllersActivoViewBagTests
     {
         public Task<ProveedorDto?> GetByIdAsync(ulong id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ProveedorDto?> GetByCuitAsync(string c, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<SearchResultDto<ProveedorDto>> SearchAsync(string? b, bool s, int p, int t, CancellationToken ct = default) => Task.FromResult(new SearchResultDto<ProveedorDto> { Items = new List<ProveedorDto>(), Total = 0, Pagina = p, Tamanio = t });
+        public Task<PagedResult<ProveedorDto>> SearchAsync(string? b, bool s, int p, int t, CancellationToken ct = default) => Task.FromResult(new PagedResult<ProveedorDto> { Items = new List<ProveedorDto>(), Total = 0, Page = p, PageSize = t });
         public Task<ProveedorDto> CreateAsync(CreateProveedorDto d, ulong? c, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ProveedorDto> UpdateAsync(ulong id, UpdateProveedorDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> DeleteAsync(ulong id, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();

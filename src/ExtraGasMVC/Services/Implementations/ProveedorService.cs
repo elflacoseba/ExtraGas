@@ -3,6 +3,7 @@ using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Extensions;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -41,7 +42,7 @@ public class ProveedorService : IProveedorService
         return proveedor is null ? null : _mapper.Map<ProveedorDto>(proveedor);
     }
 
-    public async Task<SearchResultDto<ProveedorDto>> SearchAsync(string? busqueda, bool soloActivos, int pagina, int tamanio, CancellationToken ct = default)
+    public async Task<PagedResult<ProveedorDto>> SearchAsync(string? busqueda, bool soloActivos, int pagina, int tamanio, CancellationToken ct = default)
     {
         var query = _context.Proveedores
             .AsNoTracking()
@@ -67,12 +68,12 @@ public class ProveedorService : IProveedorService
             .Take(tamanio)
             .ToListAsync(ct);
 
-        return new SearchResultDto<ProveedorDto>
+        return new PagedResult<ProveedorDto>
         {
             Items = _mapper.Map<List<ProveedorDto>>(proveedores),
             Total = total,
-            Pagina = pagina,
-            Tamanio = tamanio
+            Page = pagina,
+            PageSize = tamanio
         };
     }
 

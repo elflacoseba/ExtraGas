@@ -1,12 +1,12 @@
-@model IEnumerable<ExtraGasMVC.DTOs.ProveedorDto>
+@model ExtraGasMVC.Models.ViewModels.PagedResult<ExtraGasMVC.DTOs.ProveedorDto>
 @{
     ViewData["Title"] = "Proveedores";
     var busqueda = ViewBag.Busqueda as string;
     var soloActivos = (bool)(ViewBag.SoloActivos ?? true);
-    var pagina = (int)(ViewBag.Pagina ?? 1);
-    var tamanio = (int)(ViewBag.Tamanio ?? 25);
-    var total = (int)(ViewBag.Total ?? 0);
-    var totalPaginas = tamanio > 0 ? (int)Math.Ceiling(total / (double)tamanio) : 0;
+    var pagina = Model.Page;
+    var tamanio = Model.PageSize;
+    var total = Model.Total;
+    var totalPaginas = Model.TotalPages;
 }
 @section PageHeader {
     <div class="mb-3">
@@ -50,11 +50,11 @@
                 </tr>
             </thead>
             <tbody>
-                @if (!Model.Any())
+                @if (!Model.Items.Any())
                 {
                     <tr><td colspan="8" class="text-center py-4 text-secondary">No hay proveedores.</td></tr>
                 }
-                @foreach (var p in Model)
+                @foreach (var p in Model.Items)
                 {
                     <tr>
                         <td><code>@(p.Codigo ?? "-")</code></td>

@@ -7,6 +7,7 @@ using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Extensions;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
@@ -109,7 +110,7 @@ public class UsuarioService : IUsuarioService
         return dto;
     }
 
-    public async Task<SearchResultDto<UsuarioDto>> SearchAsync(
+    public async Task<PagedResult<UsuarioDto>> SearchAsync(
         string? busqueda, ulong? rolId, bool soloActivos,
         int pagina, int tamanio, CancellationToken ct = default)
     {
@@ -143,12 +144,12 @@ public class UsuarioService : IUsuarioService
         var dtos = _mapper.Map<List<UsuarioDto>>(usuarios);
         await EnrichBatchAsync(dtos, usuarios, ct);
 
-        return new SearchResultDto<UsuarioDto>
+        return new PagedResult<UsuarioDto>
         {
             Items = dtos,
             Total = total,
-            Pagina = pagina,
-            Tamanio = tamanio
+            Page = pagina,
+            PageSize = tamanio
         };
     }
 

@@ -32,8 +32,8 @@ public class AuditoriaLoginsController : Controller
             Busqueda = busqueda,
             Ip = ip,
             SoloFallidos = soloFallidos,
-            Pagina = resultado.Pagina,
-            Tamanio = resultado.Tamanio,
+            Pagina = resultado.Page,
+            Tamanio = resultado.PageSize,
             Total = resultado.Total,
         };
 

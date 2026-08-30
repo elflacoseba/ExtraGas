@@ -2,6 +2,7 @@ using AutoMapper;
 using ExtraGasMVC.Controllers;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Mappings;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Exceptions;
 using ExtraGasMVC.Services.Interfaces;
 using FluentAssertions;
@@ -274,7 +275,7 @@ public class ClientesControllerEditNotFoundTests
         public Task<IEnumerable<ClienteDto>> GetAllAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ClienteDto?> GetByDniAsync(string dni, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IEnumerable<ClienteDto>> GetActivosAsync(CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<SearchResultDto<ClienteDto>> SearchAsync(string? b, bool s, int p, int t, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<PagedResult<ClienteDto>> SearchAsync(string? b, bool s, int p, int t, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ClienteDto> CreateAsync(CreateClienteDto c, ulong? b, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> DeleteAsync(ulong id, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> RestoreAsync(ulong id, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();

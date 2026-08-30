@@ -1,6 +1,7 @@
 using ExtraGasMVC.Configuration;
 using ExtraGasMVC.Controllers;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services;
 using ExtraGasMVC.Services.Interfaces;
 using FluentAssertions;
@@ -213,7 +214,7 @@ public sealed class UsuariosCreateViewBagTests
             => Task.FromResult(new UsuarioDto { Id = 99, Username = d.Username });
 
         public Task<UsuarioDto?> GetByIdAsync(ulong id, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<SearchResultDto<UsuarioDto>> SearchAsync(string? b, ulong? r, bool s, int p, int t, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<PagedResult<UsuarioDto>> SearchAsync(string? b, ulong? r, bool s, int p, int t, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<UsuarioDto> UpdateAsync(UpdateUsuarioDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> DeleteAsync(ulong id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> ChangePasswordAsync(ulong id, string cp, string np, CancellationToken ct = default) => throw new NotImplementedException();
