@@ -1,14 +1,14 @@
-@model IEnumerable<ExtraGasMVC.DTOs.PedidoDto>
+@model ExtraGasMVC.Models.ViewModels.PagedResult<ExtraGasMVC.DTOs.PedidoDto>
 @{
     ViewData["Title"] = "Pedidos";
     var numero = ViewBag.Numero as string;
     var estadoId = ViewBag.EstadoId as ulong?;
     var desde = ViewBag.Desde as DateTime?;
     var hasta = ViewBag.Hasta as DateTime?;
-    var pagina = (int)(ViewBag.Pagina ?? 1);
-    var tamanio = (int)(ViewBag.Tamanio ?? 25);
-    var total = (int)(ViewBag.Total ?? 0);
-    var totalPaginas = tamanio > 0 ? (int)Math.Ceiling(total / (double)tamanio) : 0;
+    var pagina = Model.Page;
+    var tamanio = Model.PageSize;
+    var total = Model.Total;
+    var totalPaginas = Model.TotalPages;
     var estados = (IEnumerable<ExtraGasMVC.DTOs.EstadoPedidoDto>)(ViewBag.Estados ?? Array.Empty<ExtraGasMVC.DTOs.EstadoPedidoDto>());
 }
 @section PageHeader {
@@ -71,11 +71,11 @@
                 </tr>
             </thead>
             <tbody>
-                @if (!Model.Any())
+                @if (!Model.Items.Any())
                 {
                     <tr><td colspan="8" class="text-center py-4 text-secondary">No hay pedidos.</td></tr>
                 }
-                @foreach (var p in Model)
+                @foreach (var p in Model.Items)
                 {
                     <tr>
                         <td><a asp-action="Details" asp-route-id="@p.Id" class="text-decoration-none"><strong>@(p.Numero ?? "-")</strong></a></td>

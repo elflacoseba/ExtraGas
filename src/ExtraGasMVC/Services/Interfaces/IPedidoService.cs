@@ -1,17 +1,18 @@
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 
 namespace ExtraGasMVC.Services.Interfaces;
 
 public interface IPedidoService
 {
     Task<PedidoDto?> GetByIdAsync(ulong id, CancellationToken ct = default);
-    Task<SearchResultDto<PedidoDto>> SearchAsync(
+    Task<PagedResult<PedidoDto>> SearchAsync(
         string? numero, ulong? estadoId, ulong? clienteId,
         DateTime? desde, DateTime? hasta,
         int pagina, int tamanio, CancellationToken ct = default);
     Task<IEnumerable<PedidoDto>> GetAllAsync(CancellationToken ct = default);
-    Task<SearchResultDto<PedidoDto>> GetByClienteAsync(ulong clienteId, int pagina, int tamanio, CancellationToken ct = default);
-    Task<SearchResultDto<PedidoDto>> GetByEstadoAsync(ulong estadoId, int pagina, int tamanio, CancellationToken ct = default);
+    Task<PagedResult<PedidoDto>> GetByClienteAsync(ulong clienteId, int pagina, int tamanio, CancellationToken ct = default);
+    Task<PagedResult<PedidoDto>> GetByEstadoAsync(ulong estadoId, int pagina, int tamanio, CancellationToken ct = default);
 
     /// <summary>
     /// Returns pedidos with saldo pendiente (saldo &gt; 0). Used by the dashboard
@@ -19,7 +20,7 @@ public interface IPedidoService
     /// <para>
     /// Not paginated by design — the dataset is bounded by pedidos with debt,
     /// which is small in practice. If this grows large, add pagination
-    /// parameters and return a <see cref="SearchResultDto{T}"/> like
+    /// parameters and return a <see cref="PagedResult{T}"/> like
     /// <see cref="SearchAsync"/> does.
     /// </para>
     /// </summary>

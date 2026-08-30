@@ -4,6 +4,7 @@ using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.Data.Entities.Views;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Extensions;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Exceptions;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -67,7 +68,7 @@ public class ClienteService : IClienteService
         return _mapper.Map<IEnumerable<ClienteDto>>(clientes);
     }
 
-    public async Task<SearchResultDto<ClienteDto>> SearchAsync(
+    public async Task<PagedResult<ClienteDto>> SearchAsync(
         string? busqueda, bool soloActivos,
         int pagina, int tamanio, CancellationToken ct = default)
     {
@@ -106,12 +107,12 @@ public class ClienteService : IClienteService
             .Take(tamanio)
             .ToListAsync(ct);
 
-        return new SearchResultDto<ClienteDto>
+        return new PagedResult<ClienteDto>
         {
             Items = _mapper.Map<List<ClienteDto>>(clientes),
             Total = total,
-            Pagina = pagina,
-            Tamanio = tamanio
+            Page = pagina,
+            PageSize = tamanio
         };
     }
 

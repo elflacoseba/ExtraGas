@@ -1,4 +1,5 @@
 using ExtraGasMVC.Data.Context;
+using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
@@ -32,10 +33,13 @@ public class RecepcionesController : BaseController
         var query = _context.RecepcionesProveedor.AsNoTracking().OrderByDescending(r => r.Fecha);
         var total = await query.CountAsync(ct);
         var items = await query.Skip((pagina - 1) * tamanio).Take(tamanio).ToListAsync(ct);
-        ViewBag.Pagina = pagina;
-        ViewBag.Tamanio = tamanio;
-        ViewBag.Total = total;
-        return View(items);
+        return View(new PagedResult<RecepcionProveedor>
+        {
+            Items = items,
+            Total = total,
+            Page = pagina,
+            PageSize = tamanio
+        });
     }
 
     [HttpGet]
@@ -111,10 +115,13 @@ public class PagosProveedorController : Controller
         var query = _context.PagosProveedor.AsNoTracking().OrderByDescending(p => p.Fecha);
         var total = await query.CountAsync(ct);
         var items = await query.Skip((pagina - 1) * tamanio).Take(tamanio).ToListAsync(ct);
-        ViewBag.Pagina = pagina;
-        ViewBag.Tamanio = tamanio;
-        ViewBag.Total = total;
-        return View(items);
+        return View(new PagedResult<PagoProveedor>
+        {
+            Items = items,
+            Total = total,
+            Page = pagina,
+            PageSize = tamanio
+        });
     }
 }
 

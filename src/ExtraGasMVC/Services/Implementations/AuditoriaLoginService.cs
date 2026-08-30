@@ -1,6 +1,7 @@
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,7 +40,7 @@ public class AuditoriaLoginService : IAuditoriaLoginService
         await _context.SaveChangesAsync(ct);
     }
 
-    public async Task<SearchResultDto<AuditoriaLoginListDto>> SearchAsync(
+    public async Task<PagedResult<AuditoriaLoginListDto>> SearchAsync(
         string? busqueda,
         string? ip,
         bool soloFallidos,
@@ -89,12 +90,12 @@ public class AuditoriaLoginService : IAuditoriaLoginService
             CreatedAt = a.CreatedAt,
         }).ToList();
 
-        return new SearchResultDto<AuditoriaLoginListDto>
+        return new PagedResult<AuditoriaLoginListDto>
         {
             Items = dtos,
             Total = total,
-            Pagina = pagina,
-            Tamanio = tamanio,
+            Page = pagina,
+            PageSize = tamanio,
         };
     }
 

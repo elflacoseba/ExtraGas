@@ -4,6 +4,7 @@ using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.Data.Entities.Enums;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -63,7 +64,7 @@ public class PedidoService : IPedidoService
         return pedido is null ? null : _mapper.Map<PedidoDto>(pedido);
     }
 
-    public async Task<SearchResultDto<PedidoDto>> SearchAsync(
+    public async Task<PagedResult<PedidoDto>> SearchAsync(
         string? numero, ulong? estadoId, ulong? clienteId,
         DateTime? desde, DateTime? hasta,
         int pagina, int tamanio, CancellationToken ct = default)
@@ -98,12 +99,12 @@ public class PedidoService : IPedidoService
             .Take(tamanio)
             .ToListAsync(ct);
 
-        return new SearchResultDto<PedidoDto>
+        return new PagedResult<PedidoDto>
         {
             Items = _mapper.Map<List<PedidoDto>>(pedidos),
             Total = total,
-            Pagina = pagina,
-            Tamanio = tamanio
+            Page = pagina,
+            PageSize = tamanio
         };
     }
 
@@ -117,7 +118,7 @@ public class PedidoService : IPedidoService
         return _mapper.Map<IEnumerable<PedidoDto>>(pedidos);
     }
 
-    public async Task<SearchResultDto<PedidoDto>> GetByClienteAsync(ulong clienteId, int pagina, int tamanio, CancellationToken ct = default)
+    public async Task<PagedResult<PedidoDto>> GetByClienteAsync(ulong clienteId, int pagina, int tamanio, CancellationToken ct = default)
     {
         var query = GetWithIncludes()
             .AsNoTracking()
@@ -131,16 +132,16 @@ public class PedidoService : IPedidoService
             .Take(tamanio)
             .ToListAsync(ct);
 
-        return new SearchResultDto<PedidoDto>
+        return new PagedResult<PedidoDto>
         {
             Items = _mapper.Map<List<PedidoDto>>(pedidos),
             Total = total,
-            Pagina = pagina,
-            Tamanio = tamanio
+            Page = pagina,
+            PageSize = tamanio
         };
     }
 
-    public async Task<SearchResultDto<PedidoDto>> GetByEstadoAsync(ulong estadoId, int pagina, int tamanio, CancellationToken ct = default)
+    public async Task<PagedResult<PedidoDto>> GetByEstadoAsync(ulong estadoId, int pagina, int tamanio, CancellationToken ct = default)
     {
         var query = GetWithIncludes()
             .AsNoTracking()
@@ -154,12 +155,12 @@ public class PedidoService : IPedidoService
             .Take(tamanio)
             .ToListAsync(ct);
 
-        return new SearchResultDto<PedidoDto>
+        return new PagedResult<PedidoDto>
         {
             Items = _mapper.Map<List<PedidoDto>>(pedidos),
             Total = total,
-            Pagina = pagina,
-            Tamanio = tamanio
+            Page = pagina,
+            PageSize = tamanio
         };
     }
 

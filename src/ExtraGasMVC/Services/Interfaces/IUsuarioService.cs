@@ -1,4 +1,5 @@
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services;
 
 namespace ExtraGasMVC.Services.Interfaces;
@@ -7,7 +8,7 @@ namespace ExtraGasMVC.Services.Interfaces;
 public interface IUsuarioService
 {
     Task<UsuarioDto?> GetByIdAsync(ulong id, CancellationToken ct = default);
-    Task<SearchResultDto<UsuarioDto>> SearchAsync(
+    Task<PagedResult<UsuarioDto>> SearchAsync(
         string? busqueda, ulong? rolId, bool soloActivos,
         int pagina, int tamanio, CancellationToken ct = default);
     Task<List<RolDto>> GetRolesAsync(CancellationToken ct = default);

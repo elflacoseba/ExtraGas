@@ -47,11 +47,8 @@ public class PedidosController : BaseController
         ViewBag.EstadoId = estadoId;
         ViewBag.Desde = desde;
         ViewBag.Hasta = hasta;
-        ViewBag.Pagina = resultado.Pagina;
-        ViewBag.Tamanio = resultado.Tamanio;
-        ViewBag.Total = resultado.Total;
         ViewBag.Estados = await _pedidoService.GetEstadosPedidoAsync(ct);
-        return View(resultado.Items);
+        return View(resultado);
     }
 
     public async Task<IActionResult> Details(ulong id, CancellationToken ct = default)

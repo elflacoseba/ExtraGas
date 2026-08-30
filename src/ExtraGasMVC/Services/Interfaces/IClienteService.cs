@@ -1,4 +1,5 @@
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 
 namespace ExtraGasMVC.Services.Interfaces;
 
@@ -8,7 +9,7 @@ public interface IClienteService
     Task<IEnumerable<ClienteDto>> GetAllAsync(CancellationToken ct = default);
     Task<ClienteDto?> GetByDniAsync(string dni, CancellationToken ct = default);
     Task<IEnumerable<ClienteDto>> GetActivosAsync(CancellationToken ct = default);
-    Task<SearchResultDto<ClienteDto>> SearchAsync(
+    Task<PagedResult<ClienteDto>> SearchAsync(
         string? busqueda, bool soloActivos,
         int pagina, int tamanio, CancellationToken ct = default);
     Task<ClienteDto> CreateAsync(CreateClienteDto cliente, ulong? createdBy, CancellationToken ct = default);

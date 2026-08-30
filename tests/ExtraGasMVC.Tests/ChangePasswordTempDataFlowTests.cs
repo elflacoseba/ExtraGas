@@ -1,6 +1,7 @@
 using ExtraGasMVC.Configuration;
 using ExtraGasMVC.Controllers;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Http;
@@ -84,7 +85,7 @@ public class ChangePasswordTempDataFlowTests
         public Task<bool> ChangePasswordAsync(ulong id, string currentPassword, string newPassword, CancellationToken ct = default)
             => Task.FromResult(ChangePasswordResult);
         public Task<UsuarioDto?> GetByIdAsync(ulong id, CancellationToken ct = default) => Task.FromResult<UsuarioDto?>(null);
-        public Task<SearchResultDto<UsuarioDto>> SearchAsync(string? b, ulong? r, bool s, int p, int t, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<PagedResult<UsuarioDto>> SearchAsync(string? b, ulong? r, bool s, int p, int t, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<RolDto>> GetRolesAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<EmpleadoSinUsuarioDto>> GetEmpleadosSinUsuarioAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task<UsuarioDto?> GetByUsernameAsync(string u, CancellationToken ct = default) => throw new NotImplementedException();

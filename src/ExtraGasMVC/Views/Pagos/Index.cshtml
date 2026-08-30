@@ -1,11 +1,11 @@
-@model IEnumerable<ExtraGasMVC.DTOs.PagoDto>
+@model ExtraGasMVC.Models.ViewModels.PagedResult<ExtraGasMVC.DTOs.PagoDto>
 @{
     ViewData["Title"] = "Pagos";
     var pedidoId = ViewBag.PedidoId as ulong?;
-    var pagina = (int)(ViewBag.Pagina ?? 1);
-    var tamanio = (int)(ViewBag.Tamanio ?? 25);
-    var total = (int)(ViewBag.Total ?? 0);
-    var totalPaginas = tamanio > 0 ? (int)Math.Ceiling(total / (double)tamanio) : 0;
+    var pagina = Model.Page;
+    var tamanio = Model.PageSize;
+    var total = Model.Total;
+    var totalPaginas = Model.TotalPages;
 }
 @section PageHeader {
     <div class="mb-3">
@@ -32,11 +32,11 @@
                 </tr>
             </thead>
             <tbody>
-                @if (!Model.Any())
+                @if (!Model.Items.Any())
                 {
                     <tr><td colspan="7" class="text-center py-4 text-secondary">No hay pagos.</td></tr>
                 }
-                @foreach (var p in Model)
+                @foreach (var p in Model.Items)
                 {
                     <tr>
                         <td><strong>@(p.NumeroRecibo ?? "-")</strong></td>
