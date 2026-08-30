@@ -1,4 +1,5 @@
 using AutoMapper;
+using ExtraGasMVC.Constants;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Exceptions;
 using ExtraGasMVC.Services.Interfaces;
@@ -63,7 +64,7 @@ public class ClientesController : BaseController
         {
             var currentUserId = GetCurrentUserId();
             await _clienteService.CreateAsync(cliente, currentUserId, ct);
-            TempData["Success"] = $"Cliente {cliente.Nombre} {cliente.Apellido} creado correctamente.";
+            TempData[TempDataKeys.Success] = $"Cliente {cliente.Nombre} {cliente.Apellido} creado correctamente.";
             return RedirectToAction(nameof(Index));
         }
         catch (InvalidOperationException ex)
@@ -111,7 +112,7 @@ public class ClientesController : BaseController
         {
             var currentUserId = GetCurrentUserId();
             await _clienteService.UpdateAsync(cliente, currentUserId, ct);
-            TempData["Success"] = $"Cliente {cliente.Nombre} {cliente.Apellido} actualizado.";
+            TempData[TempDataKeys.Success] = $"Cliente {cliente.Nombre} {cliente.Apellido} actualizado.";
             return RedirectToAction(nameof(Index));
         }
         catch (ClienteSoftDeletedException ex)
@@ -120,7 +121,7 @@ public class ClientesController : BaseController
             // específico (que viene de la excepción) y redirigimos a Index.
             // Distinct de KeyNotFoundException porque la solución es distinta:
             // restaurar en lugar de crear uno nuevo.
-            TempData["Error"] = ex.Message;
+            TempData[TempDataKeys.Error] = ex.Message;
             return RedirectToAction(nameof(Index));
         }
         catch (InvalidOperationException ex)
@@ -134,7 +135,7 @@ public class ClientesController : BaseController
         {
             // Issue #108: el cliente no existe (o fue purgado). Redirigimos a
             // Index con el mensaje que viene del Service.
-            TempData["Error"] = ex.Message;
+            TempData[TempDataKeys.Error] = ex.Message;
             return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
@@ -151,7 +152,7 @@ public class ClientesController : BaseController
     {
         var currentUserId = GetCurrentUserId();
         var ok = await _clienteService.DeleteAsync(id, currentUserId, ct);
-        TempData[ok ? "Success" : "Error"] = ok
+        TempData[ok ? TempDataKeys.Success : TempDataKeys.Error] = ok
             ? "Cliente eliminado correctamente."
             : "No se encontró el cliente.";
         return RedirectToAction(nameof(Index));
@@ -163,7 +164,7 @@ public class ClientesController : BaseController
     {
         var currentUserId = GetCurrentUserId();
         var ok = await _clienteService.RestoreAsync(id, currentUserId, ct);
-        TempData[ok ? "Success" : "Error"] = ok
+        TempData[ok ? TempDataKeys.Success : TempDataKeys.Error] = ok
             ? "Cliente reactivado correctamente."
             : "No se encontró el cliente.";
         return RedirectToAction(nameof(Index));
