@@ -123,7 +123,7 @@ public class ClienteService : IClienteService
         var dniNormalizado = StringNormalizer.NormalizarDni(cliente.Dni);
         var telNormalizado = StringNormalizer.NormalizarTelefono(cliente.TelefonoPrincipal);
 
-        if (!await IsDniUniqueAsync(dniNormalizado, ct))
+        if (!await IsDniUniqueAsync(dniNormalizado))
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
         var entity = _mapper.Map<Cliente>(cliente);
@@ -146,6 +146,15 @@ public class ClienteService : IClienteService
 
     public async Task<ClienteDto> UpdateAsync(UpdateClienteDto cliente, ulong? updatedBy, CancellationToken ct = default)
     {
+        // Issue #136 (S6964): UpdateClienteDto.Id es nullable para evitar
+        // under-posting silencioso desde forms manipulados. El Controller
+        // ya devuelve 400 si Id == null, pero defendemos en profundidad
+        // porque el Service puede invocarse desde tests o desde otros
+        // callers que no pasaron por la validación del Controller.
+        if (cliente.Id is null)
+            throw new ArgumentException("UpdateClienteDto.Id es obligatorio.", nameof(cliente));
+        var clienteId = cliente.Id.Value;
+
         // Issue #108: usamos IgnoreQueryFilters() para distinguir "no existe"
         // (KeyNotFoundException) de "existe pero está soft-deleted"
         // (ClienteSoftDeletedException). Antes, FindAsync respetaba el
@@ -154,19 +163,19 @@ public class ClienteService : IClienteService
         // correcto.
         var entity = await _context.Clientes
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(c => c.Id == cliente.Id, ct);
+            .FirstOrDefaultAsync(c => c.Id == clienteId, ct);
 
         if (entity == null)
-            throw new KeyNotFoundException($"Cliente con Id {cliente.Id} no encontrado.");
+            throw new KeyNotFoundException($"Cliente con Id {clienteId} no encontrado.");
 
         if (entity.DeletedAt != null)
-            throw new ClienteSoftDeletedException(cliente.Id);
+            throw new ClienteSoftDeletedException(clienteId);
 
         // Issue #113: normalizamos el DNI antes de validar unicidad y antes
         // de pisar el entity. Si el operador tipea " 12.345.678 " debe matchear
         // con el cliente cuyo DNI canónico es "12345678".
         var dniNormalizado = StringNormalizer.NormalizarDni(cliente.Dni);
-        if (!await IsDniUniqueAsync(dniNormalizado, cliente.Id, ct))
+        if (!await IsDniUniqueAsync(dniNormalizado, clienteId))
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
 
         // Snapshot de Activo y FechaAlta ANTES del AutoMapper: el formulario
@@ -325,13 +334,13 @@ public class ClienteService : IClienteService
         return _mapper.Map<IEnumerable<VSaldoClienteDto>>(saldos);
     }
 
-    private Task<bool> IsDniUniqueAsync(string? dni, CancellationToken ct)
+    private Task<bool> IsDniUniqueAsync(string? dni)
     {
         var query = _context.Clientes.AsNoTracking();
         return Task.FromResult(DniEsUnicoSobre(query, dni));
     }
 
-    private Task<bool> IsDniUniqueAsync(string? dni, ulong excludeId, CancellationToken ct)
+    private Task<bool> IsDniUniqueAsync(string? dni, ulong excludeId)
     {
         var query = _context.Clientes.AsNoTracking().Where(c => c.Id != excludeId);
         return Task.FromResult(DniEsUnicoSobre(query, dni));

@@ -6,10 +6,7 @@ namespace ExtraGasMVC.Services.Interfaces;
 public interface IPedidoService
 {
     Task<PedidoDto?> GetByIdAsync(ulong id, CancellationToken ct = default);
-    Task<PagedResult<PedidoDto>> SearchAsync(
-        string? numero, ulong? estadoId, ulong? clienteId,
-        DateTime? desde, DateTime? hasta,
-        int pagina, int tamanio, CancellationToken ct = default);
+    Task<PagedResult<PedidoDto>> SearchAsync(PedidoSearchFilter filter, CancellationToken ct = default);
     Task<IEnumerable<PedidoDto>> GetAllAsync(CancellationToken ct = default);
     Task<PagedResult<PedidoDto>> GetByClienteAsync(ulong clienteId, int pagina, int tamanio, CancellationToken ct = default);
     Task<PagedResult<PedidoDto>> GetByEstadoAsync(ulong estadoId, int pagina, int tamanio, CancellationToken ct = default);

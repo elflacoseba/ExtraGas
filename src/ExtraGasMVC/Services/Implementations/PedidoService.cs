@@ -39,6 +39,22 @@ public class PedidoService : IPedidoService
         [PedidoEstados.EnPreparacion]  = new[] { PedidoEstados.Confirmado, PedidoEstados.Entregado, PedidoEstados.Cancelado },
     };
 
+    /// <summary>
+    /// Internal context for <see cref="AplicarCanjeYConfirmarAsync"/>. Bundles
+    /// the correlated parameters into a single value object so the method
+    /// signature stays under SonarQube csharpsquid:S107 (≤ 7 params). Used only
+    /// inside the canje-confirmacion flow; never crosses the service boundary.
+    /// Issue #136.
+    /// </summary>
+    private sealed record CanjeConfirmacionContext(
+        List<PedidoItem> Items,
+        Dictionary<ulong, List<string>> CodigosPorItemLimpios,
+        ulong PedidoId,
+        Pedido Pedido,
+        Dictionary<string, ulong> EstadoIdByCodigo,
+        ulong EstadoConfirmadoId,
+        ulong? UsuarioId);
+
     public PedidoService(
         ExtraGasDbContext context,
         IMapper mapper,
@@ -64,47 +80,44 @@ public class PedidoService : IPedidoService
         return pedido is null ? null : _mapper.Map<PedidoDto>(pedido);
     }
 
-    public async Task<PagedResult<PedidoDto>> SearchAsync(
-        string? numero, ulong? estadoId, ulong? clienteId,
-        DateTime? desde, DateTime? hasta,
-        int pagina, int tamanio, CancellationToken ct = default)
+    public async Task<PagedResult<PedidoDto>> SearchAsync(PedidoSearchFilter filter, CancellationToken ct = default)
     {
         var query = GetWithIncludes()
             .AsNoTracking()
             .AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(numero))
+        if (!string.IsNullOrWhiteSpace(filter.Numero))
         {
-            var n = numero.Trim();
+            var n = filter.Numero.Trim();
             query = query.Where(p => (p.Numero ?? string.Empty).Contains(n));
         }
 
-        if (estadoId.HasValue && estadoId.Value > 0)
-            query = query.Where(p => p.EstadoPedidoId == estadoId.Value);
+        if (filter.EstadoId.HasValue && filter.EstadoId.Value > 0)
+            query = query.Where(p => p.EstadoPedidoId == filter.EstadoId.Value);
 
-        if (clienteId.HasValue && clienteId.Value > 0)
-            query = query.Where(p => p.ClienteId == clienteId.Value);
+        if (filter.ClienteId.HasValue && filter.ClienteId.Value > 0)
+            query = query.Where(p => p.ClienteId == filter.ClienteId.Value);
 
-        if (desde.HasValue)
-            query = query.Where(p => p.Fecha >= desde.Value);
+        if (filter.Desde.HasValue)
+            query = query.Where(p => p.Fecha >= filter.Desde.Value);
 
-        if (hasta.HasValue)
-            query = query.Where(p => p.Fecha <= hasta.Value.Date.AddDays(1));
+        if (filter.Hasta.HasValue)
+            query = query.Where(p => p.Fecha <= filter.Hasta.Value.Date.AddDays(1));
 
         var total = await query.CountAsync(ct);
 
         var pedidos = await query
             .OrderByDescending(p => p.Fecha)
-            .Skip((pagina - 1) * tamanio)
-            .Take(tamanio)
+            .Skip((filter.Pagina - 1) * filter.Tamanio)
+            .Take(filter.Tamanio)
             .ToListAsync(ct);
 
         return new PagedResult<PedidoDto>
         {
             Items = _mapper.Map<List<PedidoDto>>(pedidos),
             Total = total,
-            Page = pagina,
-            PageSize = tamanio
+            Page = filter.Pagina,
+            PageSize = filter.Tamanio
         };
     }
 
@@ -483,7 +496,7 @@ public class PedidoService : IPedidoService
         await AsegurarNoCanjeadoAsync(pedidoId, ct);
 
         // 3) Resolver los IDs de los lookups que vamos a usar varias veces.
-        var (estadoIdByCodigo, tipoMovimientoIdByCodigo, estadoConfirmadoId) =
+        var (estadoIdByCodigo, estadoConfirmadoId) =
             await LoadCatalogosParaCanjeAsync(ct);
 
         // 4) Si no hay items a canjear (pedido solo VENTA / carbón / leña), el
@@ -510,12 +523,19 @@ public class PedidoService : IPedidoService
             await ValidarCodigosContraInventarioAsync(item, codigosPorItemLimpios[item.Id], pedido, ct);
 
         // 9) Validación completa. Transacción ambiente.
+        var ctx = new CanjeConfirmacionContext(
+            Items: items,
+            CodigosPorItemLimpios: codigosPorItemLimpios,
+            PedidoId: pedidoId,
+            Pedido: pedido,
+            EstadoIdByCodigo: estadoIdByCodigo,
+            EstadoConfirmadoId: estadoConfirmadoId,
+            UsuarioId: usuarioId);
+
         await using var transaction = await _context.Database.BeginTransactionAsync(ct);
         try
         {
-            await AplicarCanjeYConfirmarAsync(
-                items, codigosPorItemLimpios, pedidoId, pedido,
-                estadoIdByCodigo, tipoMovimientoIdByCodigo, estadoConfirmadoId, usuarioId, ct);
+            await AplicarCanjeYConfirmarAsync(ctx, ct);
 
             await transaction.CommitAsync(ct);
             return true;
@@ -574,9 +594,12 @@ public class PedidoService : IPedidoService
 
     /// <summary>
     /// Resuelve los IDs de los lookups que vamos a usar varias veces en un
-    /// solo viaje a la BD (estados de garrafa, tipo de movimiento, estado CONFIRMADO).
+    /// solo viaje a la BD (estados de garrafa, estado CONFIRMADO). Valida en
+    /// el mismo viaje que los tipos de movimiento ENTREGA_CLIENTE /
+    /// DEVOLUCION_CLIENTE existan (la app los necesita pero solo por código,
+    /// no por id directo).
     /// </summary>
-    private async Task<(Dictionary<string, ulong> estadoIdByCodigo, Dictionary<string, ulong> tipoMovimientoIdByCodigo, ulong estadoConfirmadoId)>
+    private async Task<(Dictionary<string, ulong> estadoIdByCodigo, ulong estadoConfirmadoId)>
         LoadCatalogosParaCanjeAsync(CancellationToken ct)
     {
         var lookupCodigos = new[]
@@ -593,16 +616,19 @@ public class PedidoService : IPedidoService
             .ToListAsync(ct);
         var estadoIdByCodigo = catalogos.ToDictionary(e => e.Codigo, e => e.Id);
 
-        var tiposMovimiento = await _context.TiposMovimientoGarrafa
+        // Validación: chequeamos presencia por código (no necesitamos el id
+        // porque el código mapea directo a constantes en la rama de canje).
+        // La consulta ya filtra a los dos códigos esperados; si llegamos a 0
+        // o 1, falta al menos uno en el catálogo.
+        var tiposMovimientoCodigos = await _context.TiposMovimientoGarrafa
             .AsNoTracking()
             .Where(t => t.Codigo == TipoMovimientoEntregaCliente
                      || t.Codigo == TipoMovimientoDevolucionCliente)
-            .Select(t => new { t.Id, t.Codigo })
+            .Select(t => t.Codigo)
             .ToListAsync(ct);
-        var tipoMovimientoIdByCodigo = tiposMovimiento.ToDictionary(t => t.Codigo, t => t.Id);
 
-        if (!tipoMovimientoIdByCodigo.ContainsKey(TipoMovimientoEntregaCliente)
-            || !tipoMovimientoIdByCodigo.ContainsKey(TipoMovimientoDevolucionCliente))
+        if (!tiposMovimientoCodigos.Contains(TipoMovimientoEntregaCliente)
+            || !tiposMovimientoCodigos.Contains(TipoMovimientoDevolucionCliente))
         {
             throw new InvalidOperationException(
                 "Faltan tipos de movimiento ENTREGA_CLIENTE / DEVOLUCION_CLIENTE en la base de datos.");
@@ -618,7 +644,7 @@ public class PedidoService : IPedidoService
             throw new InvalidOperationException(
                 "No se encontró el estado CONFIRMADO en el catálogo estados_pedido.");
 
-        return (estadoIdByCodigo, tipoMovimientoIdByCodigo, estadoConfirmadoId);
+        return (estadoIdByCodigo, estadoConfirmadoId);
     }
 
     /// <summary>
@@ -778,20 +804,11 @@ public class PedidoService : IPedidoService
     /// <see cref="IGarrafaService.RegistrarMovimientoPorCanjeAsync"/> y
     /// finalmente cambia el estado del pedido a CONFIRMADO.
     /// </summary>
-    private async Task AplicarCanjeYConfirmarAsync(
-        List<PedidoItem> items,
-        Dictionary<ulong, List<string>> codigosPorItemLimpios,
-        ulong pedidoId,
-        Pedido pedido,
-        Dictionary<string, ulong> estadoIdByCodigo,
-        Dictionary<string, ulong> tipoMovimientoIdByCodigo,
-        ulong estadoConfirmadoId,
-        ulong? usuarioId,
-        CancellationToken ct)
+    private async Task AplicarCanjeYConfirmarAsync(CanjeConfirmacionContext ctx, CancellationToken ct)
     {
-        foreach (var item in items)
+        foreach (var item in ctx.Items)
         {
-            var codigos = codigosPorItemLimpios[item.Id];
+            var codigos = ctx.CodigosPorItemLimpios[item.Id];
             var tipoMovimientoCodigo = item.TipoLinea == TipoLinea.ENTREGA
                 ? TipoMovimientoEntregaCliente
                 : TipoMovimientoDevolucionCliente;
@@ -800,19 +817,19 @@ public class PedidoService : IPedidoService
                 ? GarrafaEstados.EnCliente
                 : GarrafaEstados.LlenaDeposito;
 
-            var estadoDestinoId = estadoIdByCodigo[estadoDestinoCodigo];
+            var estadoDestinoId = ctx.EstadoIdByCodigo[estadoDestinoCodigo];
             var clienteIdParaCanje = item.TipoLinea == TipoLinea.ENTREGA
-                ? (ulong?)pedido.ClienteId
+                ? (ulong?)ctx.Pedido.ClienteId
                 : null;
 
             await AplicarCanjeDeItemAsync(
-                codigos, pedidoId, tipoMovimientoCodigo,
-                estadoDestinoId, clienteIdParaCanje, usuarioId, ct);
+                codigos, ctx.PedidoId, tipoMovimientoCodigo,
+                estadoDestinoId, clienteIdParaCanje, ctx.UsuarioId, ct);
         }
 
-        pedido.EstadoPedidoId = estadoConfirmadoId;
-        pedido.UpdatedAt = DateTime.UtcNow;
-        pedido.UpdatedBy = usuarioId;
+        ctx.Pedido.EstadoPedidoId = ctx.EstadoConfirmadoId;
+        ctx.Pedido.UpdatedAt = DateTime.UtcNow;
+        ctx.Pedido.UpdatedBy = ctx.UsuarioId;
 
         await _context.SaveChangesAsync(ct);
     }
