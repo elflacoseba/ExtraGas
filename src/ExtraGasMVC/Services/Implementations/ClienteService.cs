@@ -19,12 +19,22 @@ public class ClienteService : IClienteService
     private readonly ExtraGasDbContext _context;
     private readonly IMapper _mapper;
     private readonly IMemoryCache _cache;
+    // Issue #116: ILogger para trazabilidad de operaciones de escritura y de
+    // errores no esperados (ej. DbUpdateException por DNI duplicado que el
+    // mapeo de errno 1062 cubre, o cualquier otra falla de BD). ASP.NET Core
+    // registra ILogger<T> por convencion; no hace falta tocar Program.cs.
+    private readonly ILogger<ClienteService> _logger;
 
-    public ClienteService(ExtraGasDbContext context, IMapper mapper, IMemoryCache cache)
+    public ClienteService(
+        ExtraGasDbContext context,
+        IMapper mapper,
+        IMemoryCache cache,
+        ILogger<ClienteService> logger)
     {
         _context = context;
         _mapper = mapper;
         _cache = cache;
+        _logger = logger;
     }
 
     public async Task<ClienteDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
@@ -133,7 +143,14 @@ public class ClienteService : IClienteService
         var telNormalizado = StringNormalizer.NormalizarTelefono(cliente.TelefonoPrincipal);
 
         if (!await IsDniUniqueAsync(dniNormalizado))
+        {
+            // Issue #116: pre-check rechazo por DNI duplicado. El nivel Warning
+            // es el correcto: no es un error de sistema, es un input inválido
+            // que el operador puede corregir. Sirve para detectar patrones
+            // (ej. un script cargando duplicados) sin contaminar el alerting.
+            _logger.LogWarning("CreateAsync rechazo por DNI duplicado {Dni}", dniNormalizado);
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
+        }
 
         var entity = _mapper.Map<Cliente>(cliente);
         // Issue #114 + #115: el DTO ya no expone FechaAlta ni Activo. El
@@ -150,6 +167,12 @@ public class ClienteService : IClienteService
 
         _context.Clientes.Add(entity);
         await SaveOrThrowDuplicateDniAsync(ct);
+
+        // Issue #116: trazabilidad del alta. Loggeamos el Id (no el DNI) porque
+        // el DNI puede ser null y ademas ya quedo auditado en la entity.
+        _logger.LogInformation(
+            "Cliente {ClienteId} creado por {CreatedBy}",
+            entity.Id, createdBy);
 
         return _mapper.Map<ClienteDto>(entity);
     }
@@ -186,7 +209,15 @@ public class ClienteService : IClienteService
         // con el cliente cuyo DNI canónico es "12345678".
         var dniNormalizado = StringNormalizer.NormalizarDni(cliente.Dni);
         if (!await IsDniUniqueAsync(dniNormalizado, clienteId))
+        {
+            // Issue #116: ver CreateAsync. Mismo criterio: input invalido, no
+            // falla de sistema. Loggeamos clienteId ademas del DNI para que el
+            // operador entienda que estaba editando un cliente existente.
+            _logger.LogWarning(
+                "UpdateAsync rechazo por DNI duplicado {Dni} sobre cliente {ClienteId}",
+                dniNormalizado, clienteId);
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
+        }
 
         // Snapshot de FechaAlta ANTES del AutoMapper: el formulario de Edit
         // no debe poder modificarlo. Issue #114. Si el operador lo manda
@@ -204,6 +235,11 @@ public class ClienteService : IClienteService
         ClienteEditRules.PreservarFechaAlta(entity, fechaAltaOriginal);
 
         await SaveOrThrowDuplicateDniAsync(ct);
+
+        // Issue #116: trazabilidad de la modificacion.
+        _logger.LogInformation(
+            "Cliente {ClienteId} actualizado por {UpdatedBy}",
+            entity.Id, updatedBy);
 
         return _mapper.Map<ClienteDto>(entity);
     }
@@ -241,6 +277,13 @@ public class ClienteService : IClienteService
         cliente.UpdatedBy = updatedBy;
         await _context.SaveChangesAsync(ct);
 
+        // Issue #116: trazabilidad del soft-delete. No loggeamos el caso
+        // "no encontrado" porque es un flujo esperado (404 de la papelera
+        // cuando el operador hace doble click), no requiere investigación.
+        _logger.LogInformation(
+            "Cliente {ClienteId} soft-deleted por {UpdatedBy}",
+            cliente.Id, updatedBy);
+
         return true;
     }
 
@@ -261,6 +304,11 @@ public class ClienteService : IClienteService
         cliente.UpdatedAt = DateTime.UtcNow;
         cliente.UpdatedBy = updatedBy;
         await _context.SaveChangesAsync(ct);
+
+        // Issue #116: trazabilidad del restore desde la papelera.
+        _logger.LogInformation(
+            "Cliente {ClienteId} reactivado por {UpdatedBy}",
+            cliente.Id, updatedBy);
 
         return true;
     }
@@ -388,6 +436,8 @@ public class ClienteService : IClienteService
     /// Envuelve <c>SaveChangesAsync</c> con la traducción de duplicate-DNI a
     /// <see cref="InvalidOperationException"/>. Cualquier otro error burbujea
     /// sin cambios para que el Controller lo registre como error genérico.
+    /// Issue #116: loggea ambos paths (race condition de DNI duplicado y
+    /// errores no esperados) para que un fallo intermitente quede trazado.
     /// </summary>
     private async Task SaveOrThrowDuplicateDniAsync(CancellationToken ct)
     {
@@ -398,7 +448,23 @@ public class ClienteService : IClienteService
         catch (DbUpdateException ex)
         {
             var mapped = MapDuplicateDniException(ex);
-            if (mapped is not null) throw mapped;
+            if (mapped is not null)
+            {
+                // Race condition: dos requests pasaron el pre-check, el UNIQUE
+                // INDEX rechazo al segundo. No es error de sistema pero queremos
+                // medir frecuencia para detectar picos anómalos (ej. un script
+                // cargando registros en paralelo).
+                _logger.LogWarning(
+                    ex,
+                    "Race condition de DNI duplicado (errno 1062) al persistir cambios.");
+                throw mapped;
+            }
+            // No es duplicate-DNI: error inesperado de BD. Lo loggeamos con el
+            // stack completo antes de re-throw para que el caller pueda
+            // registrar el error y nosotros tengamos el detalle abajo.
+            _logger.LogError(
+                ex,
+                "DbUpdateException no esperada al persistir cliente.");
             throw;
         }
     }
