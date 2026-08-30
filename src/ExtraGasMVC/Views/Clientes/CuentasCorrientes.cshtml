@@ -1,4 +1,4 @@
-@model IEnumerable<ExtraGasMVC.DTOs.ClienteDto>
+@model IEnumerable<ExtraGasMVC.DTOs.VSaldoClienteDto>
 @{
     ViewData["Title"] = "Cuentas corrientes";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -28,20 +28,37 @@
                 </tr>
             </thead>
             <tbody>
+                @* Issue #109: la vista muestra clientes con saldo pendiente
+                   (la query SQL ya filtra HAVING saldo_total > 0), por eso el
+                   mensaje vacío habla de saldo y no de "clientes cargados". *@
                 @if (!Model.Any())
                 {
-                    <tr><td colspan="5" class="text-center py-4 text-secondary">No hay clientes cargados.</td></tr>
+                    <tr><td colspan="5" class="text-center py-4 text-secondary">No hay clientes con saldo pendiente.</td></tr>
                 }
-                @foreach (var c in Model)
+                @foreach (var s in Model)
                 {
                     <tr>
-                        <td><strong>@c.Apellido, @c.Nombre</strong></td>
-                        <td>@c.TelefonoPrincipal</td>
-                        <td class="text-end">-</td>
-                        <td class="text-end">-</td>
+                        <td><strong>@s.Cliente</strong></td>
+                        <td>@s.TelefonoPrincipal</td>
                         <td class="text-end">
-                            <a asp-controller="Pedidos" asp-action="Index" asp-route-numero="@c.Codigo" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-search"></i> Ver pedidos
+                            @if (s.PedidosPendientes > 0)
+                            {
+                                <span class="badge text-bg-warning">@s.PedidosPendientes</span>
+                            }
+                            else
+                            {
+                                <span class="text-secondary">0</span>
+                            }
+                        </td>
+                        <td class="text-end fw-semibold text-danger">@s.SaldoTotal.ToArs()</td>
+                        <td class="text-end">
+                            @* Antes este link iba a Pedidos/Index?numero=<Codigo>,
+                               pero Codigo es del cliente (no del pedido) y el
+                               parámetro de Pedidos no es clienteId: el link estaba
+                               roto. Ahora vamos al detail del cliente, que es la
+                               acción semánticamente correcta desde este listado. *@
+                            <a asp-action="Details" asp-route-id="@s.ClienteId" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> Ver cliente
                             </a>
                         </td>
                     </tr>
@@ -50,7 +67,3 @@
         </table>
     </div>
 </div>
-<p class="text-secondary small mt-3">
-    Los totales por cliente se computan en la vista <code>v_saldos_clientes</code> de la base de datos. Este listado se completará
-    con la integración correspondiente.
-</p>

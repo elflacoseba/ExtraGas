@@ -1,6 +1,7 @@
 using AutoMapper;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.Data.Entities.Views;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Extensions;
 using ExtraGasMVC.Services.Exceptions;
@@ -229,6 +230,25 @@ public class ClienteService : IClienteService
 
             return _mapper.Map<List<ProvinciaDto>>(provincias);
         }) ?? [];
+    }
+
+    /// <summary>
+    /// Saldos agregados por cliente para /Clientes/CuentasCorrientes.
+    /// Issue #109: la vista SQL <c>v_saldo_clientes</c> ya devuelve cliente +
+    /// teléfono + pedidos pendientes + saldo en una sola fila agregada, así
+    /// que acá solo proyectamos a DTO y ordenamos. AsNoTracking porque es
+    /// read-only. El OrderByDescending es defensivo: la vista declara
+    /// ORDER BY saldo_total DESC pero EF no garantiza preservarlo.
+    /// </summary>
+    public async Task<IEnumerable<VSaldoClienteDto>> GetSaldosAsync(CancellationToken ct = default)
+    {
+        var saldos = await _context.VSaldosClientes
+            .AsNoTracking()
+            .OrderByDescending(v => v.SaldoTotal)
+            .ThenBy(v => v.Cliente)
+            .ToListAsync(ct);
+
+        return _mapper.Map<IEnumerable<VSaldoClienteDto>>(saldos);
     }
 
     private Task<bool> IsDniUniqueAsync(string? dni, CancellationToken ct)

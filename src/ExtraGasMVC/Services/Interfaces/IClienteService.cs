@@ -16,4 +16,13 @@ public interface IClienteService
     Task<bool> DeleteAsync(ulong id, ulong? updatedBy, CancellationToken ct = default);
     Task<bool> RestoreAsync(ulong id, ulong? updatedBy, CancellationToken ct = default);
     Task<List<ProvinciaDto>> GetProvinciasAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Saldos agregados por cliente para la pantalla CuentasCorrientes.
+    /// Lee la vista <c>v_saldo_clientes</c> (una sola query) en lugar de
+    /// cargar todos los clientes y resolver saldo/pedidos en la vista (N+1).
+    /// Orden: saldo DESC, nombre ASC para que los deudores más grandes
+    /// queden arriba. Issue #109.
+    /// </summary>
+    Task<IEnumerable<VSaldoClienteDto>> GetSaldosAsync(CancellationToken ct = default);
 }
