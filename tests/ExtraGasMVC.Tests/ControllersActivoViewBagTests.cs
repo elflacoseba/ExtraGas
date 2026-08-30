@@ -37,7 +37,7 @@ public class ControllersActivoViewBagTests
         // propaga ViewBag.DeletedAt y ViewBag.FechaAlta.
         var controller = NewClientesController(cliente: new ClienteDto
         {
-            Id = 1, Nombre = "Juan", Apellido = "Perez", TelefonoPrincipal = "1",
+            Id = 1, Nombre = "Juan", Apellido = "Perez", TelefonoPrincipal = "1144556677",
             FechaAlta = new DateOnly(2024, 1, 15),
             // DeletedAt null por defecto → cliente activo.
         });
@@ -58,7 +58,7 @@ public class ControllersActivoViewBagTests
         var fechaBaja = new DateTime(2024, 6, 1, 10, 0, 0);
         var controller = NewClientesController(cliente: new ClienteDto
         {
-            Id = 1, Nombre = "Juan", Apellido = "Perez", TelefonoPrincipal = "1",
+            Id = 1, Nombre = "Juan", Apellido = "Perez", TelefonoPrincipal = "1144556677",
             FechaAlta = new DateOnly(2024, 1, 15),
             DeletedAt = fechaBaja,
         });
