@@ -36,7 +36,8 @@
                     <dt class="col-sm-4">Fecha de alta</dt><dd class="col-sm-8">@Model.FechaAlta.ToString("dd/MM/yyyy")</dd>
                     <dt class="col-sm-4">Estado</dt>
                     <dd class="col-sm-8">
-                        @if (Model.Activo)
+                        @* Issue #115: Activo es derivado de DeletedAt. *@
+                        @if (Model.DeletedAt == null)
                         {
                             <span class="badge text-bg-success">Activo</span>
                         }

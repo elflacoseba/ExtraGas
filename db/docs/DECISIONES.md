@@ -309,6 +309,33 @@ Documento de decisiones (ADR-style) y supuestos del sistema **ExtraGas**.
 
 ---
 
+## 17. Eliminar `clientes.activo` (un solo flag: `deleted_at`)
+
+**Contexto:** la tabla `clientes` tenía dos flags que representaban el mismo estado: `activo TINYINT(1) NOT NULL DEFAULT TRUE` y `deleted_at DATETIME NULL`. `DeleteAsync` y `RestoreAsync` escribían ambos (`DeletedAt = NOW()` + `Activo = false` / `Activo = true`), `UpdateAsync` defendía vía `ClienteEditRules` para que un form no los desincronizara, y la UI los leía para mostrar el badge "Activo/Inactivo". Tener dos columnas representando lo mismo era una bomba de tiempo: cualquier futuro INSERT/UPDATE manual sobre la tabla (seed, fix de datos, script de QA) podía dejarlas en estados zombie (`Activo=false` con `DeletedAt=null`, o viceversa) que el QueryFilter global no detectaba. Issue #115.
+
+**Decisión:** eliminar la columna `clientes.activo`. El estado operativo se deriva de `deleted_at IS NULL` en:
+
+- **Entity EF**: `Cliente` ya no tiene la propiedad `Activo`; `ClienteConfiguration` no la mapea.
+- **DTO**: `ClienteDto.Activo` es un getter-only calculado (`=> DeletedAt == null`). AutoMapper lo ignora por convención (sin setter → no se mapea). Las vistas (`Index`, `Details`, `Edit`) leen `c.DeletedAt == null` directamente, igual que el resto del sistema.
+- **Service**: `DeleteAsync` setea solo `DeletedAt = NOW()`; `RestoreAsync` solo `DeletedAt = null`. `GetActivosAsync` y `SearchAsync(soloActivos: …)` ya no filtran por `Activo` — el QueryFilter global (`DeletedAt == null`) hace el trabajo. El parámetro `bool soloActivos` se mantiene por compatibilidad de firma pero queda como no-op documentado.
+- **Vistas SQL**: ninguna vista referenciaba `clientes.activo` (solo `garrafas.activo` se usa en `v_stock_garrafas` y `v_garrafas_en_clientes` — esa columna sigue existiendo, fuera de scope).
+- **Migración**: `20260830_000001_drop_clientes_activo.sql` — `ALTER TABLE clientes DROP COLUMN activo`, idempotente vía guard `information_schema`. No requiere migrar data (la columna es redundante con `deleted_at`).
+
+**Por qué:**
+
+- La Opción A de la issue (mantener la columna pero nunca escribirla desde la app) fue descartada porque deja un pie de bomba: cualquier script futuro que toque `activo` por error reintroduce el bug. La columna debe desaparecer para que sea imposible el estado zombie.
+- El patrón "una sola fuente de verdad" ya rige otras partes del sistema: `monto_pagado` lo mantiene un trigger (ADR #6), `saldo` es columna generada. `deleted_at` ya era la fuente canónica del soft-delete; la columna `activo` era redundante con el QueryFilter global de EF y con las vistas SQL que filtran `WHERE deleted_at IS NULL`.
+- El precio es bajo: una migración aditiva reversible (con `IF EXISTS`-equivalente vía `information_schema`), cambios mecánicos en el Service y dos views Razor. No hay lógica nueva.
+
+**Implicancia:**
+
+- `ClienteDto.Activo` sigue existiendo como getter derivado para no romper consumidores que esperan esa propiedad (vistas, tests de contrato). Si alguien intenta asignarla, no compila — la única forma de cambiar el estado es `DeleteAsync`/`RestoreAsync`.
+- El script de QA `db/scripts/verify_issue_105_clientes_dni_soft_delete.sql` referencia `clientes.activo` en INSERT/UPDATE. Hay que actualizarlo o eliminarlo (es standalone, no se ejecuta en `install.sh`).
+- El patrón "soft-delete como estado operativo único" se valida con este cambio. Si en el futuro aparece otro flag redundante con `deleted_at` (ej. `usuarios.activo` + `usuarios.deleted_at`), replicar el mismo refactor.
+- **IMPORTANTE para deploy**: el código que no escribe `activo` debe deployarse ANTES de aplicar la migración en producción. Si la app vieja intenta persistir `activo` sobre una BD donde la columna ya no existe, falla con `Unknown column 'activo'`. El orden es: merge PR → deploy app → aplicar migración (o el mismo PR si la migración es idempotente, como esta — la columna se droppea si existe y el código ya no la usa).
+
+---
+
 ## Supuestos explícitos (no validados con el usuario)
 
 1. No hay delivery con zonas / tarifas distintas. Un pedido = una dirección.

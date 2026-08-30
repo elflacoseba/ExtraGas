@@ -54,7 +54,8 @@
                 <div class="col-md-3">
                     <span class="form-label">Estado</span>
                     <div>
-                        @if ((bool)ViewBag.Activo)
+                        @* Issue #115: el estado se deriva de DeletedAt. El Controller pasa ViewBag.DeletedAt en Edit GET. *@
+                        @if (ViewBag.DeletedAt == null)
                         {
                             <span class="badge text-bg-success">Activo</span>
                         }

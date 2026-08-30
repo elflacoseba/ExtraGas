@@ -14,43 +14,62 @@ using Xunit;
 namespace ExtraGasMVC.Tests;
 
 /// <summary>
-/// Tests de los Controllers para verificar que ViewBag.Activo (y
-/// ViewBag.FechaAlta en ClientesController) se popula con los valores del
-/// DTO despues del refactor del issue #114.
+/// Tests de los Controllers para verificar que ViewBag.DeletedAt / ViewBag.Activo
+/// (y ViewBag.FechaAlta en ClientesController) se popula con los valores del
+/// DTO despues del refactor del issue #115.
+///
+/// <para>Issue #115: en <see cref="ClientesController"/>, la vista Edit GET
+/// recibe <c>ViewBag.DeletedAt</c> (no <c>ViewBag.Activo</c>); el badge
+/// "Activo/Inactivo" se calcula desde <c>DeletedAt == null</c>. En
+/// Empleados/Productos/Garrafas (otras tablas con <c>activo</c> propio) el
+/// ViewBag sigue siendo <c>ViewBag.Activo</c>.</para>
+///
 /// La logica de negocio la cubren los tests del Service y del helper;
 /// aca solo se valida el wiring del Controller.
 /// </summary>
 public class ControllersActivoViewBagTests
 {
     [Fact]
-    public async Task ClientesController_EditGet_PopulaViewBagActivoYFechaAlta()
+    public async Task ClientesController_EditGet_PopulaViewBagDeletedAtYFechaAlta()
     {
+        // Issue #115: ClienteDto.Activo es getter-only derivado de
+        // DeletedAt. Solo se setea DeletedAt en el DTO; el controller
+        // propaga ViewBag.DeletedAt y ViewBag.FechaAlta.
         var controller = NewClientesController(cliente: new ClienteDto
         {
             Id = 1, Nombre = "Juan", Apellido = "Perez", TelefonoPrincipal = "1",
-            FechaAlta = new DateOnly(2024, 1, 15), Activo = true,
+            FechaAlta = new DateOnly(2024, 1, 15),
+            // DeletedAt null por defecto → cliente activo.
         });
 
         await controller.Edit(1);
 
-        ((bool)controller.ViewBag.Activo).Should().Be(true,
-            "Edit GET debe pasar el Activo del DTO por ViewBag para mostrarlo read-only");
+        // ViewBag.DeletedAt es dynamic (object). Hay que castear a DateTime?
+        // para que FluentAssertions infiera el tipo y aplique BeNull().
+        ((DateTime?)controller.ViewBag.DeletedAt).Should().BeNull(
+            "Edit GET debe pasar DeletedAt (no Activo) por ViewBag para que la vista derive el badge");
         ((DateOnly)controller.ViewBag.FechaAlta).Should().Be(new DateOnly(2024, 1, 15),
             "Edit GET debe pasar la FechaAlta del DTO por ViewBag");
     }
 
     [Fact]
-    public async Task ClientesController_EditGet_ConClienteInactivo_PopulaViewBagActivoFalse()
+    public async Task ClientesController_EditGet_ConClienteSoftDeleted_PopulaViewBagDeletedAt()
     {
+        var fechaBaja = new DateTime(2024, 6, 1, 10, 0, 0);
         var controller = NewClientesController(cliente: new ClienteDto
         {
             Id = 1, Nombre = "Juan", Apellido = "Perez", TelefonoPrincipal = "1",
-            FechaAlta = new DateOnly(2024, 1, 15), Activo = false,
+            FechaAlta = new DateOnly(2024, 1, 15),
+            DeletedAt = fechaBaja,
         });
 
         await controller.Edit(1);
 
-        ((bool)controller.ViewBag.Activo).Should().Be(false);
+        // ViewBag.DeletedAt es dynamic (object). Hay que castear para que
+        // FluentAssertions pueda aplicar `Should().Be()` con inferencia
+        // fuerte de tipo.
+        ((DateTime?)controller.ViewBag.DeletedAt).Should().Be(fechaBaja,
+            "Edit GET debe pasar la fecha de baja para que la vista muestre 'Inactivo'");
     }
 
     [Fact]
