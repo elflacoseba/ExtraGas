@@ -68,7 +68,7 @@ public class GarrafaConfiguration : IEntityTypeConfiguration<Garrafa>
             .HasColumnName("deleted_at")
             .HasColumnType("datetime");
 
-        builder.HasOne<Proveedor>()
+        builder.HasOne(g => g.Proveedor)
             .WithMany()
             .HasForeignKey(g => g.ProveedorId)
             .OnDelete(DeleteBehavior.Restrict)
@@ -86,7 +86,7 @@ public class GarrafaConfiguration : IEntityTypeConfiguration<Garrafa>
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_garrafas_estado");
 
-        builder.HasOne<Cliente>()
+        builder.HasOne(g => g.Cliente)
             .WithMany()
             .HasForeignKey(g => g.ClienteId)
             .OnDelete(DeleteBehavior.Restrict)

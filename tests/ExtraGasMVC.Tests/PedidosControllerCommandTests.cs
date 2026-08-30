@@ -117,6 +117,135 @@ public class PedidosControllerCommandTests
     }
 
     [Fact]
+    public async Task CambiarEstado_DestinoConfirmadoConCodigos_DelegaEnRegistrarCanjePedidoAsync_TempDataSuccess()
+    {
+        // Branch canje de CambiarEstado POST: destino CONFIRMADO + JSON de
+        // códigos → llama RegistrarCanjePedidoAsync. Si devuelve true,
+        // TempData[Success] con el mensaje canónico y redirect a Details.
+        var fake = new ConfigurablePedidoService
+        {
+            GetEstadosPedidoScenario = ConfigurablePedidoService.GetEstadosScenario.WithConfirmado,
+            RegistrarCanjeScenario = ConfigurablePedidoService.Scenario.ReturnsTrue,
+        };
+        var controller = NewController(fake);
+
+        var result = await controller.CambiarEstado(
+            id: 1, nuevoEstadoId: 2, motivoCancelacion: null,
+            codigosGarrafaJson: "{\"1\":[\"G-001\"]}", ct: default);
+
+        result.Should().BeOfType<RedirectToActionResult>().Subject
+            .ActionName.Should().Be(nameof(PedidosController.Details));
+
+        var tempData = SaveAndReadTempData(controller);
+        tempData.Should().ContainKey(TempDataKeys.Success);
+        tempData[TempDataKeys.Success].Should().Be(
+            "Pedido confirmado y garrafas registradas correctamente.");
+        tempData.Should().NotContainKey(TempDataKeys.Error);
+        fake.RegistrarCanjeLlamadas.Should().Be(1);
+        fake.RegistrarCanjeUltimoPedidoId.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task CambiarEstado_DestinoConfirmadoConCodigosJsonInvalido_TempDataErrorMensajeCanonico()
+    {
+        // El Controller delega JSON deserialization al branch canje. Si el
+        // JSON está malformado, no llega a llamar al service y TempData[Error]
+        // tiene el mensaje canónico (sin pasar por el catch genérico).
+        var fake = new ConfigurablePedidoService
+        {
+            GetEstadosPedidoScenario = ConfigurablePedidoService.GetEstadosScenario.WithConfirmado,
+            RegistrarCanjeScenario = ConfigurablePedidoService.Scenario.ReturnsTrue,
+        };
+        var controller = NewController(fake);
+
+        var result = await controller.CambiarEstado(
+            id: 1, nuevoEstadoId: 2, motivoCancelacion: null,
+            codigosGarrafaJson: "{esto no es JSON válido", ct: default);
+
+        result.Should().BeOfType<RedirectToActionResult>().Subject
+            .ActionName.Should().Be(nameof(PedidosController.Edit));
+
+        var tempData = SaveAndReadTempData(controller);
+        tempData.Should().ContainKey(TempDataKeys.Error);
+        tempData[TempDataKeys.Error].Should().Be(
+            "Los códigos de garrafas enviados tienen un formato inválido. Recargue la pantalla e intente nuevamente.");
+        // El service NO se llamó — la deserialización falla antes.
+        fake.RegistrarCanjeLlamadas.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CambiarEstado_DestinoConfirmadoConCodigos_ServiceDevuelveFalse_TempDataErrorPedidoNotFound()
+    {
+        // Service devuelve false (pedido no existe) → TempData[Error] con
+        // PedidoNotFoundMessage y redirect a Edit (no a Details).
+        var fake = new ConfigurablePedidoService
+        {
+            GetEstadosPedidoScenario = ConfigurablePedidoService.GetEstadosScenario.WithConfirmado,
+            RegistrarCanjeScenario = ConfigurablePedidoService.Scenario.ReturnsFalse,
+        };
+        var controller = NewController(fake);
+
+        var result = await controller.CambiarEstado(
+            id: 999999, nuevoEstadoId: 2, motivoCancelacion: null,
+            codigosGarrafaJson: "{\"1\":[\"G-001\"]}", ct: default);
+
+        result.Should().BeOfType<RedirectToActionResult>().Subject
+            .ActionName.Should().Be(nameof(PedidosController.Edit));
+
+        var tempData = SaveAndReadTempData(controller);
+        tempData.Should().ContainKey(TempDataKeys.Error);
+        tempData[TempDataKeys.Error].Should().Be(TempDataKeys.PedidoNotFoundMessage);
+        tempData.Should().NotContainKey(TempDataKeys.Success);
+    }
+
+    [Fact]
+    public async Task CambiarEstado_DestinoConfirmadoConCodigos_ServiceLanzaInvalidOperationException_TempDataErrorConElMensaje()
+    {
+        // El service lanza InvalidOperationException (código inexistente,
+        // ya CONFIRMADO, etc.) → TempData[Error] con el mensaje del service.
+        var fake = new ConfigurablePedidoService
+        {
+            GetEstadosPedidoScenario = ConfigurablePedidoService.GetEstadosScenario.WithConfirmado,
+            RegistrarCanjeScenario = ConfigurablePedidoService.Scenario.ThrowsInvalidOp,
+            InvalidOpMessage = "El código 'G-X' no existe en el inventario de garrafas.",
+        };
+        var controller = NewController(fake);
+
+        var result = await controller.CambiarEstado(
+            id: 1, nuevoEstadoId: 2, motivoCancelacion: null,
+            codigosGarrafaJson: "{\"1\":[\"G-X\"]}", ct: default);
+
+        result.Should().BeOfType<RedirectToActionResult>().Subject
+            .ActionName.Should().Be(nameof(PedidosController.Edit));
+
+        var tempData = SaveAndReadTempData(controller);
+        tempData[TempDataKeys.Error].Should().Be(
+            "El código 'G-X' no existe en el inventario de garrafas.");
+    }
+
+    [Fact]
+    public async Task CambiarEstado_DestinoConfirmadoSinCodigos_CaeAlBranchGenerico()
+    {
+        // codigosGarrafaJson null + destino CONFIRMADO → cae al branch
+        // genérico (CambiarEstadoAsync), NO al de canje. Esto cubre el caso
+        // degenerado de un pedido solo VENTA / carbón / leña.
+        var fake = new ConfigurablePedidoService
+        {
+            GetEstadosPedidoScenario = ConfigurablePedidoService.GetEstadosScenario.WithConfirmado,
+            CambiarEstadoScenario = ConfigurablePedidoService.Scenario.ReturnsTrue,
+        };
+        var controller = NewController(fake);
+
+        var result = await controller.CambiarEstado(
+            id: 1, nuevoEstadoId: 2, motivoCancelacion: null,
+            codigosGarrafaJson: null, ct: default);
+
+        result.Should().BeOfType<RedirectToActionResult>();
+        fake.RegistrarCanjeLlamadas.Should().Be(0, "sin códigos no delega en canje");
+        fake.CambiarEstadoLlamadas.Should().Be(1);
+    }
+
+    [Fact]
     public async Task AddItem_Exitoso_TempDataSuccess()
     {
         var fake = new ConfigurablePedidoService();
@@ -211,7 +340,7 @@ public class PedidosControllerCommandTests
 
     /// <summary>
     /// Fake configurable por escenario. Solo implementa los métodos que los
-    /// tests de PR #137 ejercitan; el resto lanza NotImplementedException.
+    /// tests de PR #137 y #138 ejercitan; el resto lanza NotImplementedException.
     /// </summary>
     private sealed class ConfigurablePedidoService : IPedidoService
     {
@@ -224,14 +353,28 @@ public class PedidosControllerCommandTests
             ThrowsGeneric,
         }
 
+        public enum GetEstadosScenario
+        {
+            Empty,
+            WithConfirmado,
+        }
+
         public Scenario CambiarEstadoScenario { get; set; } = Scenario.Success;
         public Scenario DeleteScenario { get; set; } = Scenario.Success;
         public Scenario AddItemScenario { get; set; } = Scenario.Success;
         public Scenario RemoveItemScenario { get; set; } = Scenario.Success;
+        public Scenario RegistrarCanjeScenario { get; set; } = Scenario.Success;
+        public GetEstadosScenario GetEstadosPedidoScenario { get; set; } = GetEstadosScenario.WithConfirmado;
         public string? InvalidOpMessage { get; set; }
+
+        // Contadores/observabilidad para los tests del branch canje.
+        public int RegistrarCanjeLlamadas { get; private set; }
+        public ulong RegistrarCanjeUltimoPedidoId { get; private set; }
+        public int CambiarEstadoLlamadas { get; private set; }
 
         public Task<bool> CambiarEstadoAsync(ulong id, ulong nuevoEstadoId, string? motivoCancelacion, ulong? usuarioId, CancellationToken ct = default)
         {
+            CambiarEstadoLlamadas++;
             return CambiarEstadoScenario switch
             {
                 Scenario.ThrowsInvalidOp => throw new InvalidOperationException(InvalidOpMessage ?? "InvalidOp"),
@@ -243,16 +386,34 @@ public class PedidosControllerCommandTests
         }
 
         public Task<List<EstadoPedidoDto>> GetEstadosPedidoAsync(CancellationToken ct = default)
-            => Task.FromResult(new List<EstadoPedidoDto>
+        {
+            if (GetEstadosPedidoScenario == GetEstadosScenario.Empty)
+                return Task.FromResult(new List<EstadoPedidoDto>());
+
+            return Task.FromResult(new List<EstadoPedidoDto>
             {
                 new() { Id = 1, Codigo = "PENDIENTE", Nombre = "Pendiente" },
                 new() { Id = 2, Codigo = "CONFIRMADO", Nombre = "Confirmado" },
             });
+        }
 
         public Task<bool> DeleteAsync(ulong id, ulong? usuarioId, CancellationToken ct = default)
         {
             return DeleteScenario switch
             {
+                Scenario.ReturnsTrue => Task.FromResult(true),
+                Scenario.ReturnsFalse => Task.FromResult(false),
+                _ => Task.FromResult(true),
+            };
+        }
+
+        public Task<bool> RegistrarCanjePedidoAsync(ulong pedidoId, Dictionary<ulong, List<string>> codigosPorItem, ulong? usuarioId, CancellationToken ct = default)
+        {
+            RegistrarCanjeLlamadas++;
+            RegistrarCanjeUltimoPedidoId = pedidoId;
+            return RegistrarCanjeScenario switch
+            {
+                Scenario.ThrowsInvalidOp => throw new InvalidOperationException(InvalidOpMessage ?? "InvalidOp"),
                 Scenario.ReturnsTrue => Task.FromResult(true),
                 Scenario.ReturnsFalse => Task.FromResult(false),
                 _ => Task.FromResult(true),
@@ -291,7 +452,6 @@ public class PedidosControllerCommandTests
         public Task<List<CanalVentaDto>> GetCanalesVentaAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<MedioContactoPedidoDto>> GetMediosContactoAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IEnumerable<EmpleadoDto>> GetEmpleadosActivosAsync(CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<bool> RegistrarCanjePedidoAsync(ulong pedidoId, Dictionary<ulong, List<string>> codigosPorItem, ulong? usuarioId, CancellationToken ct = default) => throw new NotImplementedException();
     }
 
     private sealed class NotImplementedClienteService : IClienteService
