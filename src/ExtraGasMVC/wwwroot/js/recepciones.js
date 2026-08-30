@@ -156,8 +156,8 @@
         var totalEl = document.getElementById('Recepcion_Total');
         if (!subtotalEl || !descuentoEl || !totalEl) return;
 
-        var subtotal = parseFloat(subtotalEl.value) || 0;
-        var descuento = parseFloat(descuentoEl.value) || 0;
+        var subtotal = Number.parseFloat(subtotalEl.value) || 0;
+        var descuento = Number.parseFloat(descuentoEl.value) || 0;
         var total = Math.max(0, subtotal - descuento);
         totalEl.value = total.toFixed(2);
     }
