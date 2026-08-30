@@ -32,6 +32,7 @@ public class ExtraGasDbContext : DbContext
 
     // ============== Productos y catálogo ==============
     public DbSet<Producto> Productos => Set<Producto>();
+    public DbSet<ProductoPrecioHistorico> ProductoPreciosHistorico => Set<ProductoPrecioHistorico>();
 
     // ============== Pedidos y pagos ==============
     public DbSet<Pedido> Pedidos => Set<Pedido>();
