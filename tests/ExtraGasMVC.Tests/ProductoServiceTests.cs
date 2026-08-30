@@ -6,6 +6,7 @@ using ExtraGasMVC.Mappings;
 using ExtraGasMVC.Services.Implementations;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ExtraGasMVC.Tests;
@@ -13,7 +14,8 @@ namespace ExtraGasMVC.Tests;
 /// <summary>
 /// Tests de integracion del Service de Producto contra DbContext InMemory.
 /// Cubren las lineas nuevas del issue #114 + el refactor del DeleteAsync
-/// (PR #121) que ahora hace soft-delete completo (DeletedAt + Activo=false).
+/// (PR #121) que ahora hace soft-delete completo (DeletedAt + Activo=false)
+/// + RestoreAsync de Slice 2 (issue #145).
 /// </summary>
 public class ProductoServiceTests
 {
@@ -25,7 +27,10 @@ public class ProductoServiceTests
         var context = new ExtraGasDbContext(options);
         var mapperConfig = new MapperConfiguration(cfg => cfg.AddProfile<MappingProfile>());
         var mapper = mapperConfig.CreateMapper();
-        return (new ProductoService(context, mapper), context);
+        // Issue #145 Slice 2: ILogger<ProductoService> requerido para trazabilidad
+        // de operaciones de escritura (RestoreAsync). Los tests existentes no
+        // asertan sobre el log; usamos NullLogger.
+        return (new ProductoService(context, mapper, NullLogger<ProductoService>.Instance), context);
     }
 
     private static CreateProductoDto NewCreateDto(string codigo = "GAS-10") => new()
@@ -87,5 +92,52 @@ public class ProductoServiceTests
         var entity = await context.Productos.IgnoreQueryFilters().FirstAsync(p => p.Id == creado.Id);
         entity.DeletedAt.Should().NotBeNull("soft-delete debe setear DeletedAt");
         entity.Activo.Should().BeFalse("soft-delete debe setear Activo=false (PR #121)");
+    }
+
+    // ====================================================================
+    // Issue #145 Slice 2: RestoreAsync para revertir soft-delete
+    // ====================================================================
+
+    [Fact]
+    public async Task RestoreAsync_ReactivatesSoftDeletedProducto()
+    {
+        // Soft-delete deja DeletedAt != null y Activo = false.
+        // Restore debe volver ambos a su estado original (invariante
+        // Activo=false => DeletedAt != null de #114/#121).
+        var (service, context) = NewService(nameof(RestoreAsync_ReactivatesSoftDeletedProducto));
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: 1);
+        await service.DeleteAsync(creado.Id, ct: default);
+
+        var ok = await service.RestoreAsync(creado.Id, updatedBy: 99);
+
+        ok.Should().BeTrue();
+        var entity = await context.Productos.IgnoreQueryFilters().FirstAsync(p => p.Id == creado.Id);
+        entity.DeletedAt.Should().BeNull("Restore debe limpiar DeletedAt");
+        entity.Activo.Should().BeTrue("Restore debe reactivar Activo (Producto retiene la columna por #114)");
+        entity.UpdatedBy.Should().Be(99, "Restore debe registrar quién lo reactivó");
+    }
+
+    [Fact]
+    public async Task RestoreAsync_OnAlreadyActive_ReturnsFalse()
+    {
+        // Tarea 2.1 (tasks.md): producto activo (DeletedAt == null) no debe
+        // ser "restaurado" — devolver false para que el Controller mapee
+        // TempData[Error]. Patrón tomado de PedidoService.RestoreAsync.
+        var (service, _) = NewService(nameof(RestoreAsync_OnAlreadyActive_ReturnsFalse));
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: 1);
+
+        var ok = await service.RestoreAsync(creado.Id, updatedBy: 1);
+
+        ok.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RestoreAsync_OnNonExistent_ReturnsFalse()
+    {
+        var (service, _) = NewService(nameof(RestoreAsync_OnNonExistent_ReturnsFalse));
+
+        var ok = await service.RestoreAsync(999_999UL, updatedBy: 1);
+
+        ok.Should().BeFalse();
     }
 }

@@ -8,7 +8,10 @@ using ExtraGasMVC.Services.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace ExtraGasMVC.Tests;
@@ -115,6 +118,53 @@ public class ControllersActivoViewBagTests
         ((bool)controller.ViewBag.Activo).Should().Be(true);
     }
 
+    // ====================================================================
+    // Issue #145 Slice 2: ProductosController.Restore (AdminOnly).
+    // Cubre el wiring del Controller — happy path + 404. La enforcement de
+    // [Authorize(Policy="AdminOnly")] la cubre el middleware de ASP.NET Core;
+    // no la testeamos a nivel unitario (no hay WebApplicationFactory en repo).
+    // ====================================================================
+
+    [Fact]
+    public async Task ProductosController_Restore_RedirectsToIndex_OnServiceReturnsTrue()
+    {
+        // Producto soft-deleted existe y RestoreAsync devuelve true
+        // (operación exitosa). Controller: TempData[Success] + redirect a Index.
+        var fake = new FakeProductoService(producto: null)
+        {
+            RestoreReturns = true,
+        };
+        var controller = NewProductosControllerWithTempData(fake);
+
+        var result = await controller.Restore(id: 1, ct: default);
+
+        result.Should().BeOfType<RedirectToActionResult>().Subject
+            .ActionName.Should().Be(nameof(ProductosController.Index));
+        fake.RestoreLlamadas.Should().Be(1, "RestoreAsync debe invocarse exactamente una vez");
+        fake.RestoreUltimoId.Should().Be(1, "el id del POST debe propagarse al Service");
+        fake.RestoreUltimoUpdatedBy.Should().NotBeNull(
+            "GetCurrentUserId() lee la claim del ControllerContext — si es null, el test harness esta roto");
+    }
+
+    [Fact]
+    public async Task ProductosController_Restore_RedirectsToIndex_OnServiceReturnsFalse()
+    {
+        // Producto no existe o ya esta activo: RestoreAsync devuelve false.
+        // Controller: TempData[Error] + redirect a Index (no NotFound — patron
+        // tomado de ClientesController.Restore).
+        var fake = new FakeProductoService(producto: null)
+        {
+            RestoreReturns = false,
+        };
+        var controller = NewProductosControllerWithTempData(fake);
+
+        var result = await controller.Restore(id: 999999, ct: default);
+
+        result.Should().BeOfType<RedirectToActionResult>().Subject
+            .ActionName.Should().Be(nameof(ProductosController.Index));
+        fake.RestoreLlamadas.Should().Be(1);
+    }
+
     // ---------- Helpers ----------
 
     private static ClientesController NewClientesController(ClienteDto cliente)
@@ -142,13 +192,57 @@ public class ControllersActivoViewBagTests
     }
 
     private static ProductosController NewProductosController(ProductoDto producto)
+        => NewProductosController(new FakeProductoService(producto));
+
+    /// <summary>Issue #145 Slice 2: overload que acepta el fake configurable para Restore.</summary>
+    private static ProductosController NewProductosController(IProductoService service)
     {
-        var service = new FakeProductoService(producto);
         var controller = new ProductosController(service)
         {
             ControllerContext = NewControllerContext(),
         };
         return controller;
+    }
+
+    /// <summary>
+    /// Issue #145 Slice 2: variante con TempDataProvider in-memory para tests
+    /// que escriben TempData (Restore escribe TempData[Success]/TempData[Error]).
+    /// El overload default no setea TempDataProvider porque los otros tests
+    /// solo leen Controller.ViewBag y ViewBag funciona sin TempData.
+    /// </summary>
+    private static ProductosController NewProductosControllerWithTempData(IProductoService service)
+    {
+        var provider = new InMemoryTempDataProvider();
+        var services = new ServiceCollection()
+            .AddSingleton<ITempDataProvider>(provider)
+            .AddSingleton<ITempDataDictionaryFactory, TempDataDictionaryFactory>()
+            .AddSingleton<IUrlHelperFactory, UrlHelperFactory>()
+            .BuildServiceProvider();
+        var httpContext = new DefaultHttpContext { RequestServices = services };
+        var controller = new ProductosController(service)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = httpContext,
+                RouteData = new RouteData(),
+            },
+        };
+        controller.ControllerContext.HttpContext.User = new System.Security.Claims.ClaimsPrincipal(
+            new System.Security.Claims.ClaimsIdentity(
+                new[] { new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "1") },
+                "TestAuth"));
+        return controller;
+    }
+
+    private sealed class InMemoryTempDataProvider : ITempDataProvider
+    {
+        public Dictionary<string, object?> Store { get; } = new();
+        public IDictionary<string, object?> LoadTempData(HttpContext context) => Store;
+        public void SaveTempData(HttpContext context, IDictionary<string, object?> values)
+        {
+            Store.Clear();
+            foreach (var kv in values) Store[kv.Key] = kv.Value;
+        }
     }
 
     private static GarrafasController NewGarrafasController(GarrafaDto garrafa)
@@ -216,6 +310,13 @@ public class ControllersActivoViewBagTests
     {
         private readonly ProductoDto? _producto;
         public FakeProductoService(ProductoDto? producto) { _producto = producto; }
+
+        /// <summary>Issue #145 Slice 2: configurable para tests de Restore.</summary>
+        public bool RestoreReturns { get; set; }
+        public int RestoreLlamadas { get; private set; }
+        public ulong RestoreUltimoId { get; private set; }
+        public ulong? RestoreUltimoUpdatedBy { get; private set; }
+
         public Task<ProductoDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
             => Task.FromResult(_producto);
         public Task<ProductoDto?> GetByCodigoAsync(string c, CancellationToken ct = default) => throw new NotImplementedException();
@@ -226,6 +327,13 @@ public class ControllersActivoViewBagTests
         public Task<ProductoDto> CreateAsync(CreateProductoDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ProductoDto> UpdateAsync(UpdateProductoDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> DeleteAsync(ulong id, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<bool> RestoreAsync(ulong id, ulong? updatedBy, CancellationToken ct = default)
+        {
+            RestoreLlamadas++;
+            RestoreUltimoId = id;
+            RestoreUltimoUpdatedBy = updatedBy;
+            return Task.FromResult(RestoreReturns);
+        }
     }
 
     private sealed class FakeGarrafaService : IGarrafaService
