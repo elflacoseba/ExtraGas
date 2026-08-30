@@ -7,10 +7,20 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>ExtraGasMVC.Tests</RootNamespace>
+    <!--
+      coverlet.collector genera el reporte de coverage en formato OpenCover
+      durante `dotnet test`. El archivo queda en
+      tests/.../coverage.opencover.xml y es importado por SonarQube vía
+      sonar.cs.opencover.reportsPaths en sonar-project.properties.
+    -->
+    <CoverletOutput>../TestResults/</CoverletOutput>
+    <CoverletOutputFormat>opencover</CoverletOutputFormat>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
     <PackageReference Include="FluentAssertions" Version="6.12.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
