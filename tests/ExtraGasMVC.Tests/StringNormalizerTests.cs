@@ -141,4 +141,23 @@ public class StringNormalizerTests
     {
         StringNormalizer.NormalizarTelefono(" +54 (011) 4455-6677 ").Should().Be("+5401144556677");
     }
+
+    [Fact]
+    public void NormalizarTelefono_SoloSignoMasSinDigitos_DevuelveNull()
+    {
+        // Issue #136 (S3358): con el refactor del ternario anidado a
+        // if/else, esta rama cubre el path 'sb.Length <= longitudMinima'
+        // cuando el operador tipea solo '+' (sin dígitos) — no es un
+        // teléfono válido y debe devolver null, no string.Empty ni '+'.
+        StringNormalizer.NormalizarTelefono("+").Should().BeNull();
+    }
+
+    [Fact]
+    public void NormalizarTelefono_SoloSeparadoresConMasInicial_DevuelveNull()
+    {
+        // Variante: '+' seguido de puros separadores ('+ - . ( )').
+        // Tras trim queda "+- . ( )" — el loop agrega '+' al sb pero
+        // descarta el resto, así que sb.Length == 1 == longitudMinima → null.
+        StringNormalizer.NormalizarTelefono("+ - . ( )").Should().BeNull();
+    }
 }

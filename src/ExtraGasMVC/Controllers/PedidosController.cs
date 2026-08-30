@@ -39,9 +39,18 @@ public class PedidosController : BaseController
         string? numero, ulong? estadoId, DateTime? desde, DateTime? hasta,
         int pagina = 1, int tamanio = 25, CancellationToken ct = default)
     {
-        var resultado = await _pedidoService.SearchAsync(
-            numero, estadoId > 0 ? estadoId : null, null,
-            desde, hasta, pagina, tamanio, ct);
+        // Busca por número, estado y rango de fechas. El filtro de cliente se
+        // delega a la pantalla de cuenta corriente (no se usa acá), por eso va null.
+        var filter = new PedidoSearchFilter(
+            Numero: numero,
+            EstadoId: estadoId > 0 ? estadoId : null,
+            ClienteId: null,
+            Desde: desde,
+            Hasta: hasta,
+            Pagina: pagina,
+            Tamanio: tamanio);
+
+        var resultado = await _pedidoService.SearchAsync(filter, ct);
 
         ViewBag.Numero = numero;
         ViewBag.EstadoId = estadoId;
@@ -83,7 +92,7 @@ public class PedidosController : BaseController
         {
             var userId = GetCurrentUserId();
             var created = await _pedidoService.CreateAsync(pedido, userId, ct);
-            TempData["Success"] = $"Pedido {created.Numero} creado correctamente.";
+            TempData[TempDataKeys.Success] = $"Pedido {created.Numero} creado correctamente.";
             return RedirectToAction(nameof(Index));
         }
         catch (InvalidOperationException ex)
@@ -107,7 +116,7 @@ public class PedidosController : BaseController
 
         if (PedidoEstados.EstadosFinales.Contains(pedido.EstadoCodigo ?? ""))
         {
-            TempData["Info"] = "El pedido se encuentra en un estado final y no puede editarse.";
+            TempData[TempDataKeys.Info] = "El pedido se encuentra en un estado final y no puede editarse.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -150,7 +159,7 @@ public class PedidosController : BaseController
         {
             var userId = GetCurrentUserId();
             await _pedidoService.UpdateAsync(pedido, userId, ct);
-            TempData["Success"] = "Pedido actualizado correctamente.";
+            TempData[TempDataKeys.Success] = "Pedido actualizado correctamente.";
             return RedirectToAction(nameof(Index));
         }
         catch (InvalidOperationException ex)
@@ -183,13 +192,13 @@ public class PedidosController : BaseController
         {
             var userId = GetCurrentUserId();
             var ok = await _pedidoService.DeleteAsync(id, userId, ct);
-            TempData[ok ? "Success" : "Error"] = ok
+            TempData[ok ? TempDataKeys.Success : TempDataKeys.Error] = ok
                 ? "Pedido eliminado correctamente."
-                : "No se encontró el pedido.";
+                : TempDataKeys.PedidoNotFoundMessage;
         }
         catch (InvalidOperationException ex)
         {
-            TempData["Error"] = ex.Message;
+            TempData[TempDataKeys.Error] = ex.Message;
         }
         return RedirectToAction(nameof(Index));
     }
@@ -200,9 +209,9 @@ public class PedidosController : BaseController
     {
         var userId = GetCurrentUserId();
         var ok = await _pedidoService.RestoreAsync(id, userId, ct);
-        TempData[ok ? "Success" : "Error"] = ok
+        TempData[ok ? TempDataKeys.Success : TempDataKeys.Error] = ok
             ? "Pedido reactivado correctamente."
-            : "No se encontró el pedido.";
+            : TempDataKeys.PedidoNotFoundMessage;
         return RedirectToAction(nameof(Index));
     }
 
@@ -236,11 +245,11 @@ public class PedidosController : BaseController
         {
             // Incluye: código inexistente, estado incorrecto, cantidad no coincide,
             // re-CONFIRMADO, etc. (issue #44).
-            TempData["Error"] = ex.Message;
+            TempData[TempDataKeys.Error] = ex.Message;
         }
         catch (Exception)
         {
-            TempData["Error"] = "Ocurrió un error al cambiar el estado del pedido. Intente nuevamente.";
+            TempData[TempDataKeys.Error] = "Ocurrió un error al cambiar el estado del pedido. Intente nuevamente.";
         }
         return RedirectToAction(nameof(Edit), new { id });
     }
@@ -274,15 +283,15 @@ public class PedidosController : BaseController
         }
         catch (System.Text.Json.JsonException)
         {
-            TempData["Error"] = "Los códigos de garrafas enviados tienen un formato inválido. Recargue la pantalla e intente nuevamente.";
+            TempData[TempDataKeys.Error] = "Los códigos de garrafas enviados tienen un formato inválido. Recargue la pantalla e intente nuevamente.";
             return RedirectToAction(nameof(Edit), new { id });
         }
 
         var ok = await _pedidoService.RegistrarCanjePedidoAsync(id, codigosPorItem, userId, ct);
 
-        TempData[ok ? "Success" : "Error"] = ok
+        TempData[ok ? TempDataKeys.Success : TempDataKeys.Error] = ok
             ? "Pedido confirmado y garrafas registradas correctamente."
-            : "No se encontró el pedido.";
+            : TempDataKeys.PedidoNotFoundMessage;
 
         return ok
             ? RedirectToAction(nameof(Details), new { id })
@@ -297,9 +306,9 @@ public class PedidosController : BaseController
         ulong id, ulong nuevoEstadoId, string? motivoCancelacion, ulong? userId, CancellationToken ct)
     {
         var ok = await _pedidoService.CambiarEstadoAsync(id, nuevoEstadoId, motivoCancelacion, userId, ct);
-        TempData[ok ? "Success" : "Error"] = ok
+        TempData[ok ? TempDataKeys.Success : TempDataKeys.Error] = ok
             ? "Estado del pedido actualizado correctamente."
-            : "No se encontró el pedido.";
+            : TempDataKeys.PedidoNotFoundMessage;
 
         if (!ok) return RedirectToAction(nameof(Edit), new { id });
 
@@ -323,17 +332,17 @@ public class PedidosController : BaseController
     {
         if (!ModelState.IsValid)
         {
-            TempData["Error"] = "Datos de item inválidos.";
+            TempData[TempDataKeys.Error] = "Datos de item inválidos.";
             return RedirectToAction(nameof(Edit), new { id = item.PedidoId });
         }
         try
         {
             await _pedidoService.AddItemAsync(item, ct);
-            TempData["Success"] = "Item agregado correctamente.";
+            TempData[TempDataKeys.Success] = "Item agregado correctamente.";
         }
         catch (Exception ex)
         {
-            TempData["Error"] = ex.Message;
+            TempData[TempDataKeys.Error] = ex.Message;
         }
         return RedirectToAction(nameof(Edit), new { id = item.PedidoId, fragment = "itemsTable" });
     }
@@ -345,17 +354,17 @@ public class PedidosController : BaseController
         try
         {
             var ok = await _pedidoService.RemoveItemAsync(itemId, ct);
-            TempData[ok ? "Success" : "Error"] = ok
+            TempData[ok ? TempDataKeys.Success : TempDataKeys.Error] = ok
                 ? "Item eliminado correctamente."
                 : "No se encontró el item.";
         }
         catch (InvalidOperationException ex)
         {
-            TempData["Error"] = ex.Message;
+            TempData[TempDataKeys.Error] = ex.Message;
         }
         catch (Exception)
         {
-            TempData["Error"] = "Ocurrió un error al eliminar el item.";
+            TempData[TempDataKeys.Error] = "Ocurrió un error al eliminar el item.";
         }
         return RedirectToAction(nameof(Edit), new { id = pedidoId, fragment = "itemsTable" });
     }

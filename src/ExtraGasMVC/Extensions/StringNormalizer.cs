@@ -46,13 +46,15 @@ public static class StringNormalizer
 
         foreach (var ch in trimmed)
         {
-            // '+' se descarta acá: el '+' inicial ya se agregó arriba explícitamente;
-            // cualquier '+' en otra posición es ruido de tipeo (el código de país
-            // solo es semánticamente válido al inicio) y lo removemos.
+            // Se descartan separadores comunes y el '+' (ya agregado arriba si era inicial).
             if (ch == ' ' || ch == '-' || ch == '(' || ch == ')' || ch == '.' || ch == '+') continue;
             sb.Append(ch);
         }
 
-        return sb.Length == (tieneMas ? 1 : 0) ? null : sb.ToString();
+        // Si solo quedó el '+' (o nada), devolvemos null. Si quedó '+' + dígitos,
+        // el código de país es parte de la identidad canónica.
+        var longitudMinima = tieneMas ? 1 : 0;
+        if (sb.Length <= longitudMinima) return null;
+        return sb.ToString();
     }
 }

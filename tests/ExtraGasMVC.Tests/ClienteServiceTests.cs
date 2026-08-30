@@ -249,4 +249,33 @@ actualizado.Nombre.Should().Be("Juan Modificado", "el resto de los campos si se 
         resultado.Total.Should().Be(1);
         resultado.Items[0].Id.Should().Be(tercero.Id);
     }
+
+    // ====================================================================
+    // Issue #136 (S6964): UpdateClienteDto.Id es nullable para evitar
+    // under-posting silencioso desde forms manipulados. El Controller ya
+    // devuelve 400 si id != cliente.Id, pero el Service agrega guard
+    // defensivo (ArgumentException) porque también puede invocarse desde
+    // tests u otros callers que no pasaron por la validación del
+    // Controller. Cubre el branch del null guard.
+    // ====================================================================
+
+    [Fact]
+    public async Task UpdateAsync_IdNull_LanzaArgumentException()
+    {
+        var (service, _) = NewService(nameof(UpdateAsync_IdNull_LanzaArgumentException));
+
+        var dto = new UpdateClienteDto
+        {
+            Id = null,
+            Nombre = "Sin Id",
+            Apellido = "Invalido",
+            Dni = "99999999",
+            TelefonoPrincipal = "0000000000",
+        };
+
+        var act = async () => await service.UpdateAsync(dto, updatedBy: 1);
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*Id es obligatorio*");
+    }
 }

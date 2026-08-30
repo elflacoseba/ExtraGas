@@ -599,7 +599,7 @@ public class UsuarioService : IUsuarioService
 
         var empleados = await _context.Empleados
             .AsNoTracking()
-            .Where(e => e.UsuarioId.HasValue && usuarioIds.Contains(e.UsuarioId!.Value))
+            .Where(e => e.UsuarioId.HasValue && usuarioIds.Contains(e.UsuarioId.Value))
             .ToListAsync(ct);
 
         return empleados.ToDictionary(e => e.UsuarioId!.Value);

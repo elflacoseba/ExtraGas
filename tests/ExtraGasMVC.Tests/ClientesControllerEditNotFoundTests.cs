@@ -245,20 +245,27 @@ public class ClientesControllerEditNotFoundTests
 
         public Task<ClienteDto> UpdateAsync(UpdateClienteDto cliente, ulong? updatedBy, CancellationToken ct = default)
         {
+            // Issue #136 (S6964): UpdateClienteDto.Id es nullable para evitar
+            // under-posting silencioso. En el fake replicamos el contrato del
+            // Service real: si llega null lanzamos (defense-in-depth).
+            if (cliente.Id is null)
+                throw new ArgumentException("UpdateClienteDto.Id es obligatorio.", nameof(cliente));
+            var clienteId = cliente.Id.Value;
+
             return UpdateScenario switch
             {
                 Scenario.Success => Task.FromResult(new ClienteDto
                 {
-                    Id = cliente.Id,
+                    Id = clienteId,
                     Nombre = cliente.Nombre,
                     Apellido = cliente.Apellido,
                     Dni = cliente.Dni,
                     TelefonoPrincipal = cliente.TelefonoPrincipal,
                 }),
                 Scenario.KeyNotFound =>
-                    throw new KeyNotFoundException($"Cliente con Id {cliente.Id} no encontrado."),
+                    throw new KeyNotFoundException($"Cliente con Id {clienteId} no encontrado."),
                 Scenario.SoftDeleted =>
-                    throw new ClienteSoftDeletedException(cliente.Id),
+                    throw new ClienteSoftDeletedException(clienteId),
                 Scenario.InvalidOperation =>
                     throw new InvalidOperationException("El DNI ingresado ya está registrado."),
                 _ => throw new InvalidOperationException($"Scenario no soportado: {UpdateScenario}"),

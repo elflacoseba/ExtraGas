@@ -1,3 +1,4 @@
+using ExtraGasMVC.Constants;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -75,7 +76,7 @@ public class UsuariosController : BaseController
         {
             var currentUserId = GetCurrentUserId();
             await _usuarioService.CreateAsync(dto, currentUserId, ct);
-            TempData["Success"] = $"Usuario {dto.Username} creado correctamente.";
+            TempData[TempDataKeys.Success] = $"Usuario {dto.Username} creado correctamente.";
             return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
@@ -101,10 +102,10 @@ public class UsuariosController : BaseController
         // TempData de la password temporal se consume en este render: Peek para leer
         // sin borrarla del storage, Remove para invalidarla. Asi un refresh posterior
         // del admin NO re-mostrara la password (cumpliendo "se muestra una sola vez").
-        var temporaryPassword = TempData.Peek("TemporaryPassword") as string;
-        var temporaryPasswordUsername = TempData.Peek("TemporaryPasswordUsername") as string;
-        if (temporaryPassword is not null) TempData.Remove("TemporaryPassword");
-        if (temporaryPasswordUsername is not null) TempData.Remove("TemporaryPasswordUsername");
+        var temporaryPassword = TempData.Peek(TempDataKeys.TemporaryPassword) as string;
+        var temporaryPasswordUsername = TempData.Peek(TempDataKeys.TemporaryPasswordUsername) as string;
+        if (temporaryPassword is not null) TempData.Remove(TempDataKeys.TemporaryPassword);
+        if (temporaryPasswordUsername is not null) TempData.Remove(TempDataKeys.TemporaryPasswordUsername);
 
         // Issue #114: UpdateUsuarioDto ya no expone Activo (es estado y solo
         // cambia vía Delete). Lo pasamos por ViewBag para mostrarlo como info
@@ -134,7 +135,7 @@ public class UsuariosController : BaseController
         // acá quedó obsoleta — UpdateUsuarioDto ya no expone Activo, por lo
         // que el operador ya no puede desactivarse desde este formulario.
         // La protección real está en Delete (que también compara
-        // id == currentUserId y rechaza TempData["Error"]).
+        // id == currentUserId y rechaza la key de error de TempData).
 
         // Regla que sí sigue vigente: no puede cambiarse el propio rol.
         // Podria auto-degradarse y perder permisos para volver a entrar
@@ -162,7 +163,7 @@ public class UsuariosController : BaseController
         try
         {
             await _usuarioService.UpdateAsync(dto, currentUserId, ct);
-            TempData["Success"] = "Usuario actualizado.";
+            TempData[TempDataKeys.Success] = "Usuario actualizado.";
             return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
@@ -181,12 +182,12 @@ public class UsuariosController : BaseController
         var currentUserId = GetCurrentUserId();
         if (id == currentUserId)
         {
-            TempData["Error"] = "No puede eliminarse a si mismo.";
+            TempData[TempDataKeys.Error] = "No puede eliminarse a si mismo.";
             return RedirectToAction(nameof(Index));
         }
 
         var ok = await _usuarioService.DeleteAsync(id, ct);
-        TempData[ok ? "Success" : "Error"] = ok
+        TempData[ok ? TempDataKeys.Success : TempDataKeys.Error] = ok
             ? "Usuario desactivado correctamente."
             : "No se encontro el usuario.";
         return RedirectToAction(nameof(Index));
@@ -199,24 +200,24 @@ public class UsuariosController : BaseController
         var currentUserId = GetCurrentUserId();
         if (id == currentUserId)
         {
-            TempData["Error"] = "No puede resetear su propia contrasena. Use el formulario de cambio.";
+            TempData[TempDataKeys.Error] = "No puede resetear su propia contrasena. Use el formulario de cambio.";
             return RedirectToAction(nameof(Edit), new { id });
         }
 
         try
         {
             var temporaryPassword = await _usuarioService.ResetPasswordAsync(id, currentUserId, ct);
-            TempData["TemporaryPassword"] = temporaryPassword;
-            TempData["TemporaryPasswordUsername"] = (await _usuarioService.GetByIdAsync(id, ct))?.Username;
-            TempData["Success"] = "Contrasena reseteada. La password temporal se muestra debajo UNA SOLA VEZ.";
+            TempData[TempDataKeys.TemporaryPassword] = temporaryPassword;
+            TempData[TempDataKeys.TemporaryPasswordUsername] = (await _usuarioService.GetByIdAsync(id, ct))?.Username;
+            TempData[TempDataKeys.Success] = "Contrasena reseteada. La password temporal se muestra debajo UNA SOLA VEZ.";
         }
         catch (KeyNotFoundException)
         {
-            TempData["Error"] = "No se encontro el usuario.";
+            TempData[TempDataKeys.Error] = "No se encontro el usuario.";
         }
         catch (Exception ex)
         {
-            TempData["Error"] = $"No se pudo resetear la contrasena: {ex.Message}";
+            TempData[TempDataKeys.Error] = $"No se pudo resetear la contrasena: {ex.Message}";
         }
 
         return RedirectToAction(nameof(Edit), new { id });
@@ -230,19 +231,19 @@ public class UsuariosController : BaseController
 
         if (!ModelState.IsValid)
         {
-            TempData["Error"] = "Verifique los datos ingresados.";
+            TempData[TempDataKeys.Error] = "Verifique los datos ingresados.";
             return RedirectToAction(nameof(Edit), new { id });
         }
 
         var policyResult = _passwordPolicy.Validate(dto.NewPassword);
         if (!policyResult.IsValid)
         {
-            TempData["Error"] = string.Join(" ", policyResult.Errors);
+            TempData[TempDataKeys.Error] = string.Join(" ", policyResult.Errors);
             return RedirectToAction(nameof(Edit), new { id });
         }
 
         var ok = await _usuarioService.ChangePasswordAsync(id, dto.CurrentPassword, dto.NewPassword, ct);
-        TempData[ok ? "Success" : "Error"] = ok
+        TempData[ok ? TempDataKeys.Success : TempDataKeys.Error] = ok
             ? "Contrasena cambiada correctamente."
             : "La contrasena actual es incorrecta.";
 
