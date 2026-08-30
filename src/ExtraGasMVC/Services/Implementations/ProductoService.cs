@@ -121,10 +121,39 @@ public class ProductoService : IProductoService
         // silenciosamente. ManejaGarrafaIndividual NO se preserva — es config.
         var activoOriginal = entity.Activo;
 
+        // Issue #145 Slice 3: snapshot del precio ANTES del AutoMapper para
+        // detectar cambios reales. Se compara contra `entity.PrecioActual`
+        // después del Map y se registra una fila append-only en
+        // producto_precios_historico cuando hay cambio real. El guardado
+        // `precioAnterior != 0` evita phantom rows en el primer update sobre
+        // un producto recién creado con precio=0 (caso seed manual / backfill).
+        var precioAnterior = entity.PrecioActual;
+
         _mapper.Map(producto, entity);
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = usuarioId;
         ProductoEditRules.PreservarFlagsNoEditables(entity, activoOriginal);
+
+        // Hook de histórico: solo cuando hay cambio real (precioAnterior != 0
+        // && precioAnterior != nuevo). Atómico: la fila append-only y el
+        // update del producto commitean en el mismo SaveChangesAsync. Si
+        // SaveChangesAsync falla, no queda fila huérfana.
+        var precioNuevo = entity.PrecioActual;
+        if (precioAnterior != precioNuevo && precioAnterior != 0m)
+        {
+            _context.ProductoPreciosHistorico.Add(new ProductoPrecioHistorico
+            {
+                ProductoId = entity.Id,
+                PrecioAnterior = precioAnterior,
+                PrecioNuevo = precioNuevo,
+                MotivoCambioPrecio = producto.MotivoCambioPrecio,
+                ChangedBy = usuarioId,
+                ChangedAt = DateTime.UtcNow,
+            });
+            _logger.LogInformation(
+                "Producto {ProductoId} cambió de precio: {PrecioAnterior} → {PrecioNuevo} (motivo: {Motivo}, operador: {ChangedBy})",
+                entity.Id, precioAnterior, precioNuevo, producto.MotivoCambioPrecio ?? "<sin motivo>", usuarioId);
+        }
 
         await _context.SaveChangesAsync(ct);
 
