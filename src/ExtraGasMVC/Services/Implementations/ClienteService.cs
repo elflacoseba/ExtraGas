@@ -7,6 +7,7 @@ using ExtraGasMVC.Services.Exceptions;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using MySqlConnector;
 
 namespace ExtraGasMVC.Services.Implementations;
 
@@ -121,7 +122,7 @@ public class ClienteService : IClienteService
         entity.UpdatedBy = createdBy;
 
         _context.Clientes.Add(entity);
-        await _context.SaveChangesAsync(ct);
+        await SaveOrThrowDuplicateDniAsync(ct);
 
         return _mapper.Map<ClienteDto>(entity);
     }
@@ -159,7 +160,7 @@ public class ClienteService : IClienteService
         entity.UpdatedBy = updatedBy;
         ClienteEditRules.PreservarFlagsNoEditables(entity, activoOriginal, fechaAltaOriginal);
 
-        await _context.SaveChangesAsync(ct);
+        await SaveOrThrowDuplicateDniAsync(ct);
 
         return _mapper.Map<ClienteDto>(entity);
     }
@@ -240,5 +241,47 @@ public class ClienteService : IClienteService
     {
         var query = _context.Clientes.AsNoTracking().Where(c => c.Id != excludeId);
         return Task.FromResult(DniEsUnicoSobre(query, dni));
+    }
+
+    /// <summary>
+    /// Helper testeable: si la <see cref="DbUpdateException"/> que envolvió
+    /// SaveChangesAsync fue un duplicate entry de MySQL (errno 1062) sobre el
+    /// índice único de DNI, devuelve la <see cref="InvalidOperationException"/>
+    /// de dominio con el mismo mensaje que el check previo de unicidad para
+    /// que la UX sea consistente. Si NO es 1062 (o no es MySqlException), devuelve
+    /// <c>null</c> y el caller re-lanza la excepción original.
+    ///
+    /// Marcado <c>internal</c> para que los tests lo consuman vía InternalsVisibleTo
+    /// sin exponer la lógica al resto de la app.
+    ///
+    /// Issue #107: defensa contra race condition en validación de unicidad de DNI.
+    /// El check previo (IsDniUniqueAsync) es best-effort: dos requests concurrentes
+    /// pueden pasarlo y la BD rechaza el segundo INSERT/UPDATE con 1062. Sin este
+    /// mapeo, el Controller mostraría al usuario un error SQL crudo.
+    /// </summary>
+    internal static InvalidOperationException? MapDuplicateDniException(DbUpdateException ex)
+    {
+        if (ex.InnerException is MySqlException my && my.Number == 1062)
+            return new InvalidOperationException("El DNI ingresado ya está registrado.");
+        return null;
+    }
+
+    /// <summary>
+    /// Envuelve <c>SaveChangesAsync</c> con la traducción de duplicate-DNI a
+    /// <see cref="InvalidOperationException"/>. Cualquier otro error burbujea
+    /// sin cambios para que el Controller lo registre como error genérico.
+    /// </summary>
+    private async Task SaveOrThrowDuplicateDniAsync(CancellationToken ct)
+    {
+        try
+        {
+            await _context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex)
+        {
+            var mapped = MapDuplicateDniException(ex);
+            if (mapped is not null) throw mapped;
+            throw;
+        }
     }
 }
