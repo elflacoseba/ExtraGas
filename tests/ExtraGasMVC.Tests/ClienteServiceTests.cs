@@ -3,6 +3,7 @@ using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Mappings;
+using ExtraGasMVC.Services.Exceptions;
 using ExtraGasMVC.Services.Implementations;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -58,6 +59,19 @@ public class ClienteServiceTests
         Dni = c.Dni,
         TelefonoPrincipal = c.TelefonoPrincipal,
         // Sin Activo ni FechaAlta: el DTO ya no los expone.
+    };
+
+    /// <summary>
+    /// Overload para tests que reciben un <see cref="ClienteDto"/> (lo que
+    /// devuelven los metodos del Service) en lugar de la entity.
+    /// </summary>
+    private static UpdateClienteDto NewUpdateDto(ClienteDto c) => new()
+    {
+        Id = c.Id,
+        Nombre = "Juan Modificado",
+        Apellido = c.Apellido,
+        Dni = c.Dni,
+        TelefonoPrincipal = c.TelefonoPrincipal,
     };
 
     [Fact]
@@ -124,5 +138,47 @@ var creado = await service.CreateAsync(NewCreateDto(), createdBy: 1);
         actualizado.FechaAlta.Should().Be(fechaAltaOriginal,
             "FechaAlta debe preservarse desde la BD aunque el DTO no la traiga");
 actualizado.Nombre.Should().Be("Juan Modificado", "el resto de los campos si se actualizan");
+    }
+
+    // ====================================================================
+    // Issue #108: distinguir cliente inexistente de cliente soft-deleted
+    // ====================================================================
+
+    [Fact]
+    public async Task UpdateAsync_ClienteNoExiste_LanzaKeyNotFoundException()
+    {
+        var (service, _) = NewService(nameof(UpdateAsync_ClienteNoExiste_LanzaKeyNotFoundException));
+
+        var updateDto = new UpdateClienteDto
+        {
+            Id = 999999,
+            Nombre = "Fantasma",
+            Apellido = "No existe",
+            Dni = "00000000",
+            TelefonoPrincipal = "0000000000",
+        };
+
+        var act = async () => await service.UpdateAsync(updateDto, updatedBy: 1);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("*999999*");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ClienteSoftDeleted_LanzaClienteSoftDeletedException()
+    {
+        var (service, _) = NewService(nameof(UpdateAsync_ClienteSoftDeleted_LanzaClienteSoftDeletedException));
+
+        // Seed: crear y luego soft-deleted via el metodo del Service (que
+        // respeta la BD y setea DeletedAt).
+        var creado = await service.CreateAsync(NewCreateDto(), createdBy: 1);
+        await service.DeleteAsync(creado.Id, updatedBy: 1);
+
+        var updateDto = NewUpdateDto(creado);
+
+        var act = async () => await service.UpdateAsync(updateDto, updatedBy: 1);
+
+        await act.Should().ThrowAsync<ClienteSoftDeletedException>()
+            .Where(ex => ex.ClienteId == creado.Id);
     }
 }

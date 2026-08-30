@@ -3,6 +3,7 @@ using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Extensions;
+using ExtraGasMVC.Services.Exceptions;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -127,9 +128,21 @@ public class ClienteService : IClienteService
 
     public async Task<ClienteDto> UpdateAsync(UpdateClienteDto cliente, ulong? updatedBy, CancellationToken ct = default)
     {
-        var entity = await _context.Clientes.FindAsync(new object[] { cliente.Id }, ct);
+        // Issue #108: usamos IgnoreQueryFilters() para distinguir "no existe"
+        // (KeyNotFoundException) de "existe pero está soft-deleted"
+        // (ClienteSoftDeletedException). Antes, FindAsync respetaba el
+        // QueryFilter global y devolvía null para los dos casos, lo que hacía
+        // que el Controller no pudiera mostrarle al operador el mensaje
+        // correcto.
+        var entity = await _context.Clientes
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.Id == cliente.Id, ct);
+
         if (entity == null)
             throw new KeyNotFoundException($"Cliente con Id {cliente.Id} no encontrado.");
+
+        if (entity.DeletedAt != null)
+            throw new ClienteSoftDeletedException(cliente.Id);
 
         if (!await IsDniUniqueAsync(cliente.Dni, cliente.Id, ct))
             throw new InvalidOperationException("El DNI ingresado ya está registrado.");
