@@ -9,13 +9,13 @@
 #     - Sabe analizar .cs/.js/.cshtml
 #     - NO genera .sonarqube/bin/targets/SonarQube.Integration.targets
 #     - NO dispara coverlet.collector durante el build
-#     - Reporta new_coverage=0% aunque el coverage.opencover.xml exista
+#     - Reporta new_coverage=0% aunque el coverage.cobertura.xml exista
 #
 #   Este script usa `dotnet-sonarscanner` 11.x, que SÍ integra con MSBuild:
 #     1. `begin` injecta el target SonarQube.Integration.targets en el build
 #     2. `dotnet build` ejecuta el target → cubre los .cs compilados
 #     3. `dotnet test --collect:"XPlat Code Coverage"` corre los tests y
-#        genera coverage.opencover.xml vía coverlet.collector
+#        genera coverage.cobertura.xml vía coverlet.collector
 #     4. `end` sube el reporte al server junto con la cobertura
 #
 # Requisitos:
@@ -31,8 +31,13 @@
 #
 # Salida esperada:
 #   - .sonarqube/bin/targets/SonarQube.Integration.targets (generado)
-#   - tests/ExtraGasMVC.Tests/TestResults/<guid>/coverage.opencover.xml
+#   - tests/ExtraGasMVC.Tests/TestResults/<guid>/coverage.cobertura.xml
 #   - Quality Gate actualizado en el server
+#
+# Limitaciones:
+#   - `sonar.branch.name` y `sonar.branch.target` requieren Developer Edition
+#     o superior. Este server es Community Edition, así que el script NO las
+#     usa — analiza siempre la rama actual sin comparar contra base.
 # =============================================================================
 
 set -euo pipefail
@@ -110,17 +115,17 @@ trap restore_props EXIT
 rename_props
 
 echo "[2/5] dotnet sonarscanner begin"
+# NOTA: NO pasamos sonar.branch.name/target — el server es Community
+# Edition y esas props requieren Developer Edition o superior.
 dotnet sonarscanner begin \
     /k:"extragas" \
     /n:"extragas" \
     /v:"1.0" \
     /d:sonar.host.url="${SONAR_HOST_URL}" \
-    /d:sonar.branch.name="${HEAD_BRANCH}" \
-    /d:sonar.branch.target="${BASE_BRANCH}" \
     /d:sonar.sources="src" \
     /d:sonar.tests="tests" \
     /d:sonar.test.inclusions="**/*Tests.cs,**/*Tests.csproj" \
-    /d:sonar.cs.opencover.reportsPaths="tests/ExtraGasMVC.Tests/TestResults/*/coverage.opencover.xml" \
+    /d:sonar.cs.cobertura.reportPaths="tests/ExtraGasMVC.Tests/TestResults/*/coverage.cobertura.xml" \
     ${SONAR_AUTH}
 
 echo "[3/5] dotnet build"
