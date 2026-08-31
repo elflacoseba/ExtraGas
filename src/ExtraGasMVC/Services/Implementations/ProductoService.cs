@@ -32,17 +32,25 @@ public class ProductoService : IProductoService
     // GetTiposProductoAsync. AddMemoryCache() ya está registrado en
     // Program.cs:16, solo faltaba inyectar.
     private readonly IMemoryCache _cache;
+    // Issue #147 slice 2: IAuditLogger inyectado para emitir filas a la
+    // tabla genérica audit_log cuando UpdateAsync detecta cambios por campo.
+    // Scoped → comparte el ExtraGasDbContext → commit atómico con la
+    // mutación del producto (el logger NO llama SaveChanges por contrato,
+    // ver IAuditLogger XML doc).
+    private readonly IAuditLogger _audit;
 
     public ProductoService(
         ExtraGasDbContext context,
         IMapper mapper,
         ILogger<ProductoService> logger,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        IAuditLogger audit)
     {
         _context = context;
         _mapper = mapper;
         _logger = logger;
         _cache = cache;
+        _audit = audit;
     }
 
     public async Task<ProductoDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
@@ -301,6 +309,12 @@ public class ProductoService : IProductoService
         // last-write-wins silenciosos en otros módulos).
         var cambios = DetectarCambiosProducto(entity, producto);
 
+        // Issue #147 slice 2: snapshot paralelo (estructurado en tuplas)
+        // para emitir filas a audit_log. La diff se hace ANTES del Map
+        // para evitar contaminación: la entity post-Map tiene el valor
+        // del DTO pisado, lo que impediría detectar cambios reales.
+        var cambiosAuditables = DetectarCambiosAuditables(entity, producto);
+
         _mapper.Map(producto, entity);
         // Issue #147 item 6: normalizar Codigo (trim + upper) — mismo
         // tratamiento que CreateAsync. Mantiene invariante "Codigo
@@ -310,6 +324,23 @@ public class ProductoService : IProductoService
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = usuarioId;
         ProductoEditRules.PreservarFlagsNoEditables(entity, activoOriginal);
+
+        // Issue #147 slice 2: emitir filas de audit_log por cada campo
+        // auditable que difiere. _audit NO llama SaveChanges (contrato
+        // del IAuditLogger) → las filas se commiten en el mismo
+        // SaveChangesAsync de este método, atómicas con la mutación del
+        // producto. Si el commit falla, no queda fila huérfana.
+        foreach (var (campo, oldStr, newStr) in cambiosAuditables)
+        {
+            await _audit.LogChangeAsync(
+                entidad: "Producto",
+                registroId: (long)entity.Id,
+                campo: campo,
+                valorAnterior: oldStr,
+                valorNuevo: newStr,
+                changedBy: usuarioId.HasValue ? (long?)usuarioId.Value : null,
+                ct: ct);
+        }
 
         // Hook de histórico: solo cuando hay cambio real (precioAnterior != 0
         // && precioAnterior != nuevo). Atómico: la fila append-only y el
@@ -550,6 +581,64 @@ public class ProductoService : IProductoService
             cambios.Add($"PrecioActual: {entity.PrecioActual} → {dto.PrecioActual}");
         if (entity.ManejaGarrafaIndividual != dto.ManejaGarrafaIndividual)
             cambios.Add($"ManejaGarrafaIndividual: {entity.ManejaGarrafaIndividual} → {dto.ManejaGarrafaIndividual}");
+
+        return cambios;
+    }
+
+    /// <summary>
+    /// Issue #147 slice 2: devuelve una tupla estructurada (campo, oldStr,
+    /// newStr) por cada campo auditable que difiere entre la entity y el
+    /// DTO. La usa <see cref="UpdateAsync"/> para emitir filas a
+    /// <c>audit_log</c> vía <see cref="IAuditLogger"/>.
+    ///
+    /// <para><b>Excluidos explícitamente</b>:</para>
+    /// <list type="bullet">
+    ///   <item><c>CreatedAt</c>, <c>UpdatedAt</c>, <c>CreatedBy</c>,
+    ///   <c>UpdatedBy</c>, <c>DeletedAt</c>, <c>RowVersion</c> — metadata
+    ///   autogestionada por el Service, no cambios del operador.</item>
+    ///   <item><c>Activo</c> — flag de estado, no viene en el DTO y se
+    ///   preserva desde la BD vía <see cref="ProductoEditRules.PreservarFlagsNoEditables"/>.
+    ///   Si en el futuro se permite cambiarlo desde el form, agregar acá
+    ///   la comparación contra el DTO.</item>
+    ///   <item><c>StockMinimo</c>, <c>UnidadVentaId</c> — no existen en
+    ///   la entity actual (el catálogo de unidades FK llega en slice 3).</item>
+    /// </list>
+    ///
+    /// <para>Serialización: <c>decimal</c> → string InvariantCulture (sin
+    /// coma/punto regional), <c>bool</c> → "true"/"false", nullable →
+    /// <c>null</c> cuando el valor es null. La columna <c>campo</c> ya
+    /// discrimina; no hace falta JOIN a tablas de tipos.</para>
+    /// </summary>
+    private static List<(string Campo, string? Old, string? New)> DetectarCambiosAuditables(
+        Producto entity, UpdateProductoDto dto)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var cambios = new List<(string, string?, string?)>();
+
+        if (!string.Equals(entity.Codigo, dto.Codigo, StringComparison.Ordinal))
+            cambios.Add(("Codigo", entity.Codigo, dto.Codigo));
+        if (!string.Equals(entity.Nombre, dto.Nombre, StringComparison.Ordinal))
+            cambios.Add(("Nombre", entity.Nombre, dto.Nombre));
+        if (!string.Equals(entity.Descripcion, dto.Descripcion, StringComparison.Ordinal))
+            cambios.Add(("Descripcion", entity.Descripcion, dto.Descripcion));
+        if (entity.TipoProductoId != dto.TipoProductoId)
+            cambios.Add(("TipoProductoId",
+                entity.TipoProductoId.ToString(inv),
+                dto.TipoProductoId.ToString(inv)));
+        if (entity.CapacidadKg != dto.CapacidadKg)
+            cambios.Add(("CapacidadKg",
+                entity.CapacidadKg?.ToString(inv),
+                dto.CapacidadKg?.ToString(inv)));
+        if (!string.Equals(entity.UnidadVenta, dto.UnidadVenta, StringComparison.Ordinal))
+            cambios.Add(("UnidadVenta", entity.UnidadVenta, dto.UnidadVenta));
+        if (entity.PrecioActual != dto.PrecioActual)
+            cambios.Add(("PrecioActual",
+                entity.PrecioActual.ToString(inv),
+                dto.PrecioActual.ToString(inv)));
+        if (entity.ManejaGarrafaIndividual != dto.ManejaGarrafaIndividual)
+            cambios.Add(("ManejaGarrafaIndividual",
+                entity.ManejaGarrafaIndividual ? "true" : "false",
+                dto.ManejaGarrafaIndividual ? "true" : "false"));
 
         return cambios;
     }

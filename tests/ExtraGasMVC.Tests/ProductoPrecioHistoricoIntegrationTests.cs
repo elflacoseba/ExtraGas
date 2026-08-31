@@ -233,7 +233,11 @@ public class ProductoPrecioHistoricoIntegrationTests
             // (cache de GetTiposProductoAsync). MemoryCache fresh por test.
             var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
                 new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
-            var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache);
+            // Issue #147 slice 2: IAuditLogger agregado al ctor. Comparte
+            // el mismo DbContext para que las filas de audit commit junto
+            // con la mutación del producto (atomicidad transaccional).
+            var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance);
+            var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache, audit);
 
             // Update con cambio de precio 1000 → 1500 + motivo.
             var dto = new UpdateProductoDto

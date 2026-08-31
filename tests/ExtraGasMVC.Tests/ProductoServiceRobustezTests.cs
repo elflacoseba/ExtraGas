@@ -46,7 +46,9 @@ public class ProductoServiceRobustezTests
         // (la clave de cache es constante).
         var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
             new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
-        var service = new ProductoService(context, mapper, logger, cache);
+        // Issue #147 slice 2: IAuditLogger agregado al ctor.
+        var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance);
+        var service = new ProductoService(context, mapper, logger, cache, audit);
 
         // Sembrar el catálogo de tipos_producto para que las validaciones FK
         // que ya pasan el Helper (CreateAsync con TipoProductoId=1) no tiren
