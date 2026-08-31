@@ -1,4 +1,5 @@
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Models.ViewModels;
 
 namespace ExtraGasMVC.Services.Interfaces;
 
@@ -11,9 +12,23 @@ public interface IProductoService
     Task<IEnumerable<ProductoDto>> GetByTipoAsync(ulong tipoProductoId, CancellationToken ct = default);
     Task<IEnumerable<TipoProductoDto>> GetTiposProductoAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// Listado paginado server-side (Issue #146.5). Reemplaza el patrón
+    /// <c>GetAllAsync + LINQ-to-Objects</c> que cargaba toda la tabla en
+    /// memoria y rompía con catálogos grandes. El WHERE se traduce a SQL
+    /// (incluye <c>OnlyActivos</c> y la búsqueda por código/nombre/desc) y el
+    /// conteo se hace con <c>SELECT COUNT(*)</c> separado.
+    /// </summary>
+    Task<PagedResult<ProductoDto>> GetPagedAsync(
+        string? busqueda,
+        bool soloActivos,
+        int page,
+        int pageSize,
+        CancellationToken ct = default);
+
     Task<ProductoDto> CreateAsync(CreateProductoDto producto, ulong? usuarioId, CancellationToken ct = default);
     Task<ProductoDto> UpdateAsync(UpdateProductoDto producto, ulong? usuarioId, CancellationToken ct = default);
-    Task<bool> DeleteAsync(ulong id, CancellationToken ct = default);
+    Task<bool> DeleteAsync(ulong id, ulong? usuarioId = null, CancellationToken ct = default);
 
     /// <summary>
     /// Reactiva un producto soft-deleted. Issue #145 Slice 2: inversa de

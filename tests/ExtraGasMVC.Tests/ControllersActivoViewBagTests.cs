@@ -326,7 +326,7 @@ public class ControllersActivoViewBagTests
         public Task<IEnumerable<TipoProductoDto>> GetTiposProductoAsync(CancellationToken ct = default) => Task.FromResult<IEnumerable<TipoProductoDto>>(new List<TipoProductoDto>());
         public Task<ProductoDto> CreateAsync(CreateProductoDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ProductoDto> UpdateAsync(UpdateProductoDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<bool> DeleteAsync(ulong id, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<bool> DeleteAsync(ulong id, ulong? updatedBy, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> RestoreAsync(ulong id, ulong? updatedBy, CancellationToken ct = default)
         {
             RestoreLlamadas++;
@@ -334,6 +334,7 @@ public class ControllersActivoViewBagTests
             RestoreUltimoUpdatedBy = updatedBy;
             return Task.FromResult(RestoreReturns);
         }
+        public Task<PagedResult<ProductoDto>> GetPagedAsync(string? busqueda, bool soloActivos, int page, int pageSize, CancellationToken ct = default) => throw new NotImplementedException();
     }
 
     private sealed class FakeGarrafaService : IGarrafaService

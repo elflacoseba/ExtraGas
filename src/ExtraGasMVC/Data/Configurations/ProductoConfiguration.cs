@@ -72,6 +72,25 @@ public class ProductoConfiguration : IEntityTypeConfiguration<Producto>
             .HasColumnName("deleted_at")
             .HasColumnType("datetime");
 
+        // Issue #146.4: concurrencia optimista via RowVersion. Pomelo no
+        // implementa IsRowVersion() para MySQL (no existe el tipo nativo
+        // rowversion), pero IsConcurrencyToken() logra lo mismo: EF agrega
+        // el RowVersion al WHERE del UPDATE y si 0 filas son afectadas
+        // lanza DbUpdateConcurrencyException. El trigger BEFORE UPDATE
+        // (ver db/migrations/..._add_productos_row_version.sql) se
+        // encarga de incrementar el RowVersion en cada UPDATE.
+        //
+        // Importante: NO usamos .IsRequired(). En BD la columna es NOT NULL
+        // con DEFAULT 0x00, pero en EF la property es `byte[]?` para
+        // tolerar INSERTs sin RowVersion seteado. InMemoryDatabase no
+        // simula defaults de BD y tiraría Required properties missing en
+        // cada Test de integración si fueramos a required acá.
+        builder.Property(p => p.RowVersion)
+            .HasColumnName("row_version")
+            .HasColumnType("binary(8)")
+            .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 })
+            .IsConcurrencyToken();
+
         builder.HasOne(p => p.TipoProducto)
             .WithMany()
             .HasForeignKey(p => p.TipoProductoId)

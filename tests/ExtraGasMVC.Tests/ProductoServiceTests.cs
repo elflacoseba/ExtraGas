@@ -31,14 +31,42 @@ public class ProductoServiceTests
         // Issue #145 Slice 2: ILogger<ProductoService> requerido para trazabilidad
         // de operaciones de escritura (RestoreAsync). Los tests existentes no
         // asertan sobre el log; usamos NullLogger.
-        return (new ProductoService(context, mapper, NullLogger<ProductoService>.Instance), context);
+        var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance);
+
+        // Issue #146.1: el Service valida FK TipoProductoId antes de
+        // SaveChanges. Los tests pre-existentes asumían un DbContext
+        // vacío y seteaban TipoProductoId=1; sembramos acá para mantener
+        // el escenario sin obligar a cada test a duplicar el setup.
+        if (!context.TiposProducto.Any())
+        {
+            context.TiposProducto.Add(new TipoProducto
+            {
+                Id = 1,
+                Codigo = "GAS",
+                Nombre = "Gas",
+            });
+            context.SaveChanges();
+            context.ChangeTracker.Clear();
+        }
+
+        return (service, context);
     }
 
     private static CreateProductoDto NewCreateDto(string codigo = "GAS-10") => new()
     {
         Codigo = codigo,
         Nombre = "Garrafa 10kg",
+        // Issue #146.1: pre-check FK TipoProductoId en el Service. Los
+        // tests pre-existentes usaban Id=1; el helper queda parametrizable
+        // por si un test futuro necesita otro Id. El caller debe invocar
+        // SeedTipoProducto antes (los tests que usan NewCreateDto directo
+        // lo agregan al cuerpo).
         TipoProductoId = 1,
+        // Issue #146.3: el Service ahora exige capacidad_kg > 0 cuando
+        // ManejaGarrafaIndividual=true. Los tests pre-existentes settaban
+        // el flag sin capacidad; seteamos 10m para mantener el escenario
+        // "producto GARRAFA estándar" y seguir cubriendo los asserts.
+        CapacidadKg = 10m,
         UnidadVenta = "UNIDAD",
         PrecioActual = 15000m,
         ManejaGarrafaIndividual = true,
@@ -277,6 +305,20 @@ public class ProductoServiceTests
         var logger = new TestLogger<ProductoService>();
         var service = new ProductoService(context, mapper, logger);
 
+        // Issue #146.1: el Service valida FK TipoProductoId antes de
+        // SaveChanges. Sembramos el catálogo para que el helper NewCreateDto
+        // (que setea TipoProductoId=1) pueda ejecutar sin tirar
+        // ValidationException — queremos probar el log del histórico, no la
+        // validación de FK.
+        context.TiposProducto.Add(new TipoProducto
+        {
+            Id = 1,
+            Codigo = "GAS",
+            Nombre = "Gas",
+        });
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+
         var creado = await service.CreateAsync(NewCreateDto(), usuarioId: 1);
         var dto = NewUpdateDto(creado, 18000m);
         dto.MotivoCambioPrecio = "Ajuste";
@@ -286,7 +328,9 @@ public class ProductoServiceTests
         logger.Entries.Should().ContainSingle(
             e => e.Level == LogLevel.Information && e.Message.Contains("cambió de precio"),
             "el hook debe emitir un Information cuando registra histórico");
-        logger.Entries.Single().Message.Should().Contain("18000").And.Contain("Ajuste");
+        var entryPrecio = logger.Entries.Single(
+            e => e.Level == LogLevel.Information && e.Message.Contains("cambió de precio"));
+        entryPrecio.Message.Should().Contain("18000").And.Contain("Ajuste");
     }
 
     [Fact]

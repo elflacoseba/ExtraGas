@@ -921,10 +921,22 @@ public class PedidoCanjeMySqlFixture : IAsyncLifetime
             created_by BIGINT UNSIGNED NULL,
             updated_by BIGINT UNSIGNED NULL,
             deleted_at DATETIME NULL,
+            -- Issue #146.4: concurrencia optimista via row_version.
+            -- BINARY(8) NOT NULL DEFAULT 0x0000000000000000 + el trigger
+            -- trg_productos_bu_rowversion que asigna RANDOM_BYTES(8) en
+            -- cada UPDATE. Mismo DDL que la migración real
+            -- 20260831_000001_add_productos_row_version.sql.
+            row_version BINARY(8) NOT NULL DEFAULT 0x0000000000000000,
             CONSTRAINT fk_productos_tipo FOREIGN KEY (tipo_producto_id) REFERENCES tipos_producto(id),
             UNIQUE KEY uq_productos_codigo (codigo),
             KEY idx_productos_deleted_at (deleted_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        DROP TRIGGER IF EXISTS trg_productos_bu_rowversion;
+        CREATE TRIGGER trg_productos_bu_rowversion
+        BEFORE UPDATE ON productos
+        FOR EACH ROW
+            SET NEW.row_version = RANDOM_BYTES(8);
 
         -- Pedidos
         CREATE TABLE pedidos (
