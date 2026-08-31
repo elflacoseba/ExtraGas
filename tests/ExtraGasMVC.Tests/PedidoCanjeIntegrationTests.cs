@@ -986,6 +986,11 @@ public class PedidoCanjeMySqlFixture : IAsyncLifetime
             precio_unitario DECIMAL(12,2) NOT NULL,
             subtotal DECIMAL(12,2) GENERATED ALWAYS AS (cantidad * precio_unitario) STORED,
             observaciones VARCHAR(255) NULL,
+            -- Issue #17: soft-delete per AGENTS.md convention #6. EF ahora
+            -- mapea `PedidoItem.DeletedAt` y aplica HasQueryFilter sobre
+            -- esta columna. Los tests existentes no soft-deletean items,
+            -- así que el filtro no afecta sus aserciones.
+            deleted_at DATETIME NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             CONSTRAINT fk_pedido_items_pedido FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE,
@@ -993,7 +998,8 @@ public class PedidoCanjeMySqlFixture : IAsyncLifetime
             CONSTRAINT chk_pedido_items_cantidad CHECK (cantidad > 0),
             CONSTRAINT chk_pedido_items_precio CHECK (precio_unitario >= 0),
             KEY idx_pedido_items_pedido (pedido_id),
-            KEY idx_pedido_items_producto (producto_id)
+            KEY idx_pedido_items_producto (producto_id),
+            KEY idx_pedido_items_deleted_at (deleted_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
         -- Garrafas y movimientos
