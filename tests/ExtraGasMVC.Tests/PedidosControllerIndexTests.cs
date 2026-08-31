@@ -181,6 +181,7 @@ public class PedidosControllerIndexTests
         public Task<bool> RestoreAsync(ulong id, ulong? usuarioId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> CambiarEstadoAsync(ulong id, ulong nuevoEstadoId, string? motivoCancelacion, ulong? usuarioId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<List<EstadoPedidoDto>> GetTransicionesDisponiblesAsync(ulong pedidoId, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IEnumerable<PedidoEstadoHistoricoDto>> GetHistorialEstadosAsync(ulong pedidoId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<PedidoItemDto> AddItemAsync(CreatePedidoItemDto item, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<PedidoItemDto> UpdateItemAsync(UpdatePedidoItemDto item, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> RemoveItemAsync(ulong itemId, CancellationToken ct = default) => throw new NotImplementedException();

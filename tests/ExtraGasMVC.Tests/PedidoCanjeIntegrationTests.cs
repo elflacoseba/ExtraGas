@@ -1002,6 +1002,27 @@ public class PedidoCanjeMySqlFixture : IAsyncLifetime
             KEY idx_pedido_items_deleted_at (deleted_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+        -- Issue #165: histórico append-only de cambios de estado. Réplica
+        -- mínima del DDL de la migración 20260831_000002_create_pedido_estados_historico.sql.
+        -- PedidoService.RegistrarCanjePedidoAsync y CambiarEstadoAsync insertan
+        -- aquí; sin esta tabla, los tests de canje happy-path fallan con
+        -- "Table doesn't exist" en SaveChanges. Los FKs apuntan a pedidos y
+        -- estados_pedido que ya existen en este punto.
+        CREATE TABLE pedido_estados_historico (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            pedido_id BIGINT UNSIGNED NOT NULL,
+            estado_anterior_id BIGINT UNSIGNED NULL,
+            estado_nuevo_id BIGINT UNSIGNED NOT NULL,
+            motivo_cancelacion VARCHAR(500) NULL,
+            usuario_id BIGINT UNSIGNED NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT fk_peh_pedido FOREIGN KEY (pedido_id) REFERENCES pedidos(id),
+            CONSTRAINT fk_peh_estado_anterior FOREIGN KEY (estado_anterior_id) REFERENCES estados_pedido(id),
+            CONSTRAINT fk_peh_estado_nuevo FOREIGN KEY (estado_nuevo_id) REFERENCES estados_pedido(id),
+            CONSTRAINT fk_peh_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+            KEY idx_peh_pedido_created (pedido_id, created_at DESC)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
         -- Garrafas y movimientos
         CREATE TABLE garrafas (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

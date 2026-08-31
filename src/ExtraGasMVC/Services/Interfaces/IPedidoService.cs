@@ -31,6 +31,21 @@ public interface IPedidoService
     Task<bool> CambiarEstadoAsync(ulong id, ulong nuevoEstadoId, string? motivoCancelacion, ulong? usuarioId, CancellationToken ct = default);
     Task<List<EstadoPedidoDto>> GetTransicionesDisponiblesAsync(ulong pedidoId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Devuelve el historial append-only de cambios de estado del pedido
+    /// (issue #165), ordenado del más reciente al más antiguo. Cada fila
+    /// incluye los nombres legibles del estado anterior/nuevo y del
+    /// usuario que disparó la transición, para alimentar la timeline de
+    /// <c>Pedidos/Details.cshtml</c> y el endpoint
+    /// <c>/Pedidos/{id}/historial-estados</c>.
+    /// </summary>
+    /// <remarks>
+    /// El índice <c>idx_peh_pedido_created (pedido_id, created_at DESC)</c>
+    /// cubre exactamente esta query. Si el pedido no existe o no tiene
+    /// transiciones registradas, devuelve enumerable vacío.
+    /// </remarks>
+    Task<IEnumerable<PedidoEstadoHistoricoDto>> GetHistorialEstadosAsync(ulong pedidoId, CancellationToken ct = default);
+
     Task<PedidoItemDto> AddItemAsync(CreatePedidoItemDto item, CancellationToken ct = default);
     Task<PedidoItemDto> UpdateItemAsync(UpdatePedidoItemDto item, CancellationToken ct = default);
     Task<bool> RemoveItemAsync(ulong itemId, CancellationToken ct = default);

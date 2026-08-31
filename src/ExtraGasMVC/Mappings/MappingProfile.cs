@@ -23,6 +23,30 @@ public class MappingProfile : Profile
         ConfigureProvincia();
         ConfigureEmpleado();
         ConfigureVSaldoCliente();
+        ConfigurePedidoEstadoHistorico();
+    }
+
+    // Issue #165: histórico append-only de cambios de estado de pedidos.
+    // Mapea los nombres legibles de los estados (anterior/nuevo) y del
+    // usuario para alimentar la timeline en Details.cshtml y el endpoint
+    // /Pedidos/{id}/historial-estados.
+    private void ConfigurePedidoEstadoHistorico()
+    {
+        CreateMap<PedidoEstadoHistorico, PedidoEstadoHistoricoDto>()
+            .ForMember(d => d.EstadoAnteriorCodigo, o => o.MapFrom(s =>
+                s.EstadoAnterior != null ? s.EstadoAnterior.Codigo : null))
+            .ForMember(d => d.EstadoAnteriorNombre, o => o.MapFrom(s =>
+                s.EstadoAnterior != null ? s.EstadoAnterior.Nombre : null))
+            .ForMember(d => d.EstadoAnteriorColor, o => o.MapFrom(s =>
+                s.EstadoAnterior != null ? s.EstadoAnterior.Color : null))
+            .ForMember(d => d.EstadoNuevoCodigo, o => o.MapFrom(s =>
+                s.EstadoNuevo != null ? s.EstadoNuevo.Codigo : string.Empty))
+            .ForMember(d => d.EstadoNuevoNombre, o => o.MapFrom(s =>
+                s.EstadoNuevo != null ? s.EstadoNuevo.Nombre : string.Empty))
+            .ForMember(d => d.EstadoNuevoColor, o => o.MapFrom(s =>
+                s.EstadoNuevo != null ? s.EstadoNuevo.Color : null))
+            .ForMember(d => d.UsuarioNombre, o => o.MapFrom(s =>
+                s.Usuario != null ? s.Usuario.Username : null));
     }
 
     // Issue #109: mapping de la vista v_saldo_clientes para evitar N+1 en
