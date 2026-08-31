@@ -288,9 +288,13 @@ public class ProductoService : IProductoService
             // ValidationException (mismo canal que las validaciones de
             // las brechas 1-3) para que el Controller renderice un
             // mensaje claro en lugar de un 500 genérico.
+            var codigoLog = (producto.Codigo ?? "<sin código>")
+                .Replace("\r", " ")
+                .Replace("\n", " ");
+
             _logger.LogWarning(ex,
                 "Producto {ProductoId} ({Codigo}) — conflicto de concurrencia al actualizar por {UsuarioId}",
-                producto.Id, producto.Codigo, usuarioId);
+                producto.Id, codigoLog, usuarioId);
             throw new ValidationException(
                 $"El producto {producto.Codigo} fue modificado por otro operador mientras editabas. " +
                 "Recargá la página y volvé a intentar.");
