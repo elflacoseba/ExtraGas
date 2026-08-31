@@ -52,6 +52,28 @@ public class ProductoServiceTests
         return (service, context);
     }
 
+    /// <summary>
+    /// Helper que siembra un Usuario con username único (issue #147 item 4:
+    /// LoadAuditUsersAsync resuelve las FKs de CreatedBy/UpdatedBy a usernames
+    /// legibles). Devuelve el Id del usuario sembrado.
+    /// </summary>
+    private static ulong SeedUsuario(ExtraGasDbContext context, string username)
+    {
+        var usuario = new Usuario
+        {
+            Id = (ulong)(context.Usuarios.Count() + 1) * 10,
+            Username = username,
+            PasswordHash = "test-hash",
+            RolId = 1,
+            Activo = true,
+            DebeCambiarPassword = false,
+        };
+        context.Usuarios.Add(usuario);
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+        return usuario.Id;
+    }
+
     private static CreateProductoDto NewCreateDto(string codigo = "GAS-10") => new()
     {
         Codigo = codigo,
@@ -448,5 +470,89 @@ public class ProductoServiceTests
         resultado.Total.Should().Be(1,
             "la búsqueda normalizada debe matchear el producto persistido");
         resultado.Items.Should().ContainSingle().Which.Codigo.Should().Be("GAS-10");
+    }
+
+    // ====================================================================
+    // Issue #147 item 4: auditoría visible en Details/Edit.
+    // GetByIdAsync resuelve los usernames de CreatedBy/UpdatedBy via
+    // LoadAuditUsersAsync + AplicarAudit. Los timestamps los mapea
+    // AutoMapper por convención desde la entity.
+    // ====================================================================
+
+    [Fact]
+    public async Task GetByIdAsync_PopulatesAuditFields_WithResolvingUsernames()
+    {
+        // Spec scenario "ProductoDto populates 4 audit fields":
+        // sembramos 2 usuarios (creador y modificador), creamos un producto
+        // con uno, lo editamos con el otro, y verificamos que el DTO
+        // expone los 4 miembros con los usernames resueltos.
+        var (service, context) = NewService(nameof(GetByIdAsync_PopulatesAuditFields_WithResolvingUsernames));
+        var creadorId = SeedUsuario(context, "creador");
+        var modificadorId = SeedUsuario(context, "modificador");
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: creadorId);
+
+        // Re-edit con un usuario distinto para que UpdatedBy != CreatedBy.
+        var updateDto = new UpdateProductoDto
+        {
+            Id = creado.Id,
+            Codigo = creado.Codigo,
+            Nombre = creado.Nombre + " v2",
+            TipoProductoId = creado.TipoProductoId,
+            CapacidadKg = creado.CapacidadKg,
+            UnidadVenta = creado.UnidadVenta,
+            PrecioActual = creado.PrecioActual,
+            ManejaGarrafaIndividual = creado.ManejaGarrafaIndividual,
+        };
+        await service.UpdateAsync(updateDto, usuarioId: modificadorId);
+
+        var dto = await service.GetByIdAsync(creado.Id);
+
+        dto.Should().NotBeNull();
+        dto!.CreatedAt.Should().Be(creado.CreatedAt,
+            "CreatedAt del entity se mapea por convención desde Producto.CreatedAt");
+        dto.UpdatedAt.Should().BeAfter(creado.CreatedAt,
+            "UpdatedAt del entity se mapea por convención y debe ser posterior al Create");
+        dto.CreatedByUserName.Should().Be("creador",
+            "LoadAuditUsersAsync resuelve CreatedBy FK → username");
+        dto.UpdatedByUserName.Should().Be("modificador",
+            "LoadAuditUsersAsync resuelve UpdatedBy FK → username");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_AuditFields_NullWhenUsuarioNoExiste()
+    {
+        // Defensa: si el FK apunta a un usuario que fue hard-deleted (no
+        // debería pasar, pero el FK NO es restrict en BD para auditoría),
+        // el DTO debe devolver null en lugar de tirar. LoadAuditUsersAsync
+        // usa IgnoreQueryFilters() para incluir soft-deleted, pero no
+        // puede incluir hard-deleted — el TryGetValue devuelve false y
+        // el username queda null.
+        var (service, context) = NewService(nameof(GetByIdAsync_AuditFields_NullWhenUsuarioNoExiste));
+        var dto = NewCreateDto();
+        var entity = new Producto
+        {
+            Codigo = dto.Codigo,
+            Nombre = dto.Nombre,
+            TipoProductoId = dto.TipoProductoId,
+            CapacidadKg = dto.CapacidadKg,
+            UnidadVenta = dto.UnidadVenta,
+            PrecioActual = dto.PrecioActual,
+            ManejaGarrafaIndividual = dto.ManejaGarrafaIndividual,
+            Activo = true,
+            CreatedAt = DateTime.UtcNow.AddDays(-1),
+            UpdatedAt = DateTime.UtcNow.AddDays(-1),
+            CreatedBy = 999_999UL, // FK que NO existe
+            UpdatedBy = 999_998UL, // FK que NO existe
+        };
+        context.Productos.Add(entity);
+        await context.SaveChangesAsync();
+
+        var result = await service.GetByIdAsync(entity.Id);
+
+        result.Should().NotBeNull();
+        result!.CreatedByUserName.Should().BeNull(
+            "CreatedBy FK sin usuario → username null (no excepción)");
+        result.UpdatedByUserName.Should().BeNull(
+            "UpdatedBy FK sin usuario → username null (no excepción)");
     }
 }

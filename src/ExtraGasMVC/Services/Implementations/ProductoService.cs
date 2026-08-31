@@ -36,7 +36,16 @@ public class ProductoService : IProductoService
             .Include(p => p.TipoProducto)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
-        return producto is null ? null : _mapper.Map<ProductoDto>(producto);
+        if (producto is null) return null;
+
+        var dto = _mapper.Map<ProductoDto>(producto);
+        // Issue #147 item 4: auditoría visible en Details. El MappingProfile
+        // deja CreatedByUserName/UpdatedByUserName en null (.Ignore()) y el
+        // Service los resuelve explícitamente. Mismo patrón que
+        // UsuarioService.LoadAuditUsersAsync (líneas 570-587).
+        var auditUsers = await LoadAuditUsersAsync(new[] { producto }, ct);
+        AplicarAudit(dto, producto, auditUsers);
+        return dto;
     }
 
     public async Task<ProductoDto?> GetByCodigoAsync(string codigo, CancellationToken ct = default)
@@ -511,5 +520,48 @@ public class ProductoService : IProductoService
             cambios.Add($"ManejaGarrafaIndividual: {entity.ManejaGarrafaIndividual} → {dto.ManejaGarrafaIndividual}");
 
         return cambios;
+    }
+
+    /// <summary>
+    /// Recolecta los IDs de CreatedBy/UpdatedBy de los productos y devuelve
+    /// un diccionario Id → Username para resolver auditores en una sola query.
+    /// Issue #147 item 4: replica <see cref="UsuarioService.LoadAuditUsersAsync"/>
+    /// (líneas 570-587) — los usernames NO viven en Producto, son FKs a
+    /// usuarios. Devuelve diccionario vacío si no hay IDs para evitar la
+    /// query.
+    /// </summary>
+    private async Task<Dictionary<ulong, string>> LoadAuditUsersAsync(
+        IEnumerable<Producto> productos, CancellationToken ct)
+    {
+        var auditUserIds = new HashSet<ulong>();
+        foreach (var producto in productos)
+        {
+            if (producto.CreatedBy.HasValue) auditUserIds.Add(producto.CreatedBy.Value);
+            if (producto.UpdatedBy.HasValue) auditUserIds.Add(producto.UpdatedBy.Value);
+        }
+
+        if (auditUserIds.Count == 0) return new Dictionary<ulong, string>();
+
+        return await _context.Usuarios
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(u => auditUserIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Username, ct);
+    }
+
+    /// <summary>
+    /// Copia el username del auditor (CreatedBy / UpdatedBy) en el DTO si
+    /// el auditor existe. Sin excepción si el auditor fue soft-deleted —
+    /// el Diccionario simplemente no tiene la entrada y los campos quedan
+    /// en null, que es la representación correcta (auditor desconocido).
+    /// </summary>
+    private static void AplicarAudit(
+        ProductoDto dto, Producto entity, Dictionary<ulong, string> auditUsers)
+    {
+        if (entity.CreatedBy.HasValue && auditUsers.TryGetValue(entity.CreatedBy.Value, out var creador))
+            dto.CreatedByUserName = creador;
+
+        if (entity.UpdatedBy.HasValue && auditUsers.TryGetValue(entity.UpdatedBy.Value, out var actualizador))
+            dto.UpdatedByUserName = actualizador;
     }
 }
