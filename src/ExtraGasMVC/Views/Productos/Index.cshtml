@@ -1,4 +1,4 @@
-@model IEnumerable<ExtraGasMVC.DTOs.ProductoDto>
+@model ExtraGasMVC.Models.ViewModels.PagedResult<ExtraGasMVC.DTOs.ProductoDto>
 @{
     ViewData["Title"] = "Productos";
     var busqueda = ViewBag.Busqueda as string;
@@ -14,7 +14,7 @@
 <div class="card">
     <div class="card-header">
         <form method="get" class="row g-2 align-items-end">
-            <div class="col-md-6">
+            <div class="col-md-5">
                 <label for="filtroBusqueda" class="form-label small mb-1">Buscar</label>
                 <input type="text" id="filtroBusqueda" name="busqueda" value="@busqueda" class="form-control" placeholder="Nombre, código o descripción" />
             </div>
@@ -25,7 +25,19 @@
                     <label class="form-check-label" for="soloActivos">Solo activos</label>
                 </div>
             </div>
-            <div class="col-md-4 d-flex gap-2">
+            <div class="col-md-2">
+                <label for="pageSizeSelect" class="form-label small mb-1">Por página</label>
+                <select id="pageSizeSelect" name="pageSize" class="form-select">
+                    @{
+                        var sizes = new[] { 10, 25, 50, 100 };
+                    }
+                    @foreach (var s in sizes)
+                    {
+                        <option value="@s" selected="@(Model.PageSize == s)">@s</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
                 <button type="submit" class="btn btn-primary flex-fill"><i class="bi bi-search me-1"></i> Buscar</button>
                 <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise"></i></a>
             </div>
@@ -47,11 +59,11 @@
                 </tr>
             </thead>
             <tbody>
-                @if (!Model.Any())
+                @if (!Model.Items.Any())
                 {
                     <tr><td colspan="9" class="text-center py-4 text-secondary">No hay productos.</td></tr>
                 }
-                @foreach (var p in Model)
+                @foreach (var p in Model.Items)
                 {
                     <tr>
                         <td><code>@p.Codigo</code></td>
@@ -78,11 +90,11 @@
                             @if (p.Activo)
                             {
                                 // Issue #145 Slice 2: solo Activos ven Delete.
-                                // Inactivos (soft-deleted) ven Restaurar.
-                                // Restore es AdminOnly — la policy se enforza en
-                                // el Controller; el boton se muestra a todos los
-                                // usuarios de la tabla pero el POST falla con 403
-                                // si el caller no es Admin.
+                                // Issue #146.6: Delete es AdminOnly — la policy
+                                // se enforza en el Controller; el botón se
+                                // muestra a todos los usuarios de la tabla
+                                // pero el POST falla con 403 si el caller no
+                                // es Admin.
                                 <form asp-action="Delete" asp-route-id="@p.Id" method="post" class="d-inline js-confirm-form" data-name="este producto" data-action="desactivar">
                                     @Html.AntiForgeryToken()
                                     <button type="button" class="btn btn-sm btn-danger" onclick="confirmarAccion(this)"><i class="bi bi-trash"></i></button>
@@ -101,4 +113,61 @@
             </tbody>
         </table>
     </div>
+    @* Issue #146.5: paginación. Mantenemos los filtros del query string al
+       armar los links Anterior/Siguiente, igual que en Garrafas. Sin
+       page-hidden en el form de filtros, si el operador cambia de página y
+       el form reenvía sin page, el controller recibe page=1 (default). *@
+    @if (Model.TotalPages > 1)
+    {
+        <div class="card-footer">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="text-secondary small">
+                    Mostrando @(Model.Items.Count) de @Model.Total resultados — página @Model.Page de @Model.TotalPages
+                </div>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item @(Model.HasPrevious ? "" : "disabled")">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-busqueda="@busqueda"
+                               asp-route-soloActivos="@soloActivos"
+                               asp-route-pageSize="@Model.PageSize"
+                               asp-route-page="@(Model.Page - 1)">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
+                        @for (var p = 1; p <= Model.TotalPages; p++)
+                        {
+                            <li class="page-item @(p == Model.Page ? "active" : "")">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-busqueda="@busqueda"
+                                   asp-route-soloActivos="@soloActivos"
+                                   asp-route-pageSize="@Model.PageSize"
+                                   asp-route-page="@p">@p</a>
+                            </li>
+                        }
+                        <li class="page-item @(Model.HasNext ? "" : "disabled")">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-busqueda="@busqueda"
+                               asp-route-soloActivos="@soloActivos"
+                               asp-route-pageSize="@Model.PageSize"
+                               asp-route-page="@(Model.Page + 1)">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    }
+    else if (Model.Total > 0)
+    {
+        <div class="card-footer">
+            <div class="text-secondary small">
+                Mostrando @Model.Items.Count de @Model.Total resultados
+            </div>
+        </div>
+    }
 </div>

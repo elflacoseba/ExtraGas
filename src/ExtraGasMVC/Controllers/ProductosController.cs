@@ -1,5 +1,6 @@
 using ExtraGasMVC.Constants;
 using ExtraGasMVC.DTOs;
+using ExtraGasMVC.Exceptions;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,21 +17,26 @@ public class ProductosController : BaseController
         _productoService = productoService;
     }
 
-    public async Task<IActionResult> Index(string? busqueda, bool soloActivos = true, CancellationToken ct = default)
+    public async Task<IActionResult> Index(
+        string? busqueda,
+        bool soloActivos = true,
+        int page = 1,
+        int pageSize = 25,
+        CancellationToken ct = default)
     {
-        var productos = await _productoService.GetAllAsync(ct);
-        if (soloActivos) productos = productos.Where(p => p.Activo);
-        if (!string.IsNullOrWhiteSpace(busqueda))
-        {
-            var q = busqueda.Trim();
-            productos = productos.Where(p =>
-                p.Nombre.Contains(q, StringComparison.OrdinalIgnoreCase)
-                || p.Codigo.Contains(q, StringComparison.OrdinalIgnoreCase)
-                || (p.Descripcion ?? string.Empty).Contains(q, StringComparison.OrdinalIgnoreCase));
-        }
+        // Issue #146.5: paginación server-side. Antes este Controller
+        // llamaba GetAllAsync() y filtraba en memoria con LINQ-to-Objects
+        // — escaneaba toda la tabla + cargaba la navegación TipoProducto
+        // para todas las filas. Con catálogos grandes era un riesgo de
+        // performance y consumo de memoria. Ahora el WHERE y el Skip/Take
+        // se traducen a SQL; el resultado usa PagedResult<T> que ya
+        // existe en el repo (reusado por GarrafaService y otros).
+        var resultado = await _productoService.GetPagedAsync(
+            busqueda, soloActivos, page, pageSize, ct);
+
         ViewBag.Busqueda = busqueda;
         ViewBag.SoloActivos = soloActivos;
-        return View(productos.OrderBy(p => p.Nombre).ToList());
+        return View(resultado);
     }
 
     public async Task<IActionResult> Details(ulong id, CancellationToken ct = default)
@@ -62,6 +68,17 @@ public class ProductosController : BaseController
             await _productoService.CreateAsync(producto, GetCurrentUserId(), ct);
             TempData["Success"] = $"Producto {producto.Nombre} creado.";
             return RedirectToAction(nameof(Index));
+        }
+        catch (ValidationException ex)
+        {
+            // Issue #146.1, .2, .3: errores de validación de negocio que
+            // el Service rechaza ANTES de tocar la BD. El mensaje ya viene
+            // legible del Service ("Ya existe un producto con el código
+            // 'GAS-10'."); lo agregamos a ModelState para que el form
+            // muestre el error arriba y el operador entienda qué corregir.
+            ModelState.AddModelError(string.Empty, ex.Message);
+            await LoadViewBagsAsync(ct);
+            return View(producto);
         }
         catch (Exception ex)
         {
@@ -114,6 +131,15 @@ public class ProductosController : BaseController
             TempData["Success"] = $"Producto {producto.Nombre} actualizado.";
             return RedirectToAction(nameof(Index));
         }
+        catch (ValidationException ex)
+        {
+            // Issue #146.1, .2, .3, .4: validaciones de negocio y race
+            // conditions de concurrencia llegan por este canal (el Service
+            // traduce DbUpdateConcurrencyException → ValidationException).
+            ModelState.AddModelError(string.Empty, ex.Message);
+            await LoadViewBagsAsync(ct);
+            return View(producto);
+        }
         catch (Exception ex)
         {
             ModelState.AddModelError(string.Empty, $"No se pudo actualizar el producto: {ex.Message}");
@@ -122,7 +148,14 @@ public class ProductosController : BaseController
         }
     }
 
+    // Issue #146.6: AdminOnly override del class-level OperadorOrAdmin.
+    // Desactivar un producto es una operación privilegiada — un operador
+    // podría borrar del catálogo el GAS-10 por error y dejar la app
+    // inutilizable hasta que un DBA reactive (ver issue crítico sobre
+    // RestoreAsync). Mismo patrón que el Restore existente (PR #145 Slice
+    // 2). Consolida los dos puntos del ABM que requieren rol ADMIN.
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(ulong id, CancellationToken ct = default)
     {
@@ -131,17 +164,17 @@ public class ProductosController : BaseController
         // Activo fuera editable. Con el fix, el soft-delete se delega al
         // Service (DeleteAsync), que setea DeletedAt + Activo=false en una
         // sola operación consistente con el resto de los módulos.
-        var ok = await _productoService.DeleteAsync(id, ct);
+        var ok = await _productoService.DeleteAsync(id, GetCurrentUserId(), ct);
         TempData[ok ? "Success" : "Error"] = ok
             ? "Producto desactivado correctamente."
             : "No se encontró el producto.";
         return RedirectToAction(nameof(Index));
     }
 
-    // Issue #145 Slice 2: AdminOnly override del class-level OperadorOrAdmin.
-    // Restaurar un producto es una operación privilegiada — cualquier operador
-    // podria revertir un delete accidental y volver a exponer un producto
-    // desactivado a propósito. Mismo patrón que AuditoriaLoginsController.
+    // Issue #145 Slice 2 + #146.6: AdminOnly override del class-level
+    // OperadorOrAdmin. Restaurar un producto es una operación privilegiada
+    // — cualquier operador podria revertir un delete accidental y volver a
+    // exponer un producto desactivado a propósito.
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
     [ValidateAntiForgeryToken]
