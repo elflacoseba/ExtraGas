@@ -360,17 +360,10 @@ public class PedidoService : IPedidoService
 
     public async Task<PedidoItemDto> AddItemAsync(CreatePedidoItemDto item, CancellationToken ct = default)
     {
-        // Business rule: only PENDIENTE orders can have items added
-        var pedido = await _context.Pedidos.FindAsync(new object[] { item.PedidoId }, ct);
-        if (pedido is null)
-            throw new KeyNotFoundException($"Pedido con Id {item.PedidoId} no encontrado.");
-
-        var estadoPedido = await _context.EstadosPedido
-            .AsNoTracking()
-            .FirstOrDefaultAsync(e => e.Id == pedido.EstadoPedidoId, ct);
-
-        if (estadoPedido is not null && estadoPedido.Codigo != PedidoEstados.Pendiente)
-            throw new InvalidOperationException($"No se pueden agregar items en estado {estadoPedido.Nombre}. Solo se permite en estado Pendiente.");
+        // Issue #164: validación de estado extraída al helper compartido
+        // EnsurePedidoEditableForItemsAsync. Garantiza que solo se muten
+        // items en pedidos PENDIENTE (mismo contrato que Update/Remove).
+        await EnsurePedidoEditableForItemsAsync(item.PedidoId, "agregar", ct);
 
         var tipoLinea = ParseTipoLinea(item.TipoLinea);
 
@@ -402,7 +395,7 @@ public class PedidoService : IPedidoService
         {
             _context.PedidoItems.Add(entity);
             await _context.SaveChangesAsync(ct);
-            await RecalculateTotalsAsync(pedido.Id, ct);
+            await RecalculateTotalsAsync(item.PedidoId, ct);
             await transaction.CommitAsync(ct);
         }
         catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
@@ -427,6 +420,15 @@ public class PedidoService : IPedidoService
         if (entity == null)
             throw new KeyNotFoundException($"Item con Id {item.Id} no encontrado.");
 
+        // Issue #164: bloquear mutaciones de items en cualquier estado que no
+        // sea PENDIENTE. La UI bloquea los inputs por estado, pero el endpoint
+        // HTTP no enforce nada, así que esta validación es la única defensa
+        // del lado del service. Garantiza además que RecalculateTotalsAsync
+        // abajo no pise el Total de un pedido cerrado (ENTREGADO/CANCELADO),
+        // manteniendo consistencia con el monto_pagado que mantiene el
+        // trigger de pagos.
+        await EnsurePedidoEditableForItemsAsync(entity.PedidoId, "modificar", ct);
+
         _mapper.Map(item, entity);
         entity.TipoLinea = ParseTipoLinea(item.TipoLinea);
         entity.UpdatedAt = DateTime.UtcNow;
@@ -448,17 +450,14 @@ public class PedidoService : IPedidoService
         if (item == null)
             return false;
 
-        // Business rule: only PENDIENTE orders can have items removed
-        var pedido = await _context.Pedidos.FindAsync(new object[] { item.PedidoId }, ct);
-        if (pedido is not null)
-        {
-            var estadoPedido = await _context.EstadosPedido
-                .AsNoTracking()
-                .FirstOrDefaultAsync(e => e.Id == pedido.EstadoPedidoId, ct);
-
-            if (estadoPedido is not null && estadoPedido.Codigo != PedidoEstados.Pendiente)
-                throw new InvalidOperationException($"No se pueden eliminar items en estado {estadoPedido.Nombre}. Solo se permite en estado Pendiente.");
-        }
+        // Issue #164: validación de estado extraída al helper compartido.
+        // Antes validaba inline con `if (pedido is not null)` y NO fallaba
+        // cuando el pedido había sido borrado — alineado ahora con
+        // AddItemAsync, que sí lanza KeyNotFoundException si el pedido no
+        // existe. Defensa en profundidad: un RemoveItemAsync sobre un item
+        // huérfano (pedido borrado) es un estado inconsistente que debe
+        // rechazarse, no procesarse silenciosamente.
+        await EnsurePedidoEditableForItemsAsync(item.PedidoId, "eliminar", ct);
 
         var pedidoId = item.PedidoId;
 
@@ -1017,6 +1016,60 @@ public class PedidoService : IPedidoService
     #endregion
 
     #region Private Helpers
+
+    /// <summary>
+    /// Issue #164: helper compartido por <see cref="AddItemAsync"/>,
+    /// <see cref="UpdateItemAsync"/> y <see cref="RemoveItemAsync"/>.
+    /// Garantiza que el pedido esté en estado PENDIENTE antes de cualquier
+    /// mutación de items — la UI bloquea los inputs por estado, pero el
+    /// endpoint HTTP no enforce nada, así que esta validación es la única
+    /// defensa del lado del service.
+    /// <para>
+    /// Reemplaza tres bloques inline idénticos (uno por método) que
+    /// repetían la misma consulta + el mismo mensaje de error. Centralizar
+    /// además elimina la inconsistencia previa: <c>AddItemAsync</c> y
+    /// <c>RemoveItemAsync</c> validaban, <c>UpdateItemAsync</c> no. Un
+    /// POST directo al endpoint UpdateItem podía modificar cantidad /
+    /// precio / tipo de línea de items en pedidos ENTREGADO o CANCELADO,
+    /// e incluso pisar el <c>Total</c> vía <see cref="RecalculateTotalsAsync"/>.
+    /// </para>
+    /// </summary>
+    /// <param name="pedidoId">Id del pedido a validar.</param>
+    /// <param name="accionPasado">
+    /// Verbo en pasado para el mensaje de error. Ej: "agregar", "modificar",
+    /// "eliminar". Produce mensajes como:
+    /// "No se pueden modificar items en estado Confirmado. Solo se permite
+    /// en estado Pendiente." (mismo formato que el mensaje histórico).
+    /// </param>
+    /// <exception cref="KeyNotFoundException">
+    /// Si el pedido no existe. <see cref="AddItemAsync"/> ya lo hacía;
+    /// <see cref="RemoveItemAsync"/> antes NO fallaba en este caso — ahora
+    /// se unifica el comportamiento en favor de defensa en profundidad (un
+    /// Remove sobre un item huérfano es estado inconsistente, no algo a
+    /// procesar silenciosamente).
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// Si el pedido existe pero su estado no es PENDIENTE. La excepción se
+    /// lanza solo si el estado se encontró en el catálogo
+    /// <c>estados_pedido</c>; si el catálogo está corrupto (estadoId
+    /// huérfano) se omite la validación para no bloquear operaciones
+    /// legítimas con un mensaje confuso.
+    /// </exception>
+    private async Task EnsurePedidoEditableForItemsAsync(
+        ulong pedidoId, string accionPasado, CancellationToken ct)
+    {
+        var pedido = await _context.Pedidos.FindAsync(new object[] { pedidoId }, ct);
+        if (pedido is null)
+            throw new KeyNotFoundException($"Pedido con Id {pedidoId} no encontrado.");
+
+        var estadoPedido = await _context.EstadosPedido
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == pedido.EstadoPedidoId, ct);
+
+        if (estadoPedido is not null && estadoPedido.Codigo != PedidoEstados.Pendiente)
+            throw new InvalidOperationException(
+                $"No se pueden {accionPasado} items en estado {estadoPedido.Nombre}. Solo se permite en estado Pendiente.");
+    }
 
     /// <summary>
     /// Common include chain for Pedido queries. Reduces duplication across query methods.
