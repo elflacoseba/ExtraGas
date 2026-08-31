@@ -58,6 +58,16 @@ public class PedidoItemConfiguration : IEntityTypeConfiguration<PedidoItem>
             .ValueGeneratedOnAddOrUpdate()
             .HasDefaultValueSql("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
 
+        // Issue #17: soft-delete per AGENTS.md convention #6. La columna
+        // existe en BD desde la migración 20260607_000003. HasQueryFilter
+        // oculta DeletedAt != null de las queries por defecto (mismo patrón
+        // que Pedido, Cliente, Producto, etc.). El índice acelera los lookups
+        // que pasan por IgnoreQueryFilters() y mantiene simetría con el resto
+        // del modelo.
+        builder.Property(pi => pi.DeletedAt)
+            .HasColumnName("deleted_at")
+            .HasColumnType("datetime");
+
         builder.HasOne(pi => pi.Pedido)
             .WithMany(p => p.Items)
             .HasForeignKey(pi => pi.PedidoId)
@@ -71,12 +81,22 @@ public class PedidoItemConfiguration : IEntityTypeConfiguration<PedidoItem>
             .HasConstraintName("fk_pedido_items_producto");
 
         // Unique constraint: one item per (pedido, producto, tipo_linea) among active items.
-        // MySQL partial index workaround: we use a filter on DeletedAt == null.
-        // Note: MySQL 9.6 does not support filtered unique indexes natively,
-        // so the constraint enforcement is handled in PedidoService.AddItemAsync
-        // with a defensive check + DbUpdateException catch for duplicate key violations.
+        // MySQL partial index workaround: la BD genera una columna virtual
+        // <c>unique_hash</c> que concatena
+        // (pedido_id, producto_id, tipo_linea, COALESCE(deleted_at, '0')) y
+        // tiene un UNIQUE INDEX. Cuando un item se soft-deletea su hash
+        // cambia, así que se puede re-agregar el mismo (pedido, producto,
+        // tipo_linea) sin violar la constraint. La enforcement defensiva
+        // (chequeo + catch de DbUpdateException 1062) sigue viviendo en
+        // PedidoService.AddItemAsync por si la BD y el EF se desincronizan.
         builder.HasIndex(pi => pi.PedidoId).HasDatabaseName("idx_pedido_items_pedido");
         builder.HasIndex(pi => pi.ProductoId).HasDatabaseName("idx_pedido_items_producto");
         builder.HasIndex(pi => pi.TipoLinea).HasDatabaseName("idx_pedido_items_tipo");
+        builder.HasIndex(pi => pi.DeletedAt).HasDatabaseName("idx_pedido_items_deleted_at");
+
+        // Issue #17: soft-delete query filter. Sin esto la BD no soft-deleta
+        // realmente — los registros borrados volverían a aparecer en
+        // GetItemsByPedidoAsync, RecalculateTotalsAsync y LoadItemsParaCanjeAsync.
+        builder.HasQueryFilter(pi => pi.DeletedAt == null);
     }
 }

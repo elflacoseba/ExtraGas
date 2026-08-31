@@ -402,7 +402,7 @@ public class PedidoService : IPedidoService
         {
             _context.PedidoItems.Add(entity);
             await _context.SaveChangesAsync(ct);
-            await RecalculateTotalsInternalAsync(pedido.Id, ct);
+            await RecalculateTotalsAsync(pedido.Id, ct);
             await transaction.CommitAsync(ct);
         }
         catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
@@ -462,14 +462,23 @@ public class PedidoService : IPedidoService
 
         var pedidoId = item.PedidoId;
 
-        // Hard-delete: pedido_items se borran físicamente al eliminar del detalle
-        _context.PedidoItems.Remove(item);
+        // Issue #17: soft-delete per AGENTS.md convention #6. Antes este método
+        // hacía hard-delete (_context.PedidoItems.Remove), lo cual perdía el
+        // historial de qué productos tuvo un pedido. Ahora se setea
+        // DeletedAt y el HasQueryFilter de PedidoItemConfiguration oculta la
+        // fila de las queries por defecto (GetItemsByPedidoAsync,
+        // RecalculateTotalsAsync, LoadItemsParaCanjeAsync, etc.). El
+        // unique_hash generado en BD (migración 20260607_000003) cambia al
+        // setear DeletedAt, así que el operador puede re-agregar el mismo
+        // (producto, tipo_linea) sin chocar con la constraint única.
+        item.DeletedAt = DateTime.UtcNow;
+        item.UpdatedAt = DateTime.UtcNow;
 
         using var transaction = await _context.Database.BeginTransactionAsync(ct);
         try
         {
             await _context.SaveChangesAsync(ct);
-            await RecalculateTotalsInternalAsync(pedidoId, ct);
+            await RecalculateTotalsAsync(pedidoId, ct);
             await transaction.CommitAsync(ct);
         }
         catch
@@ -1034,6 +1043,18 @@ public class PedidoService : IPedidoService
     /// In the canje model, ENTREGA and VENTA serve the same financial purpose (charge).
     /// If the business rule changes, this method must be updated accordingly.
     /// </para>
+    /// <para>
+    /// Issue #17: la query aplica el <c>HasQueryFilter</c> de
+    /// <c>PedidoItemConfiguration</c>, así que los items soft-deleted quedan
+    /// fuera del cálculo. Antes del fix #17, además, este método no llamaba
+    /// <c>SaveChangesAsync</c> cuando se invocaba desde dentro de una
+    /// transacción (<c>AddItemAsync</c> / <c>RemoveItemAsync</c>), así que el
+    /// subtotal quedaba desactualizado en BD hasta el próximo
+    /// <c>UpdateAsync</c>. El <c>SaveChangesAsync</c> participa en la
+    /// transacción ambiente si existe, así que es seguro llamarlo tanto
+    /// standalone (vía <c>UpdateAsync</c>) como dentro de una transacción
+    /// abierta por el caller.
+    /// </para>
     /// </summary>
     private async Task RecalculateTotalsAsync(ulong pedidoId, CancellationToken ct = default)
     {
@@ -1051,25 +1072,6 @@ public class PedidoService : IPedidoService
         pedido.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(ct);
-    }
-
-    /// <summary>
-    /// Same as RecalculateTotalsAsync but for use within an existing transaction.
-    /// Does not create its own SaveChangesAsync — the caller manages the transaction.
-    /// </summary>
-    private async Task RecalculateTotalsInternalAsync(ulong pedidoId, CancellationToken ct = default)
-    {
-        var items = await _context.PedidoItems
-            .Where(i => i.PedidoId == pedidoId)
-            .ToListAsync(ct);
-
-        var subtotal = CalculateSubtotal(items);
-        var pedido = await _context.Pedidos.FindAsync(new object[] { pedidoId }, ct);
-        if (pedido == null) return;
-
-        pedido.Subtotal = subtotal;
-        pedido.Total = subtotal - (subtotal * pedido.Descuento / 100m);
-        pedido.UpdatedAt = DateTime.UtcNow;
     }
 
     /// <summary>
