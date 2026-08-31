@@ -1,6 +1,10 @@
-@model IEnumerable<ExtraGasMVC.DTOs.PedidoDto>
+@model ExtraGasMVC.Models.ViewModels.PagedResult<ExtraGasMVC.DTOs.PedidoDto>
 @{
     ViewData["Title"] = "Pedidos pendientes de cobro";
+    var pagina = Model.Page;
+    var tamanio = Model.PageSize;
+    var total = Model.Total;
+    var totalPaginas = Model.TotalPages;
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
     {
         new() { Label = "Pedidos", Controller = "Pedidos", Action = "Index" },
@@ -34,11 +38,11 @@
                 </tr>
             </thead>
             <tbody>
-                @if (!Model.Any())
+                @if (!Model.Items.Any())
                 {
                     <tr><td colspan="7" class="text-center py-4 text-secondary">No hay pedidos pendientes de cobro. ¡Bien!</td></tr>
                 }
-                @foreach (var p in Model)
+                @foreach (var p in Model.Items)
                 {
                     <tr>
                         <td><a asp-action="Details" asp-route-id="@p.Id" class="text-decoration-none"><strong>@(p.Numero ?? "-")</strong></a></td>
@@ -59,5 +63,26 @@
                 }
             </tbody>
         </table>
+    </div>
+    @* Issue #166: paginación con el mismo patrón que Pedidos/Index.cshtml.
+        card-footer con pagination-sm + contador de items. *@
+    <div class="card-footer clearfix">
+        @if (totalPaginas > 1)
+        {
+            <nav>
+                <ul class="pagination pagination-sm m-0 float-end">
+                    @for (var i = 1; i <= totalPaginas; i++)
+                    {
+                        <li class="page-item @(i == pagina ? "active" : "")">
+                            <a class="page-link"
+                               asp-action="Pendientes"
+                               asp-route-pagina="@i"
+                               asp-route-tamanio="@tamanio">@i</a>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        }
+        <small class="text-secondary">@total pedido@(total == 1 ? "" : "s") pendiente@(total == 1 ? "" : "s")</small>
     </div>
 </div>

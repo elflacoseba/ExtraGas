@@ -442,7 +442,7 @@ public class PedidosControllerCommandTests
         public Task<IEnumerable<PedidoDto>> GetAllAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task<PagedResult<PedidoDto>> GetByClienteAsync(ulong clienteId, int pagina, int tamanio, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<PagedResult<PedidoDto>> GetByEstadoAsync(ulong estadoId, int pagina, int tamanio, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IEnumerable<PedidoDto>> GetPendientesAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<PagedResult<PedidoDto>> GetPendientesAsync(int pagina = 1, int tamanio = 25, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IEnumerable<PedidoItemDto>> GetItemsByPedidoAsync(ulong pedidoId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<PedidoDto> CreateAsync(CreatePedidoDto pedido, ulong? usuarioId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<PedidoDto> UpdateAsync(UpdatePedidoDto pedido, ulong? usuarioId, CancellationToken ct = default) => throw new NotImplementedException();

@@ -177,15 +177,42 @@ public class PedidoService : IPedidoService
         };
     }
 
-    public async Task<IEnumerable<PedidoDto>> GetPendientesAsync(CancellationToken ct = default)
+    public async Task<PagedResult<PedidoDto>> GetPendientesAsync(
+        int pagina = 1, int tamanio = 25, CancellationToken ct = default)
     {
-        var pedidos = await GetWithIncludes()
+        // Issue #166: normalización defensiva idéntica al patrón de
+        // GarrafaService.GetPagedAsync. pagina/tamanio llegan del query
+        // string del Controller, no son confiables.
+        if (pagina < 1) pagina = 1;
+        if (tamanio < 1) tamanio = 25;
+        if (tamanio > 100) tamanio = 100;
+
+        var query = GetWithIncludes()
             .AsNoTracking()
-            .Where(p => p.Saldo > 0)
+            .Where(p => p.Saldo > 0);
+
+        // CountAsync ANTES del Skip/Take — traduce a SELECT COUNT(*) sobre
+        // el WHERE aplicado (no carga filas). Mantiene el contrato de
+        // PagedResult.Total que la vista usa para renderizar la paginación.
+        var total = await query.CountAsync(ct);
+
+        // Orden ASC por Fecha: la cobranza prioriza los más viejos. El índice
+        // compuesto (cliente_id, fecha) NO ayuda acá porque filtramos por
+        // saldo (no por cliente), pero el filtro Saldo > 0 sí aprovecha
+        // idx_pedidos_saldo si existe, sino queda full scan acotado.
+        var pedidos = await query
             .OrderBy(p => p.Fecha)
+            .Skip((pagina - 1) * tamanio)
+            .Take(tamanio)
             .ToListAsync(ct);
 
-        return _mapper.Map<IEnumerable<PedidoDto>>(pedidos);
+        return new PagedResult<PedidoDto>
+        {
+            Items = _mapper.Map<List<PedidoDto>>(pedidos),
+            Total = total,
+            Page = pagina,
+            PageSize = tamanio
+        };
     }
 
     public async Task<IEnumerable<PedidoItemDto>> GetItemsByPedidoAsync(ulong pedidoId, CancellationToken ct = default)

@@ -12,16 +12,21 @@ public interface IPedidoService
     Task<PagedResult<PedidoDto>> GetByEstadoAsync(ulong estadoId, int pagina, int tamanio, CancellationToken ct = default);
 
     /// <summary>
-    /// Returns pedidos with saldo pendiente (saldo &gt; 0). Used by the dashboard
-    /// dropdown in <c>PagosController</c> and the <c>Pendientes</c> view.
+    /// Devuelve los pedidos con saldo pendiente (<c>saldo &gt; 0</c>), ordenados
+    /// del más viejo al más nuevo (la cobranza prioriza antigüedad). Alimenta
+    /// la vista <c>Pedidos/Pendientes</c> y el dropdown de selección de pedido
+    /// en <c>PagosController.LoadViewBagsAsync</c>.
     /// <para>
-    /// Not paginated by design — the dataset is bounded by pedidos with debt,
-    /// which is small in practice. If this grows large, add pagination
-    /// parameters and return a <see cref="PagedResult{T}"/> like
-    /// <see cref="SearchAsync"/> does.
+    /// Issue #166: paginado para que la vista escale cuando crezca la cantidad
+    /// de pedidos con deuda. La normalización de <paramref name="pagina"/> y
+    /// <paramref name="tamanio"/> es defensiva — ambos vienen del query string
+    /// y no son confiables. Se devuelven siempre los más viejos primero
+    /// (<c>OrderBy(p =&gt; p.Fecha)</c>) para que la cobranza vea primero
+    /// la deuda más antigua.
     /// </para>
     /// </summary>
-    Task<IEnumerable<PedidoDto>> GetPendientesAsync(CancellationToken ct = default);
+    Task<PagedResult<PedidoDto>> GetPendientesAsync(
+        int pagina = 1, int tamanio = 25, CancellationToken ct = default);
     Task<IEnumerable<PedidoItemDto>> GetItemsByPedidoAsync(ulong pedidoId, CancellationToken ct = default);
 
     Task<PedidoDto> CreateAsync(CreatePedidoDto pedido, ulong? usuarioId, CancellationToken ct = default);

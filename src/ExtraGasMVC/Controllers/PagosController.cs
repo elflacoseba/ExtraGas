@@ -30,7 +30,13 @@ public class PagosController : Controller
 
     private async Task LoadViewBagsAsync(CancellationToken ct = default)
     {
-        ViewBag.Pedidos = await _pedidoService.GetPendientesAsync(ct);
+        // Issue #166: GetPendientesAsync ahora devuelve PagedResult<PedidoDto>.
+        // El dropdown de Pagos/Create y Pagos/Edit solo necesita la lista
+        // plana (IEnumerable), así que proyectamos .Items para no propagar
+        // el cambio de tipo a las vistas (siguen casteando
+        // ViewBag.Pedidos as IEnumerable<PedidoDto>).
+        var pendientes = await _pedidoService.GetPendientesAsync(ct: ct);
+        ViewBag.Pedidos = pendientes.Items;
         ViewBag.Clientes = await _clienteService.GetActivosAsync(ct);
         ViewBag.FormasPago = await _context.FormasPago.AsNoTracking().ToListAsync(ct);
     }
