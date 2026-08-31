@@ -34,6 +34,11 @@ public class ExtraGasDbContext : DbContext
     public DbSet<Producto> Productos => Set<Producto>();
     public DbSet<ProductoPrecioHistorico> ProductoPreciosHistorico => Set<ProductoPrecioHistorico>();
 
+    // ============== Auditoría genérica (issue #147 slice 2) ==============
+    // Tabla append-only alimentada por IAuditLogger. NO tiene FK a la entidad
+    // auditada ni a usuarios — el log debe sobrevivir bajas de ambos.
+    public DbSet<AuditLogEntry> AuditLog => Set<AuditLogEntry>();
+
     // ============== Pedidos y pagos ==============
     public DbSet<Pedido> Pedidos => Set<Pedido>();
     public DbSet<PedidoItem> PedidoItems => Set<PedidoItem>();

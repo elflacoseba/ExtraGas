@@ -233,7 +233,11 @@ public class ProductoPrecioHistoricoIntegrationTests
             // (cache de GetTiposProductoAsync). MemoryCache fresh por test.
             var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
                 new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
-            var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache);
+            // Issue #147 slice 2: IAuditLogger agregado al ctor. Comparte
+            // el mismo DbContext para que las filas de audit commit junto
+            // con la mutación del producto (atomicidad transaccional).
+            var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance);
+            var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache, audit);
 
             // Update con cambio de precio 1000 → 1500 + motivo.
             var dto = new UpdateProductoDto
@@ -547,5 +551,26 @@ public class ProductoPrecioHistoricoMySqlFixture : IAsyncLifetime
         -- apuntan a usuarios(id) y productos(id); sembramos solo lo mínimo.
         INSERT IGNORE INTO tipos_producto (id, codigo, nombre) VALUES (1, 'GAS', 'Gas');
         INSERT IGNORE INTO usuarios (id, username, password_hash, rol_id) VALUES (1, 'system', 'noop', 1);
+
+        -- Issue #147 slice 2: ProductoService.UpdateAsync ahora emite
+        -- filas a audit_log en el mismo SaveChangesAsync que la mutación
+        -- del producto. Si la tabla no existe, el SaveChanges revienta
+        -- y estos tests focused de producto_precios_historico se rompen
+        -- con un error colateral. Creamos la tabla mínima con el shape
+        -- de la migración 20260901_000001_create_audit_log.sql para
+        -- que la atomicidad no nos sabotee el path bajo prueba.
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            entidad         VARCHAR(50)     NOT NULL,
+            registro_id     BIGINT UNSIGNED NOT NULL,
+            campo           VARCHAR(100)    NOT NULL,
+            valor_anterior  TEXT            NULL,
+            valor_nuevo     TEXT            NULL,
+            user_id         BIGINT UNSIGNED NULL,
+            changed_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_audit_entidad_registro (entidad, registro_id, changed_at),
+            KEY idx_audit_changed_at (changed_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """;
 }

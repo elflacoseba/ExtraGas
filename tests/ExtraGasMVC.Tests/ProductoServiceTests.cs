@@ -4,6 +4,7 @@ using ExtraGasMVC.Data.Entities;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Mappings;
 using ExtraGasMVC.Services.Implementations;
+using ExtraGasMVC.Services.Interfaces;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -36,7 +37,12 @@ public class ProductoServiceTests
         // de cache es constante; sin esto los tests interfieren entre sí).
         var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
             new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
-        var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache);
+        // Issue #147 slice 2: IAuditLogger requerido para UpdateAsync (cambio
+        // de constructor). La mayoría de los tests pre-existentes no observan
+        // audit; pasamos uno fresco contra el mismo DbContext para que
+        // cualquier SaveChangesAsync commit eventual si lo necesita.
+        var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance);
+        var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache, audit);
 
         // Issue #146.1: el Service valida FK TipoProductoId antes de
         // SaveChanges. Los tests pre-existentes asumían un DbContext
@@ -334,7 +340,9 @@ public class ProductoServiceTests
         // MemoryCache fresh por test — la cache key es constante.
         var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
             new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
-        var service = new ProductoService(context, mapper, logger, cache);
+        // Issue #147 slice 2: IAuditLogger agregado al ctor.
+        var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance);
+        var service = new ProductoService(context, mapper, logger, cache, audit);
 
         // Issue #146.1: el Service valida FK TipoProductoId antes de
         // SaveChanges. Sembramos el catálogo para que el helper NewCreateDto
@@ -763,7 +771,9 @@ public class ProductoServiceTests
         var mapper = mapperConfig.CreateMapper();
         var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
             new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
-        var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache);
+        // Issue #147 slice 2: IAuditLogger agregado al ctor.
+        var audit = new AuditLogger(context, NullLogger<AuditLogger>.Instance);
+        var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache, audit);
 
         // Seed inicial: 2 tipos visibles para el Service.
         context.TiposProducto.AddRange(
