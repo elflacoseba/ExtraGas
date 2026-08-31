@@ -150,9 +150,14 @@ public class ProductoService : IProductoService
                 ChangedBy = usuarioId,
                 ChangedAt = DateTime.UtcNow,
             });
+
+            var motivoCambioPrecioLog = (producto.MotivoCambioPrecio ?? "<sin motivo>")
+                .Replace("\r", " ")
+                .Replace("\n", " ");
+
             _logger.LogInformation(
                 "Producto {ProductoId} cambió de precio: {PrecioAnterior} → {PrecioNuevo} (motivo: {Motivo}, operador: {ChangedBy})",
-                entity.Id, precioAnterior, precioNuevo, producto.MotivoCambioPrecio ?? "<sin motivo>", usuarioId);
+                entity.Id, precioAnterior, precioNuevo, motivoCambioPrecioLog, usuarioId);
         }
 
         await _context.SaveChangesAsync(ct);
