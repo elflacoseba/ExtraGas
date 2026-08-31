@@ -1,3 +1,4 @@
+using ExtraGasMVC.Constants;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -133,6 +134,23 @@ public class ProductosController : BaseController
         var ok = await _productoService.DeleteAsync(id, ct);
         TempData[ok ? "Success" : "Error"] = ok
             ? "Producto desactivado correctamente."
+            : "No se encontró el producto.";
+        return RedirectToAction(nameof(Index));
+    }
+
+    // Issue #145 Slice 2: AdminOnly override del class-level OperadorOrAdmin.
+    // Restaurar un producto es una operación privilegiada — cualquier operador
+    // podria revertir un delete accidental y volver a exponer un producto
+    // desactivado a propósito. Mismo patrón que AuditoriaLoginsController.
+    [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Restore(ulong id, CancellationToken ct = default)
+    {
+        var currentUserId = GetCurrentUserId();
+        var ok = await _productoService.RestoreAsync(id, currentUserId, ct);
+        TempData[ok ? TempDataKeys.Success : TempDataKeys.Error] = ok
+            ? "Producto reactivado correctamente."
             : "No se encontró el producto.";
         return RedirectToAction(nameof(Index));
     }

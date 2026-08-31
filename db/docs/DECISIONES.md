@@ -336,6 +336,62 @@ Documento de decisiones (ADR-style) y supuestos del sistema **ExtraGas**.
 
 ---
 
+## 18. Histórico append-only de precios de productos
+
+**Contexto:** `ProductoService.UpdateAsync` sobrescribía `productos.precio_actual` sin dejar trazabilidad de los cambios. Sin histórico, no se podía responder "¿a qué precio le vendimos la garrafa de 10kg al cliente X en marzo?" — el campo congelado en `pedido_items.precio_unitario` sobrevive, pero los cambios intermedios del precio de lista se perdían. Issue #145 (Slices 1 y 3).
+
+**Decisión:** crear tabla `producto_precios_historico` append-only, escrita exclusivamente desde un hook en `ProductoService.UpdateAsync`. Schema (`db/migrations/20260830_000001_producto_precios_historico.sql`):
+
+- Columnas: `id`, `producto_id` (FK RESTRICT a `productos`), `precio_anterior`, `precio_nuevo`, `motivo_cambio_precio` (VARCHAR(255) NULL), `changed_by` (FK RESTRICT a `usuarios.id`, NULL permitido), `changed_at` (default CURRENT_TIMESTAMP).
+- Sin `updated_at`, sin `deleted_at` — append-only. Borrar un cambio de precio sería reescribir la historia.
+- Índice `(producto_id, changed_at DESC)` para queries de auditoría del estilo "último cambio de precio del producto X" o "todos los cambios en orden cronológico".
+- FKs `RESTRICT` (no CASCADE) — no se puede borrar un producto ni un usuario que tengan cambios registrados. Si un día hay que desvincular, se hace explícitamente, no por side-effect.
+
+El hook en `ProductoService.UpdateAsync` (líneas 137-156) corre dentro del mismo `SaveChangesAsync` que el update del producto, garantizando atomicidad: si falla el UPDATE del producto, no queda fila huérfana en el histórico. La guarda `precioAnterior != 0 && precioAnterior != nuevo` evita phantom rows en el primer update sobre un producto recién creado con precio=0 (caso seed manual / backfill).
+
+**Por qué:**
+
+- La trazabilidad de precios es obligatoria para defender la postura ante ARCA en caso de auditoría. "El sistema no recuerda por qué subimos el precio" es una respuesta inaceptable.
+- El patrón append-only es el mismo que usa el sistema para `movimientos_garrafa` (ADR #2 lo menciona implícitamente). Consistencia interna: las tablas de auditoría NO se actualizan ni borran, solo se les agrega filas.
+- FKs RESTRICT refuerzan la inmutabilidad: nadie puede borrar el producto o el usuario sin antes decidir qué pasa con su histórico. Esto convierte cambios destructivos en operaciones conscientes.
+- El default `CURRENT_TIMESTAMP` en `changed_at` evita "missing timestamps" — el hook también lo setea explícitamente en C# (`DateTime.UtcNow`) como defensa contra el desfase entre el `DateTime.UtcNow` de la app y el del servidor MySQL.
+
+**Implicancia:**
+
+- Cualquier futuro campo a trackear (ej. cambio de nombre del producto) sigue el mismo patrón: nueva tabla `_historico` append-only, FK RESTRICT al padre, hook atómico en el Service.
+- El `MotivoCambioPrecio` es metadata libre (string hasta 255 chars). No se valida que no esté vacío cuando hay cambio — el operador puede dejarlo en blanco y el sistema lo registra igual. Esto es por diseño (el spec lo define opcional, ver `design.md` Open Questions #1).
+- El log de ILogger (`LogInformation` con productoId + precios + motivo + operador) es duplicación deliberada: si la tabla falla por algún motivo, queda el rastro en el log de la app. Patrón de "auditoría redundante".
+- Si el sistema crece y aparece la necesidad de revertir un cambio de precio, eso NO se hace borrando una fila del histórico. Se hace con un nuevo INSERT en `producto_precios_historico` con `motivo_cambio_precio = "Reversión de ID=X"` y emitiendo la corrección en `producto.precio_actual`. La historia sigue siendo verdadera: el precio fue X, después fue Y, después volvió a X.
+
+---
+
+## 19. Invariante "producto.Activo ⇒ visible en dropdowns de Pedidos y Recepciones"
+
+**Contexto:** al confirmar un pedido (path canje o VENTA-only) o al registrar una recepción, los dropdowns de selección de producto mostraban TODOS los productos del catálogo, incluyendo los desactivados (`Activo=false`, `DeletedAt=null`) y los soft-deleted. Si el operador abría el formulario, el admin desactivaba el producto en otra ventana, y el operador confirmaba el pedido con ese producto desactivado, el sistema aceptaba la transacción y quedaba con FKs apuntando a productos inactivos — corrompiendo el inventario y rompiendo la invariante "producto listado = producto seleccionable". Issue #145 (Slice 4).
+
+**Decisión:** los dropdowns de Pedidos (Create/Edit) y Recepciones (Create/Edit) filtran `productos.Activo = true` en el SQL. El Service valida **doble** al confirmar:
+
+1. `RecepcionService.LoadProductosByIdAsync` (línea 109-115) agrega `&& p.Activo` a la query que arma el diccionario de productos del dto. Si un producto desactivado llega al submit (por race entre carga del form y submit), no aparece en el dictionary → `ValidarItemsPreCommitAsync` lo detecta con el mensaje "el producto {id} no existe o está inactivo".
+2. `PedidoService.ValidarProductosActivosAsync` (líneas 607-640) corre **antes** de abrir transacción en `RegistrarCanjePedidoAsync`. Usa `IgnoreQueryFilters()` para detectar tanto `Activo=false` como `DeletedAt!=null` — porque el QueryFilter global ocultaría los soft-deleted, lo cual sería la misma trampa que el bug original. Cubre tanto el path canje (con `codigosPorItem`) como el path VENTA-only (`ConfirmarSinCanjeAsync`), porque se ejecuta antes del fork.
+
+Mensaje de error de PedidoService: `"El producto {nombre} (id={id}) fue desactivado, refrescá el pedido"` — nombra al producto para que el operador sepa qué refrescar del carrito sin tener que adivinar.
+
+**Por qué:**
+
+- Defensa en profundidad: filtrar en los dropdowns es la UX correcta (no muestra productos que no se pueden elegir), pero la validación en el Service es la **única** garantía real. Un admin puede desactivar el producto entre que el operador carga el form y submitea — un dropdown filtrado no protege contra eso. El Service debe revalidar contra la BD al momento de la escritura.
+- La ventana de race es microsegundos en términos de tiempo absoluto pero existe. En la práctica, el escenario es "Admin desactiva producto porque se discontinuó mientras el operador tenía el carrito armado". Admin-tier, no malicious — pero la invariante no debe romperse igual.
+- El nombre del producto en el mensaje (no solo el ID) es UX — el operador tiene el nombre visible en su carrito, no el ID. Si solo diéramos el ID, el operador tendría que cruzar con otra pantalla para entender qué pasa.
+- `IgnoreQueryFilters()` es la ÚNICA forma de detectar el caso soft-deleted desde el lado del pedido. Si proyectara `i.Producto!` directamente, EF aplicaría el `WHERE deleted_at IS NULL` al JOIN y los soft-deleted desaparecerían del set — el bug estaría sin arreglo.
+
+**Implicancia:**
+
+- Cualquier futuro flujo que referencie productos desde un pedido o recepción DEBE llamar a `ValidarProductosActivosAsync` (o equivalente) antes de transicionar estado. Hoy está en `RegistrarCanjePedidoAsync`; si mañana se agrega un flujo tipo "clonar pedido a partir de pedido anterior", ese flujo debe tener la misma guarda antes de clonar items.
+- El bug de PedidoService se cubre SOLO en el path de confirmación (`RegistrarCanjePedidoAsync`). `CreateAsync` (crear pedido nuevo) NO valida — está bien, porque los items se arman después vía `AddItemAsync`, que sí filtra por navegación. El bug solo aparece cuando un pedido en draft pierde su producto, y eso solo se puede gatillar entre `AddItemAsync` y `RegistrarCanjePedidoAsync`.
+- El bug de RecepcionService estaba en el filtro del dictionary, no en la validación final (`ValidarItemsPreCommitAsync` ya rechazaba productos faltantes — el problema era que el dictionary los incluía por error). El fix es más quirúrgico: una sola línea de SQL.
+- Si en el futuro aparece un caso "producto con flag distinto" (ej. `RequiereAutorizacion`), el patrón a seguir es el mismo: filtrar en dropdowns + revalidar en el Service antes de transicionar estado.
+
+---
+
 ## Supuestos explícitos (no validados con el usuario)
 
 1. No hay delivery con zonas / tarifas distintas. Un pedido = una dirección.

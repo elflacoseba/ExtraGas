@@ -129,7 +129,16 @@ public class MappingProfile : Profile
                 s.TipoProducto != null ? s.TipoProducto.Nombre : null))
             .ReverseMap();
         CreateMap<CreateProductoDto, Producto>();
-        CreateMap<UpdateProductoDto, Producto>();
+        // Issue #145 Slice 3: MotivoCambioPrecio vive en el DTO pero NO tiene
+        // destino en la entity Producto — es metadata de auditoría que el
+        // Service lee y persiste en producto_precios_historico. Usamos
+        // ForSourceMember.DoNotValidate() (no .Ignore()) porque la entity
+        // Producto no tiene la propiedad: .Ignore() requiere que el destino
+        // la exponga. El equivalente funcional al patrón de ConfigureCliente
+        // (issue #118) — bloquear el camino para que nadie agregue el campo
+        // al entity por accidente.
+        CreateMap<UpdateProductoDto, Producto>()
+            .ForSourceMember(s => s.MotivoCambioPrecio, o => o.DoNotValidate());
     }
 
     private void ConfigureTipoProducto()

@@ -106,4 +106,17 @@ public class UpdateProductoDto
     public decimal PrecioActual { get; set; }
 
     public bool ManejaGarrafaIndividual { get; set; }
+
+    /// <summary>
+    /// Motivo del cambio de precio. Solo tiene sentido registrarlo cuando el
+    /// precio cambió (el hook de Slice 3 en <c>ProductoService.UpdateAsync</c>
+    /// ignora este campo si <c>PrecioActual</c> queda igual). Es metadata de
+    /// auditoría — NO se mapea a la entity <c>Producto</c> (MappingProfile
+    /// lo ignora explícitamente) y NO se persiste en <c>productos</c>; vive
+    /// solo en <c>producto_precios_historico</c>.
+    /// Issue #145 Slice 3.
+    /// </summary>
+    [Display(Name = "Motivo del cambio de precio")]
+    [StringLength(255, ErrorMessage = "El motivo no puede superar {1} caracteres.")]
+    public string? MotivoCambioPrecio { get; set; }
 }

@@ -52,8 +52,20 @@
                 </div>
                 <div class="col-md-2">
                     <label asp-for="PrecioActual" class="form-label"></label> <span class="text-danger">*</span>
-                    <input asp-for="PrecioActual" type="number" step="0.01" class="form-control" />
+                    <input asp-for="PrecioActual"
+                           type="number" step="0.01"
+                           class="form-control js-precio-actual-input"
+                           data-precio-original="@Model.PrecioActual.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                     <span asp-validation-for="PrecioActual" class="text-danger small"></span>
+                </div>
+                <div class="col-md-4 js-motivo-cambio-wrapper d-none">
+                    <label asp-for="MotivoCambioPrecio" class="form-label"></label>
+                    <input asp-for="MotivoCambioPrecio"
+                           class="form-control"
+                           maxlength="255"
+                           placeholder="Ej: ajuste por inflación, nuevo proveedor..." />
+                    <span asp-validation-for="MotivoCambioPrecio" class="text-danger small"></span>
+                    <small class="text-secondary">Se registra en el histórico de precios.</small>
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <div class="form-check">
@@ -89,3 +101,32 @@
         </div>
     </form>
 </div>
+@section Scripts {
+<script>
+    // Issue #145 Slice 3: el campo MotivoCambioPrecio aparece solo cuando el
+    // operador modifica el precio. Sin cambios, el Service ignora el motivo
+    // (regla de negocio: solo se registra histórico si hay cambio real). El
+    // patrón data-precio-original en el input guarda el valor del modelo
+    // al renderizar — la comparación es por string normalizado (InvariantCulture
+    // para no pelearse con comas vs puntos).
+    (function () {
+        var input = document.querySelector('.js-precio-actual-input');
+        var wrapper = document.querySelector('.js-motivo-cambio-wrapper');
+        if (!input || !wrapper) return;
+
+        function sync() {
+            var original = (input.getAttribute('data-precio-original') || '').trim();
+            var actual = (input.value || '').trim();
+            if (actual && actual !== original) {
+                wrapper.classList.remove('d-none');
+            } else {
+                wrapper.classList.add('d-none');
+            }
+        }
+
+        input.addEventListener('input', sync);
+        input.addEventListener('change', sync);
+        sync();
+    })();
+</script>
+}

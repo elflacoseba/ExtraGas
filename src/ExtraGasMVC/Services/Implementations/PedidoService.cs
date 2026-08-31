@@ -495,7 +495,16 @@ public class PedidoService : IPedidoService
         // 2) Idempotencia: si ya hay movimientos para este pedido, rechazar.
         await AsegurarNoCanjeadoAsync(pedidoId, ct);
 
-        // 3) Resolver los IDs de los lookups que vamos a usar varias veces.
+        // 3) Issue #145 Slice 4: validar que cada PedidoItem.ProductoId sigue
+        // activo. Cubre el race "producto desactivado entre draft y confirm"
+        // documentado en ADR #19 de db/docs/DECISIONES.md. Falla rápido con
+        // InvalidOperationException nombrando el producto, antes de abrir
+        // transacción. Cubre tanto el path canje (con codigosPorItem) como
+        // el VENTA-only (ConfirmarSinCanjeAsync) porque se ejecuta antes del
+        // fork.
+        await ValidarProductosActivosAsync(pedidoId, ct);
+
+        // 4) Resolver los IDs de los lookups que vamos a usar varias veces.
         var (estadoIdByCodigo, estadoConfirmadoId) =
             await LoadCatalogosParaCanjeAsync(ct);
 
@@ -590,6 +599,52 @@ public class PedidoService : IPedidoService
             throw new InvalidOperationException(
                 "Este pedido ya tiene movimientos de canje registrados. " +
                 "No se puede confirmar dos veces.");
+    }
+
+    /// <summary>
+    /// Issue #145 Slice 4: revalida dentro del flujo de confirmación que cada
+    /// producto de los <c>PedidoItem</c> del pedido sigue
+    /// <c>Activo = true AND DeletedAt = null</c>. Cubre el race "producto
+    /// desactivado entre draft y confirm" documentado en ADR #19 de
+    /// <c>db/docs/DECISIONES.md</c>. Implementación en dos queries (no
+    /// navegación) para esquivar el QueryFilter global de Producto: si
+    /// proyectara la navegación <c>i.Producto!</c>, EF aplicaría el filtro
+    /// <c>DeletedAt IS NULL</c> al JOIN y los soft-deleted desaparecerían
+    /// del WHERE — la misma trampa que el bug original. Extrayendo los IDs
+    /// primero y consultando después con <c>IgnoreQueryFilters()</c>
+    /// detectamos ambos casos (Activo=false OR DeletedAt!=null). Falla
+    /// rápido con un mensaje que nombra al producto para que el operador sepa
+    /// qué refrescar del carrito. Se ejecuta antes de
+    /// <see cref="LoadCatalogosParaCanjeAsync"/> y cubre tanto el path canje
+    /// como el path VENTA-only (<see cref="ConfirmarSinCanjeAsync"/>).
+    /// </summary>
+    private async Task ValidarProductosActivosAsync(ulong pedidoId, CancellationToken ct)
+    {
+        // Query 1: extraer los ProductoId del pedido (sin filtrar — el
+        // pedido ya está validado por LoadPedidoParaCanjeAsync).
+        var productoIds = await _context.PedidoItems
+            .AsNoTracking()
+            .Where(i => i.PedidoId == pedidoId)
+            .Select(i => i.ProductoId)
+            .ToListAsync(ct);
+
+        if (productoIds.Count == 0) return;
+
+        // Query 2: detectar productos desactivados o soft-deleted SIN que el
+        // QueryFilter global los oculte. IgnoreQueryFilters es la única forma
+        // de ver DeletedAt != null acá.
+        var productosInactivos = await _context.Productos
+            .IgnoreQueryFilters()
+            .Where(p => productoIds.Contains(p.Id) && (!p.Activo || p.DeletedAt != null))
+            .Select(p => new { p.Id, p.Nombre })
+            .ToListAsync(ct);
+
+        if (productosInactivos.Count > 0)
+        {
+            var nombres = string.Join(", ", productosInactivos.Select(p => $"{p.Nombre} (id={p.Id})"));
+            throw new InvalidOperationException(
+                $"El producto {nombres} fue desactivado, refrescá el pedido");
+        }
     }
 
     /// <summary>

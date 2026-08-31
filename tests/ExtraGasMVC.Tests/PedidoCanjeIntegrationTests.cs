@@ -698,6 +698,38 @@ public class PedidoCanjeMySqlFixture : IAsyncLifetime
     }
 
     /// <summary>
+    /// Cierra un DbContext abierto por <see cref="NewDbContextAsync"/> y
+    /// elimina su base efímera. Helper para el patrón using en tests que
+    /// necesitan cleanup explícito (vs. el default de
+    /// <see cref="PedidoCanjeIntegrationTests"/> que confía en el container
+    /// dispose al final de la clase).
+    ///
+    /// Issue #145 Slice 4: agregado para los tests de race condition que
+    /// crean múltiples bases por test class y necesitan cleanup por test
+    /// para no acumular basura entre runs.
+    /// </summary>
+    public async Task DropDatabaseAsyncForDbContext(ExtraGasDbContext context)
+    {
+        var dbName = context.Database.GetDbConnection().Database;
+        await context.DisposeAsync();
+        await DropDatabaseAsync(dbName);
+    }
+
+    /// <summary>
+    /// DROP DATABASE IF EXISTS para la base efímera. Réplica del helper en
+    /// <see cref="ProductoPrecioHistoricoMySqlFixture"/>. Usado por
+    /// <see cref="DropDatabaseAsyncForDbContext"/>.
+    /// </summary>
+    public async Task DropDatabaseAsync(string dbName)
+    {
+        await using var conn = new MySqlConnection(_rootConnectionString);
+        await conn.OpenAsync();
+        await using var drop = conn.CreateCommand();
+        drop.CommandText = $"DROP DATABASE IF EXISTS `{dbName}`;";
+        await drop.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
     /// Schema mínimo para que <see cref="PedidoService.RegistrarCanjePedidoAsync"/>
     /// funcione contra MySQL real. Incluye solo las tablas + FKs + el trigger
     /// <c>trg_mov_garrafa_ai</c> que el flujo ejercita (PR #137). Reproduce
@@ -821,6 +853,55 @@ public class PedidoCanjeMySqlFixture : IAsyncLifetime
             ) VIRTUAL,
             UNIQUE KEY idx_clientes_dni_unique (dni_unique),
             KEY idx_clientes_deleted_at (deleted_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        -- Issue #145 Slice 4: usuarios + proveedores. proveedores debe ir
+        -- ANTES de recepciones_proveedor (FK proveedor_id) y el orden de
+        -- creación de tablas en este schema es relevante. usuarios va acá
+        -- para tener un id=1 sembrado que satisfaga FKs empleados.usuario_id
+        -- si algún test los activa.
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(50) NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            email VARCHAR(150) NULL,
+            rol_id BIGINT UNSIGNED NOT NULL,
+            bloqueado_hasta DATETIME NULL,
+            intentos_fallidos INT NOT NULL DEFAULT 0,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_usuarios_username (username)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        CREATE TABLE IF NOT EXISTS proveedores (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            codigo VARCHAR(20) NULL,
+            razon_social VARCHAR(150) NOT NULL,
+            nombre_fantasia VARCHAR(150) NULL,
+            cuit VARCHAR(15) NULL,
+            telefono_principal VARCHAR(25) NULL,
+            telefono_secundario VARCHAR(25) NULL,
+            email VARCHAR(150) NULL,
+            calle VARCHAR(150) NULL,
+            numero VARCHAR(10) NULL,
+            piso VARCHAR(10) NULL,
+            depto VARCHAR(10) NULL,
+            ciudad VARCHAR(100) NULL,
+            codigo_postal VARCHAR(10) NULL,
+            provincia_id BIGINT UNSIGNED NULL,
+            referencias TEXT NULL,
+            observaciones TEXT NULL,
+            contacto_nombre VARCHAR(150) NULL,
+            contacto_telefono VARCHAR(25) NULL,
+            contacto_email VARCHAR(150) NULL,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            created_by BIGINT UNSIGNED NULL,
+            updated_by BIGINT UNSIGNED NULL,
+            deleted_at DATETIME NULL,
+            KEY idx_proveedores_deleted_at (deleted_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
         -- Productos
@@ -952,6 +1033,46 @@ public class PedidoCanjeMySqlFixture : IAsyncLifetime
             KEY idx_mov_garrafa_pedido (pedido_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+        -- Issue #145 Slice 4: recepciones_proveedor + recepcion_items.
+        -- Necesarios para que RecepcionService.CreateAsync complete su
+        -- transacción en el integration test. Réplica mínima de la
+        -- migración 20260102_000005 (las columnas generadas y los FKs que
+        -- el service toca).
+        CREATE TABLE recepciones_proveedor (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            numero VARCHAR(20) NULL,
+            fecha DATETIME NOT NULL,
+            proveedor_id BIGINT UNSIGNED NOT NULL,
+            empleado_id BIGINT UNSIGNED NOT NULL,
+            numero_factura_proveedor VARCHAR(50) NULL,
+            subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
+            descuento DECIMAL(12,2) NOT NULL DEFAULT 0,
+            total DECIMAL(12,2) NOT NULL DEFAULT 0,
+            monto_pagado DECIMAL(12,2) NOT NULL DEFAULT 0,
+            observaciones TEXT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            created_by BIGINT UNSIGNED NULL,
+            updated_by BIGINT UNSIGNED NULL,
+            deleted_at DATETIME NULL,
+            CONSTRAINT fk_recepciones_proveedor FOREIGN KEY (proveedor_id) REFERENCES proveedores(id),
+            CONSTRAINT fk_recepciones_empleado FOREIGN KEY (empleado_id) REFERENCES empleados(id),
+            KEY idx_recepciones_proveedor (proveedor_id, fecha)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        CREATE TABLE recepcion_items (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            recepcion_id BIGINT UNSIGNED NOT NULL,
+            producto_id BIGINT UNSIGNED NOT NULL,
+            cantidad DECIMAL(10,2) NOT NULL,
+            precio_unitario DECIMAL(12,2) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            CONSTRAINT fk_recepcion_items_recepcion FOREIGN KEY (recepcion_id) REFERENCES recepciones_proveedor(id) ON DELETE CASCADE,
+            CONSTRAINT fk_recepcion_items_producto FOREIGN KEY (producto_id) REFERENCES productos(id),
+            KEY idx_recepcion_items_recepcion (recepcion_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
         -- Catálogo sembrado (idempotente gracias a INSERT IGNORE).
         INSERT IGNORE INTO tipos_producto (codigo, nombre) VALUES ('GAS', 'Gas');
         INSERT IGNORE INTO estados_pedido (codigo, nombre, es_final) VALUES
@@ -970,7 +1091,15 @@ public class PedidoCanjeMySqlFixture : IAsyncLifetime
             ('FUERA_SERVICIO', 'Fuera de servicio', FALSE, FALSE);
         INSERT IGNORE INTO tipos_movimiento_garrafa (codigo, nombre) VALUES
             ('ENTREGA_CLIENTE', 'Entrega a cliente'),
-            ('DEVOLUCION_CLIENTE', 'Devolución de cliente');
+            ('DEVOLUCION_CLIENTE', 'Devolución de cliente'),
+            -- Issue #145 Slice 4: COMPRA es el tipo de movimiento que usa
+            -- RecepcionService.LoadCatalogosCompraAsync al registrar una
+            -- recepción de proveedor.
+            ('COMPRA', 'Compra');
+
+        -- Usuario mínimo para que FKs empleados.usuario_id / productos.created_by
+        -- tengan destino si un test los usa. Réplica mínima.
+        INSERT IGNORE INTO usuarios (id, username, password_hash, rol_id) VALUES (1, 'system', 'noop', 1);
 
         -- Trigger crítico: actualiza garrafas.estado_garrafa_id cuando se
         -- inserta un movimiento. Sin este trigger GarrafaService no podría
