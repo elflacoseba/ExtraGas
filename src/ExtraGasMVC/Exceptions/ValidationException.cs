@@ -16,4 +16,12 @@ namespace ExtraGasMVC.Exceptions;
 public class ValidationException : Exception
 {
     public ValidationException(string message) : base(message) { }
+
+    /// <summary>
+    /// Construye la excepción preservando la inner exception. Útil cuando se
+    /// detecta un fallo no-recuperable (ej. <c>DbUpdateConcurrencyException</c>)
+    /// y se quiere traducir a un error de validación sin perder el stack
+    /// trace original en logs. Issue #158 (S2139).
+    /// </summary>
+    public ValidationException(string message, Exception innerException) : base(message, innerException) { }
 }

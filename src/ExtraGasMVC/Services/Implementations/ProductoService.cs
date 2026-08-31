@@ -355,10 +355,13 @@ public class ProductoService : IProductoService
 
             _logger.LogWarning(ex,
                 "Producto {ProductoId} ({Codigo}) — conflicto de concurrencia al actualizar por {UsuarioId}",
-                producto.Id, codigoLog, usuarioId);
+                producto.Id, producto.Codigo, usuarioId);
+            // Issue #158 (S2139): preservamos `ex` como inner exception para
+            // que el stack trace original quede en logs sin perder el mensaje
+            // de negocio que el Controller renderiza al operador.
             throw new ValidationException(
                 $"El producto {producto.Codigo} fue modificado por otro operador mientras editabas. " +
-                "Recargá la página y volvé a intentar.");
+                "Recargá la página y volvé a intentar.", ex);
         }
 
         // Issue #146.7: log de los campos efectivamente cambiados.

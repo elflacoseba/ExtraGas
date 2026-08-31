@@ -423,7 +423,10 @@ public class ClienteService : IClienteService
     internal static InvalidOperationException? MapDuplicateDniException(DbUpdateException ex)
     {
         if (ex.InnerException is MySqlException my && my.Number == 1062)
-            return new InvalidOperationException("El DNI ingresado ya está registrado.");
+            // Issue #158 (S2139): preservamos `ex` como inner exception para
+            // que el stack trace original (errno 1062 + query + contexto EF)
+            // quede en logs sin perder el mensaje de negocio.
+            return new InvalidOperationException("El DNI ingresado ya está registrado.", ex);
         return null;
     }
 
