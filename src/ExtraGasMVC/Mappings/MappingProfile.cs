@@ -124,9 +124,26 @@ public class MappingProfile : Profile
 
     private void ConfigureProducto()
     {
+        // Issue #147 item 4 + regresión #118 (mismo patrón que
+        // ConfigureCliente). El DTO expone 4 miembros de auditoría:
+        //   - CreatedAt, UpdatedAt: mapeo 1:1 desde la entity (timestamps).
+        //     Se declaran explícitos para que un futuro refactor que
+        //     renombre la property en la entity rompa este profile en
+        //     compile-time, no en runtime silencioso.
+        //   - CreatedByUserName, UpdatedByUserName: .Ignore() explícito.
+        //     El Service los resuelve vía LoadAuditUsersAsync +
+        //     AplicarAudit y los asigna después del Map. Sin el Ignore,
+        //     si mañana alguien agrega un `CreatedBy` string al DTO,
+        //     AutoMapper intentaría mapear la FK ulong del entity a
+        //     string y rompería el contrato (o pisaría el username real
+        //     con un "5" de la FK). El Ignore bloquea ese camino.
         CreateMap<Producto, ProductoDto>()
             .ForMember(d => d.TipoProductoNombre, o => o.MapFrom(s =>
                 s.TipoProducto != null ? s.TipoProducto.Nombre : null))
+            .ForMember(d => d.CreatedAt, o => o.MapFrom(s => s.CreatedAt))
+            .ForMember(d => d.UpdatedAt, o => o.MapFrom(s => s.UpdatedAt))
+            .ForMember(d => d.CreatedByUserName, o => o.Ignore())
+            .ForMember(d => d.UpdatedByUserName, o => o.Ignore())
             .ReverseMap();
         CreateMap<CreateProductoDto, Producto>();
         // Issue #145 Slice 3: MotivoCambioPrecio vive en el DTO pero NO tiene

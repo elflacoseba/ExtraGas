@@ -160,4 +160,63 @@ public class StringNormalizerTests
         // descarta el resto, así que sb.Length == 1 == longitudMinima → null.
         StringNormalizer.NormalizarTelefono("+ - . ( )").Should().BeNull();
     }
+
+    // --- TrimAndUpper (issue #147 item 6) ---
+    // Normalización canónica de códigos de producto: trim + upper invariant.
+    // Devuelve string.Empty para null/whitespace (no null) porque el dominio
+    // (Producto.Codigo) es NOT NULL — diverge deliberadamente de
+    // NormalizarDni/NormalizarTelefono que devuelven null.
+
+    [Fact]
+    public void TrimAndUpper_Null_DevuelveEmpty()
+    {
+        StringNormalizer.TrimAndUpper(null).Should().Be(
+            string.Empty,
+            "Codigo es NOT NULL — null debe colapsar a string.Empty");
+    }
+
+    [Fact]
+    public void TrimAndUpper_Vacio_DevuelveEmpty()
+    {
+        StringNormalizer.TrimAndUpper(string.Empty).Should().Be(string.Empty);
+    }
+
+    [Fact]
+    public void TrimAndUpper_Whitespace_DevuelveEmpty()
+    {
+        StringNormalizer.TrimAndUpper("   ").Should().Be(string.Empty);
+    }
+
+    [Fact]
+    public void TrimAndUpper_Minusculas_Uppercase()
+    {
+        StringNormalizer.TrimAndUpper("gas-10").Should().Be("GAS-10");
+    }
+
+    [Fact]
+    public void TrimAndUpper_EspaciosAlrededor_Trim()
+    {
+        StringNormalizer.TrimAndUpper("  gas-10  ").Should().Be("GAS-10");
+    }
+
+    [Fact]
+    public void TrimAndUpper_YaUppercase_NoCambia()
+    {
+        StringNormalizer.TrimAndUpper("GAS-10").Should().Be("GAS-10");
+    }
+
+    [Fact]
+    public void TrimAndUpper_Mixto_TrimYUpper()
+    {
+        // Caso del usuario: " gas-10 " → "GAS-10".
+        StringNormalizer.TrimAndUpper(" gas-10 ").Should().Be("GAS-10");
+    }
+
+    [Fact]
+    public void TrimAndUpper_ConAcentos_NoStrippea_UpperInvariant()
+    {
+        // ToUpperInvariant preserva caracteres no-ASCII — para "café" no
+        // rompe acentos. El spec exige upper, no quitar diacríticos.
+        StringNormalizer.TrimAndUpper("café").Should().Be("CAFÉ");
+    }
 }
