@@ -21,6 +21,16 @@ public class ProductoDto
     public string? TipoProductoNombre { get; set; }
     public decimal? CapacidadKg { get; set; }
     public string UnidadVenta { get; set; } = "UNIDAD";
+
+    // Issue #147 slice 3 item 7: FK + nombre display de la unidad de venta.
+    // El DTO ahora expone tanto el id (para el <select> del Edit/Create)
+    // como el nombre (para display en Details/Index sin JOIN adicional).
+    // El MappingProfile hidrata UnidadVentaNombre desde la navigation property
+    // `Producto.UnidadVenta.Nombre`. `UnidadVenta` (string) queda por
+    // backward-compat con la columna legacy hasta la migración cleanup.
+    public ulong? UnidadVentaId { get; set; }
+    public string? UnidadVentaNombre { get; set; }
+
     public decimal PrecioActual { get; set; }
     public bool ManejaGarrafaIndividual { get; set; }
     public bool Activo { get; set; }
@@ -77,6 +87,16 @@ public class CreateProductoDto
     [StringLength(20, ErrorMessage = "La unidad de venta no puede superar {1} caracteres.")]
     public string UnidadVenta { get; set; } = "UNIDAD";
 
+    // Issue #147 slice 3 item 7: el form usa <select> poblado por
+    // GetUnidadesVentaAsync. UnidadVentaId es nullable para tolerar
+    // el estado "sin selección" (la fila con valor="" en el dropdown
+    // bindea null al modelo). El Service rechaza null con un
+    // ValidationException ("Seleccione una unidad de venta").
+    [Display(Name = "Unidad de venta")]
+    [Required(ErrorMessage = "Seleccione una unidad de venta.")]
+    [Range(1, ulong.MaxValue, ErrorMessage = "Seleccione una unidad de venta válida.")]
+    public ulong? UnidadVentaId { get; set; }
+
     [Display(Name = "Precio actual")]
     [Range(0, 9999999999.99, ErrorMessage = "El precio debe estar entre {1} y {2}.")]
     public decimal PrecioActual { get; set; }
@@ -119,6 +139,17 @@ public class UpdateProductoDto
     [Display(Name = "Unidad de venta")]
     [StringLength(20, ErrorMessage = "La unidad de venta no puede superar {1} caracteres.")]
     public string UnidadVenta { get; set; } = "UNIDAD";
+
+    // Issue #147 slice 3 item 7: id de la FK a `unidades_venta`. Nullable
+    // para tolerar "sin selección" (la fila con valor="" bindea null).
+    // El Service traduce `UnidadVentaId` al `UnidadVentaId` de la entity;
+    // mientras convivan ambas columnas, también se setea el `UnidadVenta`
+    // string para que la columna legacy quede sincronizada y el backfill
+    // sea idempotente en re-deploys.
+    [Display(Name = "Unidad de venta")]
+    [Required(ErrorMessage = "Seleccione una unidad de venta.")]
+    [Range(1, ulong.MaxValue, ErrorMessage = "Seleccione una unidad de venta válida.")]
+    public ulong? UnidadVentaId { get; set; }
 
     [Display(Name = "Precio actual")]
     [Range(0, 9999999999.99, ErrorMessage = "El precio debe estar entre {1} y {2}.")]

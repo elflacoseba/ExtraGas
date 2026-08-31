@@ -15,6 +15,8 @@ public class MappingProfile : Profile
         ConfigureLookups();
         ConfigureProducto();
         ConfigureTipoProducto();
+        // Issue #147 slice 3 item 7: lookup cerrada de unidades_venta.
+        ConfigureUnidadVenta();
         ConfigureProveedor();
         ConfigurePago();
         ConfigureGarrafa();
@@ -140,11 +142,24 @@ public class MappingProfile : Profile
         CreateMap<Producto, ProductoDto>()
             .ForMember(d => d.TipoProductoNombre, o => o.MapFrom(s =>
                 s.TipoProducto != null ? s.TipoProducto.Nombre : null))
+            // Issue #147 slice 3 item 7: el DTO ahora tiene UnidadVentaId
+            // (FK) + UnidadVentaNombre (read-only display). El id mapea
+            // por convención desde la entity (mismo nombre). El nombre
+            // sale de la navigation property UnidadVentaRef.Nombre — si la
+            // entity se cargó sin Include, queda null (es lo correcto: el
+            // Service que llama debe hacer Include si quiere el nombre).
+            .ForMember(d => d.UnidadVentaNombre, o => o.MapFrom(s =>
+                s.UnidadVentaRef != null ? s.UnidadVentaRef.Nombre : null))
             .ForMember(d => d.CreatedAt, o => o.MapFrom(s => s.CreatedAt))
             .ForMember(d => d.UpdatedAt, o => o.MapFrom(s => s.UpdatedAt))
             .ForMember(d => d.CreatedByUserName, o => o.Ignore())
             .ForMember(d => d.UpdatedByUserName, o => o.Ignore())
             .ReverseMap();
+        // Issue #147 slice 3 item 7: CreateProductoDto.UnidadVentaId (ulong?)
+        // mapea por convención a Producto.UnidadVentaId (ulong?). La columna
+        // legacy `UnidadVenta` queda como fallback durante la ventana de
+        // transición — el Service la sincroniza después del Map buscando el
+        // codigo en unidades_venta (ver ProductoService.CreateAsync/UpdateAsync).
         CreateMap<CreateProductoDto, Producto>();
         // Issue #145 Slice 3: MotivoCambioPrecio vive en el DTO pero NO tiene
         // destino en la entity Producto — es metadata de auditoría que el
@@ -161,6 +176,15 @@ public class MappingProfile : Profile
     private void ConfigureTipoProducto()
     {
         CreateMap<TipoProducto, TipoProductoDto>().ReverseMap();
+    }
+
+    /// <summary>
+    /// Issue #147 slice 3 item 7: mapping del catálogo cerrado
+    /// <see cref="UnidadVenta"/>. Réplica del patrón de TipoProducto.
+    /// </summary>
+    private void ConfigureUnidadVenta()
+    {
+        CreateMap<UnidadVenta, UnidadVentaDto>().ReverseMap();
     }
 
     private void ConfigureProveedor()
