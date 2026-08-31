@@ -1,4 +1,7 @@
 @model ExtraGasMVC.DTOs.UpdateProductoDto
+@* ViewData para auditoría visible (issue #147 item 4). UpdateProductoDto NO
+   expone los 4 campos de auditoría — el Controller los pasa via ViewBag
+   desde la entity original (pre-Map) para evitar bindearlos al form. *@
 @{
     ViewData["Title"] = "Editar producto";
     ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
@@ -92,6 +95,33 @@
                 <div class="col-12">
                     <label asp-for="Descripcion" class="form-label">Descripción</label>
                     <textarea asp-for="Descripcion" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+
+            @* Issue #147 item 4: auditoría visible read-only al pie del form.
+               Los valores vienen de ViewBag (entity original cargada por el
+               Controller en GET Edit, antes de cualquier Map del DTO).
+               NO están en el form — son solo display. *@
+            <hr class="my-3" />
+            <div class="row g-3">
+                <div class="col-12">
+                    <h6 class="text-secondary mb-2">Auditoría</h6>
+                </div>
+                <div class="col-md-3">
+                    <span class="form-label">Creado</span>
+                    <div class="form-control-plaintext">@(((DateTime)ViewBag.AuditCreatedAt).ToShortDateTime())</div>
+                </div>
+                <div class="col-md-3">
+                    <span class="form-label">Última modificación</span>
+                    <div class="form-control-plaintext">@(((DateTime)ViewBag.AuditUpdatedAt).ToShortDateTime())</div>
+                </div>
+                <div class="col-md-3">
+                    <span class="form-label">Creado por</span>
+                    <div class="form-control-plaintext">@(ViewBag.AuditCreatedBy ?? "-")</div>
+                </div>
+                <div class="col-md-3">
+                    <span class="form-label">Modificado por</span>
+                    <div class="form-control-plaintext">@(ViewBag.AuditUpdatedBy ?? "-")</div>
                 </div>
             </div>
         </div>
