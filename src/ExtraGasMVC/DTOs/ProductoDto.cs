@@ -24,6 +24,25 @@ public class ProductoDto
     public decimal PrecioActual { get; set; }
     public bool ManejaGarrafaIndividual { get; set; }
     public bool Activo { get; set; }
+
+    // Issue #147 item 4: auditoría visible en Details/Edit. Los timestamps
+    // se mapean por convención desde Producto.CreatedAt/UpdatedAt; los
+    // usernames NO se mapean por convención (Producto expone CreatedBy/
+    // UpdatedBy como ulong FK, no como string) — el Service los resuelve
+    // explícitamente vía LoadAuditUsersAsync + AplicarAudit y los asigna
+    // después del Map. El MappingProfile tiene .Ignore() explícito para
+    // los dos usernames como defensa en profundidad (regresión #118).
+    [Display(Name = "Creado")]
+    public DateTime CreatedAt { get; set; }
+
+    [Display(Name = "Última modificación")]
+    public DateTime UpdatedAt { get; set; }
+
+    [Display(Name = "Creado por")]
+    public string? CreatedByUserName { get; set; }
+
+    [Display(Name = "Modificado por")]
+    public string? UpdatedByUserName { get; set; }
 }
 
 /// <summary>
