@@ -14,7 +14,9 @@ namespace ExtraGasMVC.Tests;
 /// </summary>
 public class ProveedorDtoValidationTests
 {
-    private static IList<ValidationResult> Validar(object dto)
+    // Issue #158 (CA1859): IReadOnlyList porque el caller nunca muta el
+    // resultado de Validator.TryValidateObject — comunica la intención.
+    private static IReadOnlyList<ValidationResult> Validar(object dto)
     {
         var ctx = new ValidationContext(dto);
         var results = new List<ValidationResult>();

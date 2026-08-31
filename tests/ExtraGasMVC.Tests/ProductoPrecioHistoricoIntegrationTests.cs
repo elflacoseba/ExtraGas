@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MySqlConnector;
 using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
+using System.Text.RegularExpressions;
 using Testcontainers.MySql;
 using Xunit;
 
@@ -32,6 +33,23 @@ namespace ExtraGasMVC.Tests;
 public class ProductoPrecioHistoricoIntegrationTests
     : IClassFixture<ProductoPrecioHistoricoMySqlFixture>
 {
+    // Issue #158 (CA1861): agrupamos los arrays literales repetidos en un
+    // contenedor estático para que la regla no flaggee "constant array as
+    // argument".
+    private static class ProductoPrecioHistoricoSchema
+    {
+        public static readonly string[] ColumnasEsperadas =
+        {
+            "id",
+            "producto_id",
+            "precio_anterior",
+            "precio_nuevo",
+            "motivo_cambio_precio",
+            "changed_by",
+            "changed_at",
+        };
+    }
+
     private readonly ProductoPrecioHistoricoMySqlFixture _fixture;
 
     public ProductoPrecioHistoricoIntegrationTests(ProductoPrecioHistoricoMySqlFixture fixture)
@@ -51,16 +69,7 @@ public class ProductoPrecioHistoricoIntegrationTests
 
             var columnas = await _fixture.GetColumnNamesAsync(dbName, "producto_precios_historico");
             columnas.Should().BeEquivalentTo(
-                new[]
-                {
-                    "id",
-                    "producto_id",
-                    "precio_anterior",
-                    "precio_nuevo",
-                    "motivo_cambio_precio",
-                    "changed_by",
-                    "changed_at",
-                },
+                ProductoPrecioHistoricoSchema.ColumnasEsperadas,
                 options => options.WithStrictOrdering(),
                 "el schema debe coincidir 1:1 con el design (incluido snake_case)");
         }
@@ -274,12 +283,7 @@ public class ProductoPrecioHistoricoIntegrationTests
     }
 }
 
-/// <summary>
-/// Fixture xUnit que arranca un container MySQL via Testcontainers y expone
-/// helpers para crear bases frescas, aplicar la migración bajo prueba y
-/// sembrar las FKs mínimas (tipos_producto + productos) que el schema necesita.
-/// </summary>
-public class ProductoPrecioHistoricoMySqlFixture : IAsyncLifetime
+public partial class ProductoPrecioHistoricoMySqlFixture : IAsyncLifetime
 {
     private const string MysqlImage = "mysql:8.0";
     private const string RootPassword = "test_root_pwd";
@@ -474,11 +478,15 @@ public class ProductoPrecioHistoricoMySqlFixture : IAsyncLifetime
         // Strip del "USE extragas;" porque los tests apuntan a bases efímeras
         // (pph_<guid>) y la cláusula USE generaría "Unknown database 'extragas'".
         // La migración real conserva el USE para el flujo install.sh.
-        return System.Text.RegularExpressions.Regex.Replace(
-            raw, @"^\s*USE\s+\w+\s*;\s*$",
-            "",
-            System.Text.RegularExpressions.RegexOptions.Multiline);
+        // Issue #158 (SYSLIB1045): regex compilada en tiempo de compilación vía
+        // [GeneratedRegex] source generator — evita recompilar el patrón en cada call.
+        return UseStatementRegex().Replace(raw, "");
     }
+
+    // Issue #158 (SYSLIB1045): método parcial con [GeneratedRegex] source generator.
+    // El compilador emite la implementación del Regex; nosotros solo declaramos la firma.
+    [GeneratedRegex(@"^\s*USE\s+\w+\s*;\s*$", RegexOptions.Multiline)]
+    private static partial Regex UseStatementRegex();
 
     /// <summary>
     /// Schema mínimo para que las FKs de la migración bajo prueba tengan

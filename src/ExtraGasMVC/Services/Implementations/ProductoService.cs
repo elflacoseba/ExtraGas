@@ -126,7 +126,7 @@ public class ProductoService : IProductoService
         // startup y servir idéntico por 1h"; un sliding extendería el TTL
         // indefinidamente bajo uso sostenido.
         //
-        // TODO forward-looking (issue #147 slice 3 / follow-up): si en el
+        // Nota forward-looking (issue #147 slice 3 / follow-up): si en el
         // futuro se agrega UI CRUD para TiposProducto, este cache key debe
         // evacuarse en Create/Update/Delete (escritura → RemoveAsync). Por
         // ahora la API no expone esos verbos — el catálogo es cerrado.
@@ -252,15 +252,28 @@ public class ProductoService : IProductoService
         // normal pero queremos reconstruir después quién dio de alta un
         // producto sensible (ej. GAS-10 en medio de un conflicto de
         // precios). Information, no Warning.
-        _logger.LogInformation(
-            "Producto {ProductoId} (codigo={Codigo}, nombre={Nombre}) creado por {UsuarioId}",
-            entity.Id, entity.Codigo, entity.Nombre, usuarioId);
+        // Issue #158 (CA1873): guard de logging condicional.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Producto {ProductoId} (codigo={Codigo}, nombre={Nombre}) creado por {UsuarioId}",
+                entity.Id, entity.Codigo, entity.Nombre, usuarioId);
+        }
 
         return _mapper.Map<ProductoDto>(entity);
     }
 
     public async Task<ProductoDto> UpdateAsync(UpdateProductoDto producto, ulong? usuarioId, CancellationToken ct = default)
     {
+        // Issue #158 (S6964): Id es nullable en el DTO para defender contra
+        // under-posting desde forms manipulados. El Controller ya devuelve
+        // 400 si Id == null, pero defendemos en profundidad porque el Service
+        // puede invocarse desde tests o desde otros callers que no pasaron
+        // por la validación del Controller.
+        if (producto.Id is null)
+            throw new ArgumentException("UpdateProductoDto.Id es obligatorio.", nameof(producto));
+        var productoId = producto.Id.Value;
+
         // Issue #146.3: igual que CreateAsync, validar GARRAFA ⇒ CapacidadKg
         // > 0 sobre el DTO post-Map. Misma justificación: rechazar al
         // operador en el borde con un mensaje claro, no dejar que el bug
@@ -273,11 +286,11 @@ public class ProductoService : IProductoService
         // Issue #146.2: pre-check de Codigo duplicado. El `idAExcluir = Id`
         // es clave: si el operador está editando y deja su propio Codigo,
         // el AnyAsync no debe chocar contra sí mismo.
-        await ValidarCodigoNoDuplicadoAsync(producto.Codigo, idAExcluir: producto.Id, ct);
+        await ValidarCodigoNoDuplicadoAsync(producto.Codigo, idAExcluir: productoId, ct);
 
-        var entity = await _context.Productos.FindAsync(new object[] { producto.Id }, ct);
+        var entity = await _context.Productos.FindAsync(new object[] { productoId }, ct);
         if (entity == null)
-            throw new KeyNotFoundException($"Producto con Id {producto.Id} no encontrado.");
+            throw new KeyNotFoundException($"Producto con Id {productoId} no encontrado.");
 
         // Snapshot de Activo ANTES del AutoMapper: el formulario de Edit no
         // debe poder modificarlo. Si el operador lo manda distinto (sea por
@@ -332,9 +345,14 @@ public class ProductoService : IProductoService
                 .Replace("\r", " ")
                 .Replace("\n", " ");
 
-            _logger.LogInformation(
-                "Producto {ProductoId} cambió de precio: {PrecioAnterior} → {PrecioNuevo} (motivo: {Motivo}, operador: {ChangedBy})",
-                entity.Id, precioAnterior, precioNuevo, motivoCambioPrecioLog, usuarioId);
+            // Issue #158 (CA1873): guard de logging condicional — evita el
+            // Replace().Replace() cuando Information está deshabilitado.
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "Producto {ProductoId} cambió de precio: {PrecioAnterior} → {PrecioNuevo} (motivo: {Motivo}, operador: {ChangedBy})",
+                    entity.Id, precioAnterior, precioNuevo, motivoCambioPrecioLog, usuarioId);
+            }
         }
 
         try
@@ -355,10 +373,13 @@ public class ProductoService : IProductoService
 
             _logger.LogWarning(ex,
                 "Producto {ProductoId} ({Codigo}) — conflicto de concurrencia al actualizar por {UsuarioId}",
-                producto.Id, codigoLog, usuarioId);
+                productoId, producto.Codigo, usuarioId);
+            // Issue #158 (S2139): preservamos `ex` como inner exception para
+            // que el stack trace original quede en logs sin perder el mensaje
+            // de negocio que el Controller renderiza al operador.
             throw new ValidationException(
                 $"El producto {producto.Codigo} fue modificado por otro operador mientras editabas. " +
-                "Recargá la página y volvé a intentar.");
+                "Recargá la página y volvé a intentar.", ex);
         }
 
         // Issue #146.7: log de los campos efectivamente cambiados.
@@ -370,9 +391,14 @@ public class ProductoService : IProductoService
         if (cambios.Count > 0)
         {
             var cambiosLog = SanitizeForLog(string.Join(", ", cambios));
-            _logger.LogInformation(
-                "Producto {ProductoId} ({Codigo}) actualizado por {UsuarioId} — cambios: {Cambios}",
-                entity.Id, entity.Codigo, usuarioId, cambiosLog);
+            // Issue #158 (CA1873): guard de logging condicional — evita el
+            // SanitizeForLog + string.Join cuando Information está deshabilitado.
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "Producto {ProductoId} ({Codigo}) actualizado por {UsuarioId} — cambios: {Cambios}",
+                    entity.Id, entity.Codigo, usuarioId, cambiosLog);
+            }
         }
 
         return _mapper.Map<ProductoDto>(entity);
@@ -452,9 +478,13 @@ public class ProductoService : IProductoService
         // Trazabilidad: RestoreAsync es AdminOnly y revierte un soft-delete,
         // operación que el auditor quiere ver en logs. No loggeamos el caso
         // "no encontrado" porque es flujo esperado (404 desde la papelera).
-        _logger.LogInformation(
-            "Producto {ProductoId} reactivado por {UpdatedBy}",
-            producto.Id, updatedBy);
+        // Issue #158 (CA1873): guard de logging condicional.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Producto {ProductoId} reactivado por {UpdatedBy}",
+                producto.Id, updatedBy);
+        }
 
         return true;
     }

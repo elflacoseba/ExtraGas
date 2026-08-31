@@ -73,14 +73,9 @@ public class ClienteService : IClienteService
         // que un `Where(c => c.Activo)` adicional sería redundante. El nombre
         // del método se conserva por compatibilidad con los callers
         // (Home/Pagos/Garrafas/Pedidos) — "clientes activos" = "no
-        // soft-deleted".
-        var clientes = await _context.Clientes
-            .AsNoTracking()
-            .OrderBy(c => c.Apellido)
-            .ThenBy(c => c.Nombre)
-            .ToListAsync(ct);
-
-        return _mapper.Map<IEnumerable<ClienteDto>>(clientes);
+        // soft-deleted". Issue #158 (S4144): implementación idéntica a
+        // GetAllAsync, así que delegamos para eliminar la duplicación.
+        return await GetAllAsync(ct);
     }
 
     public async Task<PagedResult<ClienteDto>> SearchAsync(
@@ -170,9 +165,14 @@ public class ClienteService : IClienteService
 
         // Issue #116: trazabilidad del alta. Loggeamos el Id (no el DNI) porque
         // el DNI puede ser null y ademas ya quedo auditado en la entity.
-        _logger.LogInformation(
-            "Cliente {ClienteId} creado por {CreatedBy}",
-            entity.Id, createdBy);
+        // Issue #158 (CA1873): guard de logging condicional — evita construir
+        // los argumentos cuando Information está deshabilitado.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Cliente {ClienteId} creado por {CreatedBy}",
+                entity.Id, createdBy);
+        }
 
         return _mapper.Map<ClienteDto>(entity);
     }
@@ -237,9 +237,13 @@ public class ClienteService : IClienteService
         await SaveOrThrowDuplicateDniAsync(ct);
 
         // Issue #116: trazabilidad de la modificacion.
-        _logger.LogInformation(
-            "Cliente {ClienteId} actualizado por {UpdatedBy}",
-            entity.Id, updatedBy);
+        // Issue #158 (CA1873): guard de logging condicional.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Cliente {ClienteId} actualizado por {UpdatedBy}",
+                entity.Id, updatedBy);
+        }
 
         return _mapper.Map<ClienteDto>(entity);
     }
@@ -280,9 +284,13 @@ public class ClienteService : IClienteService
         // Issue #116: trazabilidad del soft-delete. No loggeamos el caso
         // "no encontrado" porque es un flujo esperado (404 de la papelera
         // cuando el operador hace doble click), no requiere investigación.
-        _logger.LogInformation(
-            "Cliente {ClienteId} soft-deleted por {UpdatedBy}",
-            cliente.Id, updatedBy);
+        // Issue #158 (CA1873): guard de logging condicional.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Cliente {ClienteId} soft-deleted por {UpdatedBy}",
+                cliente.Id, updatedBy);
+        }
 
         return true;
     }
@@ -306,9 +314,13 @@ public class ClienteService : IClienteService
         await _context.SaveChangesAsync(ct);
 
         // Issue #116: trazabilidad del restore desde la papelera.
-        _logger.LogInformation(
-            "Cliente {ClienteId} reactivado por {UpdatedBy}",
-            cliente.Id, updatedBy);
+        // Issue #158 (CA1873): guard de logging condicional.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Cliente {ClienteId} reactivado por {UpdatedBy}",
+                cliente.Id, updatedBy);
+        }
 
         return true;
     }
@@ -428,7 +440,10 @@ public class ClienteService : IClienteService
     internal static InvalidOperationException? MapDuplicateDniException(DbUpdateException ex)
     {
         if (ex.InnerException is MySqlException my && my.Number == 1062)
-            return new InvalidOperationException("El DNI ingresado ya está registrado.");
+            // Issue #158 (S2139): preservamos `ex` como inner exception para
+            // que el stack trace original (errno 1062 + query + contexto EF)
+            // quede en logs sin perder el mensaje de negocio.
+            return new InvalidOperationException("El DNI ingresado ya está registrado.", ex);
         return null;
     }
 

@@ -440,7 +440,9 @@ public class PedidoCanjeIntegrationTests : IClassFixture<PedidoCanjeMySqlFixture
     ///   - 2 garrafas LLENA_DEPOSITO (serán entregadas al cliente)
     ///   - (opcional) 1 garrafa EN_CLIENTE del cliente del pedido (será devuelta)
     /// </summary>
-    private async Task<CanjeSeed> SeedPedidoCompletoAsync(
+    // Issue #158 (CA1822): static — no usa estado de instancia, recibe el
+    // DbContext como parámetro.
+    private static async Task<CanjeSeed> SeedPedidoCompletoAsync(
         ExtraGasDbContext ctx, bool incluirDevolucion)
     {
         // Catálogos (idempotente gracias a INSERT IGNORE + ON DUPLICATE KEY).

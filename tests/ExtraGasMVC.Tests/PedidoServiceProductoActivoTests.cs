@@ -54,7 +54,9 @@ public class PedidoServiceProductoActivoTests
     /// pedido PENDIENTE con UN item que referencia ese producto. Devuelve los
     /// IDs para que el test arme codigosPorItem según el scenario.
     /// </summary>
-    private async Task<(ulong pedidoId, ulong productoId, ulong clienteId)> SeedPedidoActivoAsync(
+    // Issue #158 (CA1822): static — no usa estado de instancia, recibe el
+    // DbContext como parámetro.
+    private static async Task<(ulong pedidoId, ulong productoId, ulong clienteId)> SeedPedidoActivoAsync(
         ExtraGasDbContext context, bool incluirProductoInactivo = false, bool softDeleteProducto = false)
     {
         // InMemory no aplica migrations ni siembra catálogos. Sembramos los
