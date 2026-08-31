@@ -308,7 +308,7 @@ public class ProductoService : IProductoService
         // log de auditoría de la edición completa.
         if (cambios.Count > 0)
         {
-            var cambiosLog = string.Join(", ", cambios);
+            var cambiosLog = SanitizeForLog(string.Join(", ", cambios));
             _logger.LogInformation(
                 "Producto {ProductoId} ({Codigo}) actualizado por {UsuarioId} — cambios: {Cambios}",
                 entity.Id, entity.Codigo, usuarioId, cambiosLog);
@@ -451,6 +451,16 @@ public class ProductoService : IProductoService
         var existe = await query.AnyAsync(ct);
         if (existe)
             throw new ValidationException($"Ya existe un producto con el código '{codigo}'.");
+    }
+
+    /// <summary>
+    /// Sanitiza texto para logging en salidas planas, evitando log forging por CR/LF.
+    /// </summary>
+    private static string SanitizeForLog(string? value)
+    {
+        return (value ?? string.Empty)
+            .Replace("\r", " ")
+            .Replace("\n", " ");
     }
 
     /// <summary>
