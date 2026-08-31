@@ -266,6 +266,10 @@ public class ClienteServiceDniRaceConditionTests
         var act = async () => await service.CreateAsync(dto, createdBy: 1);
 
         await act.Should().ThrowAsync<DbUpdateException>()
-            .WithMessage("connection lost");
+            // Issue #161 (S2139): el Service ahora envuelve la excepción con
+            // un mensaje contextual ("Error de base de datos no esperado..."),
+            // preservando el DbUpdateException original como inner. El mensaje
+            // original ("connection lost") ahora vive en `InnerException.Message`.
+            .WithMessage("*no esperado al persistir el cliente*");
     }
 }

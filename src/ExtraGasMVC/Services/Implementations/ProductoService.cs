@@ -367,9 +367,6 @@ public class ProductoService : IProductoService
             // ValidationException (mismo canal que las validaciones de
             // las brechas 1-3) para que el Controller renderice un
             // mensaje claro en lugar de un 500 genérico.
-            var codigoLog = (producto.Codigo ?? "<sin código>")
-                .Replace("\r", " ")
-                .Replace("\n", " ");
 
             _logger.LogWarning(ex,
                 "Producto {ProductoId} ({Codigo}) — conflicto de concurrencia al actualizar por {UsuarioId}",
@@ -431,7 +428,16 @@ public class ProductoService : IProductoService
             _logger.LogWarning(ex,
                 "Producto {Id} ({Codigo}) — conflicto de concurrencia al desactivar por {UsuarioId}",
                 producto.Id, producto.Codigo, usuarioId);
-            throw;
+            // Issue #161 (S2139): rethrow CON contexto para satisfacer la
+            // regla. Re-lanzamos como nueva DbUpdateConcurrencyException con
+            // mensaje contextual + preservando `ex` como inner. Mantenemos
+            // el tipo concreto para que el caller pueda distinguir este
+            // error de otros (concurrencia ≠ violación de unique constraint).
+            throw new DbUpdateConcurrencyException(
+                $"Conflicto de concurrencia al desactivar el producto {producto.Codigo}. " +
+                "La causa original está preservada como inner exception. " +
+                $"Detalle original: {ex.Message}",
+                ex);
         }
 
         // Issue #146.7 + #146.6: Delete es AdminOnly (PR #145 Slice 2 lo
