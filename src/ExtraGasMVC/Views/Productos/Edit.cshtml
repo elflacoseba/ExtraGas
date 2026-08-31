@@ -50,12 +50,21 @@
                     <input asp-for="CapacidadKg" type="number" step="0.01" class="form-control" />
                 </div>
                 <div class="col-md-2">
-                    <label asp-for="UnidadVenta" class="form-label"></label>
-                    <input asp-for="UnidadVenta" class="form-control" />
+                    <label asp-for="UnidadVentaId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="UnidadVentaId" class="form-select">
+                        <option value="">-- Seleccionar --</option>
+                        @foreach (var u in (IEnumerable<ExtraGasMVC.DTOs.UnidadVentaDto>)ViewBag.UnidadesVenta)
+                        {
+                            <option value="@u.Id" selected="@(Model.UnidadVentaId == u.Id)">@u.Nombre (@u.Codigo)</option>
+                        }
+                    </select>
+                    <span asp-validation-for="UnidadVentaId" class="text-danger small"></span>
+                    <label for="UnidadVenta" class="visually-hidden">Unidad de venta legacy (sincronizada desde la unidad seleccionada)</label>
+                    <input type="hidden" id="UnidadVenta" name="UnidadVenta" value="" />
                 </div>
                 <div class="col-md-2">
-                    <label asp-for="PrecioActual" class="form-label"></label> <span class="text-danger">*</span>
-                    <input asp-for="PrecioActual"
+                    <label for="PrecioActual" class="form-label">Precio actual</label> <span class="text-danger">*</span>
+                    <input id="PrecioActual" name="PrecioActual"
                            type="number" step="0.01"
                            class="form-control js-precio-actual-input"
                            data-precio-original="@Model.PrecioActual.ToString(System.Globalization.CultureInfo.InvariantCulture)" />

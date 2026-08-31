@@ -324,6 +324,8 @@ public class ControllersActivoViewBagTests
         public Task<IEnumerable<ProductoDto>> GetActivosAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IEnumerable<ProductoDto>> GetByTipoAsync(ulong t, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IEnumerable<TipoProductoDto>> GetTiposProductoAsync(CancellationToken ct = default) => Task.FromResult<IEnumerable<TipoProductoDto>>(new List<TipoProductoDto>());
+        public Task<IEnumerable<UnidadVentaDto>> GetUnidadesVentaAsync(CancellationToken ct = default) => Task.FromResult<IEnumerable<UnidadVentaDto>>(new List<UnidadVentaDto>());
+        public Task<ProductoDeleteImpactDto> GetDeleteImpactAsync(ulong id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ProductoDto> CreateAsync(CreateProductoDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ProductoDto> UpdateAsync(UpdateProductoDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> DeleteAsync(ulong id, ulong? updatedBy, CancellationToken ct = default) => throw new NotImplementedException();

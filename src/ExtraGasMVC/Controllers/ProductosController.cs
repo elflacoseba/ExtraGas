@@ -49,9 +49,13 @@ public class ProductosController : BaseController
     public async Task<IActionResult> Create(CancellationToken ct = default)
     {
         await LoadViewBagsAsync(ct);
-        // Issue #114: CreateProductoDto ya no expone Activo — lo setea el
-        // Service en true. UnidadVenta queda como default de UI.
-        return View(new CreateProductoDto { UnidadVenta = "UNIDAD" });
+        // Issue #147 slice 3 item 7: el form usa <select> poblado por
+        // ViewBag.UnidadesVenta. El campo UnidadVenta (string) queda por
+        // compatibilidad con el modelo pero ya no se bindea desde el form
+        // (lo sincroniza el Service en base al FK). UnidadVentaId empieza
+        // en null para forzar al operador a elegir (no autoselecciona la
+        // primera opción).
+        return View(new CreateProductoDto());
     }
 
     [HttpPost]
@@ -71,10 +75,10 @@ public class ProductosController : BaseController
         }
         catch (ValidationException ex)
         {
-            // Issue #146.1, .2, .3: errores de validación de negocio que
-            // el Service rechaza ANTES de tocar la BD. El mensaje ya viene
-            // legible del Service ("Ya existe un producto con el código
-            // 'GAS-10'."); lo agregamos a ModelState para que el form
+            // Issue #146.1, .2, .3 + #147 slice 3: errores de validación de
+            // negocio que el Service rechaza ANTES de tocar la BD. El mensaje
+            // ya viene legible del Service ("Ya existe un producto con el
+            // código 'GAS-10'."); lo agregamos a ModelState para que el form
             // muestre el error arriba y el operador entienda qué corregir.
             ModelState.AddModelError(string.Empty, ex.Message);
             await LoadViewBagsAsync(ct);
@@ -101,7 +105,11 @@ public class ProductosController : BaseController
             Descripcion = producto.Descripcion,
             TipoProductoId = producto.TipoProductoId,
             CapacidadKg = producto.CapacidadKg,
+            // Issue #147 slice 3 item 7: el FK ahora es la fuente de verdad;
+            // el campo string queda por backward-compat con la columna
+            // legacy. El Service sincroniza el string en base al FK.
             UnidadVenta = producto.UnidadVenta,
+            UnidadVentaId = producto.UnidadVentaId,
             PrecioActual = producto.PrecioActual,
             ManejaGarrafaIndividual = producto.ManejaGarrafaIndividual,
         };
@@ -143,9 +151,10 @@ public class ProductosController : BaseController
         }
         catch (ValidationException ex)
         {
-            // Issue #146.1, .2, .3, .4: validaciones de negocio y race
-            // conditions de concurrencia llegan por este canal (el Service
-            // traduce DbUpdateConcurrencyException → ValidationException).
+            // Issue #146.1, .2, .3, .4 + #147 slice 3: validaciones de
+            // negocio y race conditions de concurrencia llegan por este
+            // canal (el Service traduce DbUpdateConcurrencyException →
+            // ValidationException).
             ModelState.AddModelError(string.Empty, ex.Message);
             await LoadViewBagsAsync(ct);
             return View(producto);
@@ -158,25 +167,62 @@ public class ProductosController : BaseController
         }
     }
 
-    // Issue #146.6: AdminOnly override del class-level OperadorOrAdmin.
-    // Desactivar un producto es una operación privilegiada — un operador
-    // podría borrar del catálogo el GAS-10 por error y dejar la app
-    // inutilizable hasta que un DBA reactive (ver issue crítico sobre
-    // RestoreAsync). Mismo patrón que el Restore existente (PR #145 Slice
-    // 2). Consolida los dos puntos del ABM que requieren rol ADMIN.
+    // Issue #147 slice 3 item 2: el Delete ahora es un flujo de 2 pasos.
+    // GET: muestra el impacto (3 contadores de dependencias) + exige
+    // type-to-confirm si Total > 0. POST: valida el confirmCode, llama
+    // a DeleteAsync del Service. AdminOnly override del class-level
+    // OperadorOrAdmin — desactivar un producto es operación privilegiada
+    // (issue #146.6).
+    [HttpGet]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> Delete(ulong id, CancellationToken ct = default)
+    {
+        var producto = await _productoService.GetByIdAsync(id, ct);
+        if (producto is null) return NotFound();
+
+        // Issue #147 slice 3 item 2: el conteo de dependencias alimenta
+        // la decisión "confirm simple vs type-to-confirm". Si el producto
+        // no existe o está soft-deleted, GetDeleteImpactAsync tira
+        // KeyNotFoundException — lo dejamos propagar a 404 vía NotFound()
+        // para no confundir al operador con un DTO vacío.
+        var impacto = await _productoService.GetDeleteImpactAsync(id, ct);
+
+        // ViewBag: el JS de wwwroot/js/productos-delete.js lee
+        // expectedCode para comparar con el input del operador.
+        ViewBag.ExpectedCode = producto.Codigo;
+        return View(impacto);
+    }
+
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Delete(ulong id, CancellationToken ct = default)
+    public async Task<IActionResult> Delete(ulong id, string? confirmCode, CancellationToken ct = default)
     {
-        // Issue #114: antes este Delete implementaba soft-delete a mano vía
-        // UpdateAsync con Activo=false — un anti-patrón que dependía de que
-        // Activo fuera editable. Con el fix, el soft-delete se delega al
-        // Service (DeleteAsync), que setea DeletedAt + Activo=false en una
-        // sola operación consistente con el resto de los módulos.
+        // Issue #147 slice 3 item 2: type-to-confirm. Si el operador tipea
+        // el codigo mal, recargamos la vista de impacto con error en lugar
+        // de proceder con el delete silencioso. Mismo compare Ordinal que
+        // los lookup codes (case-sensitive: la columna es VARCHAR(20) y el
+        // DTO lo expone normalizado).
+        var producto = await _productoService.GetByIdAsync(id, ct);
+        if (producto is null) return NotFound();
+
+        if (string.IsNullOrEmpty(confirmCode) ||
+            !string.Equals(confirmCode, producto.Codigo, StringComparison.Ordinal))
+        {
+            // Re-renderizar la vista de impacto con error y mantener el
+            // input del operador en ViewBag para que pueda corregir sin
+            // re-tipear.
+            var impacto = await _productoService.GetDeleteImpactAsync(id, ct);
+            ViewBag.ExpectedCode = producto.Codigo;
+            ViewBag.ConfirmError = "Código incorrecto. Tipee el código exacto del producto para confirmar.";
+            ViewBag.ConfirmInput = confirmCode;
+            return View(impacto);
+        }
+
+        // Confirmación válida: proceder con el soft-delete via Service.
         var ok = await _productoService.DeleteAsync(id, GetCurrentUserId(), ct);
         TempData[ok ? "Success" : "Error"] = ok
-            ? "Producto desactivado correctamente."
+            ? $"Producto {producto.Codigo} desactivado correctamente."
             : "No se encontró el producto.";
         return RedirectToAction(nameof(Index));
     }
@@ -201,5 +247,8 @@ public class ProductosController : BaseController
     private async Task LoadViewBagsAsync(CancellationToken ct)
     {
         ViewBag.TiposProducto = await _productoService.GetTiposProductoAsync(ct);
+        // Issue #147 slice 3 item 7: el <select> de Create/Edit usa este
+        // ViewBag. Réplica del patrón de TiposProducto.
+        ViewBag.UnidadesVenta = await _productoService.GetUnidadesVentaAsync(ct);
     }
 }

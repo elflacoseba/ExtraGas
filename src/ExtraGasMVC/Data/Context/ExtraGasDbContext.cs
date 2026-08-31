@@ -11,6 +11,10 @@ public class ExtraGasDbContext : DbContext
     // ============== Lookups ==============
     public DbSet<Rol> Roles => Set<Rol>();
     public DbSet<TipoProducto> TiposProducto => Set<TipoProducto>();
+    // Issue #147 slice 3 item 7: lookup cerrada de unidades de venta
+    // (UNIDAD, GARRAFA, BOLSA, KG). Réplica del patrón de TiposProducto.
+    // Catálogo seed-only — no hay UI CRUD (ADR #20 a documentar en slice 3).
+    public DbSet<UnidadVenta> UnidadesVenta => Set<UnidadVenta>();
     public DbSet<FormaPago> FormasPago => Set<FormaPago>();
     public DbSet<EstadoPedido> EstadosPedido => Set<EstadoPedido>();
     public DbSet<EstadoGarrafa> EstadosGarrafa => Set<EstadoGarrafa>();

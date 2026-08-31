@@ -66,16 +66,32 @@ public class ProductoServiceRobustezTests
             context.ChangeTracker.Clear();
         }
 
+        // Issue #147 slice 3 item 7: sembrar UNIDAD (id=1) para que la nueva
+        // validación de UnidadVentaId no falle colateralmente en tests que
+        // quieren ejercitar otras reglas.
+        if (!context.UnidadesVenta.Any())
+        {
+            context.UnidadesVenta.Add(new UnidadVenta
+            {
+                Id = 1,
+                Codigo = "UNIDAD",
+                Nombre = "Unidad",
+            });
+            context.SaveChanges();
+            context.ChangeTracker.Clear();
+        }
+
         return (service, context, logger);
     }
 
-    private static CreateProductoDto NewCreateDto(string codigo = "GAS-10", ulong tipoProductoId = 1) => new()
+    private static CreateProductoDto NewCreateDto(string codigo = "GAS-10", ulong tipoProductoId = 1, ulong unidadVentaId = 1) => new()
     {
         Codigo = codigo,
         Nombre = "Garrafa 10kg",
         TipoProductoId = tipoProductoId,
         CapacidadKg = 10m,
-        UnidadVenta = "UNIDAD",
+        // Issue #147 slice 3 item 7: el FK es ahora obligatorio.
+        UnidadVentaId = unidadVentaId,
         PrecioActual = 15000m,
         ManejaGarrafaIndividual = true,
     };
@@ -90,6 +106,7 @@ public class ProductoServiceRobustezTests
         TipoProductoId = creado.TipoProductoId,
         CapacidadKg = creado.CapacidadKg,
         UnidadVenta = creado.UnidadVenta,
+        UnidadVentaId = creado.UnidadVentaId,
         PrecioActual = creado.PrecioActual,
         ManejaGarrafaIndividual = creado.ManejaGarrafaIndividual,
     };
@@ -438,15 +455,30 @@ public class ProductoServiceRobustezTests
         // de testeo directo para policies en MVC sin host completo, así que
         // verificamos el contrato por reflexión. Si un PR futuro elimina la
         // policy, este test falla y bloquea la regresión.
-        var deleteMethod = typeof(ExtraGasMVC.Controllers.ProductosController)
-            .GetMethod(nameof(ExtraGasMVC.Controllers.ProductosController.Delete));
+        //
+        // Issue #147 slice 3 item 2: ahora hay DOS overloads de Delete
+        // (GET y POST). Buscamos específicamente el GET (el que el operador
+        // usa para ver el impacto) — ambos deben tener la policy AdminOnly.
+        var deleteGetMethod = typeof(ExtraGasMVC.Controllers.ProductosController)
+            .GetMethods()
+            .First(m => m.Name == nameof(ExtraGasMVC.Controllers.ProductosController.Delete)
+                     && m.GetParameters().Length == 2);
 
-        deleteMethod.Should().NotBeNull();
+        deleteGetMethod.Should().NotBeNull();
 
-        var authorize = deleteMethod!.GetCustomAttribute<AuthorizeAttribute>();
-        authorize.Should().NotBeNull("Delete debe tener [Authorize(Policy = ...)]");
+        var authorize = deleteGetMethod!.GetCustomAttribute<AuthorizeAttribute>();
+        authorize.Should().NotBeNull("Delete GET debe tener [Authorize(Policy = ...)]");
         authorize!.Policy.Should().Be("AdminOnly",
-            "Delete es AdminOnly — issue #146.6 (operación privilegiada, previene zombie de GAS-10)");
+            "Delete GET es AdminOnly — issue #146.6 (operación privilegiada, previene zombie de GAS-10)");
+
+        var deletePostMethod = typeof(ExtraGasMVC.Controllers.ProductosController)
+            .GetMethods()
+            .First(m => m.Name == nameof(ExtraGasMVC.Controllers.ProductosController.Delete)
+                     && m.GetParameters().Length == 3);
+
+        var authorizePost = deletePostMethod!.GetCustomAttribute<AuthorizeAttribute>();
+        authorizePost.Should().NotBeNull("Delete POST también debe tener [Authorize(Policy = ...)]");
+        authorizePost!.Policy.Should().Be("AdminOnly");
     }
 
     [Fact]

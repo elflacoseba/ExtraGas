@@ -22,6 +22,14 @@ public class ProductoService : IProductoService
     private const string TiposProductoCacheKey = "tipos_producto";
     private static readonly TimeSpan TiposProductoCacheTtl = TimeSpan.FromHours(1);
 
+    // Issue #147 slice 3 item 7: clave de cache para GetUnidadesVentaAsync.
+    // Mismo rationale que TiposProductoCacheKey: la lookup `unidades_venta`
+    // es seed-only (4 valores: UNIDAD, GARRAFA, BOLSA, KG), no hay UI
+    // CRUD (ADR #20). TTL 1h absoluto — el catálogo no cambia durante la
+    // vida del proceso.
+    private const string UnidadesVentaCacheKey = "unidades_venta";
+    private static readonly TimeSpan UnidadesVentaCacheTtl = TimeSpan.FromHours(1);
+
     private readonly ExtraGasDbContext _context;
     private readonly IMapper _mapper;
     // Issue #145 Slice 2: ILogger<ProductoService> inyectado para trazabilidad
@@ -58,6 +66,9 @@ public class ProductoService : IProductoService
         var producto = await _context.Productos
             .AsNoTracking()
             .Include(p => p.TipoProducto)
+            // Issue #147 slice 3 item 7: hidratar UnidadVentaRef.Nombre para
+            // que el MappingProfile pueda poblar ProductoDto.UnidadVentaNombre.
+            .Include(p => p.UnidadVentaRef)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
         if (producto is null) return null;
@@ -85,6 +96,7 @@ public class ProductoService : IProductoService
         var producto = await _context.Productos
             .AsNoTracking()
             .Include(p => p.TipoProducto)
+            .Include(p => p.UnidadVentaRef)
             .FirstOrDefaultAsync(p => p.Codigo == codigoNormalizado, ct);
 
         return producto is null ? null : _mapper.Map<ProductoDto>(producto);
@@ -95,6 +107,7 @@ public class ProductoService : IProductoService
         var productos = await _context.Productos
             .AsNoTracking()
             .Include(p => p.TipoProducto)
+            .Include(p => p.UnidadVentaRef)
             .OrderBy(p => p.Codigo)
             .ToListAsync(ct);
 
@@ -106,6 +119,7 @@ public class ProductoService : IProductoService
         var productos = await _context.Productos
             .AsNoTracking()
             .Include(p => p.TipoProducto)
+            .Include(p => p.UnidadVentaRef)
             .Where(p => p.Activo)
             .OrderBy(p => p.Codigo)
             .ToListAsync(ct);
@@ -118,6 +132,7 @@ public class ProductoService : IProductoService
         var productos = await _context.Productos
             .AsNoTracking()
             .Include(p => p.TipoProducto)
+            .Include(p => p.UnidadVentaRef)
             .Where(p => p.TipoProductoId == tipoProductoId)
             .OrderBy(p => p.Codigo)
             .ToListAsync(ct);
@@ -152,6 +167,96 @@ public class ProductoService : IProductoService
     }
 
     /// <summary>
+    /// Issue #147 slice 3 item 7: devuelve el catálogo cerrado
+    /// <c>unidades_venta</c> (UNIDAD, GARRAFA, BOLSA, KG) ordenado por
+    /// <c>Nombre</c>. Cacheado en memoria con TTL 1h — misma lógica y
+    /// mismo patrón que <see cref="GetTiposProductoAsync"/>. El query
+    /// filter global <c>DeletedAt == null</c> oculta las unidades
+    /// soft-deleted (no deberían existir: el catálogo es seed-only y la
+    /// baja requiere migración SQL — ver ADR #20).
+    /// </summary>
+    public async Task<IEnumerable<UnidadVentaDto>> GetUnidadesVentaAsync(CancellationToken ct = default)
+    {
+        return await _cache.GetOrCreateAsync(UnidadesVentaCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = UnidadesVentaCacheTtl;
+
+            var unidades = await _context.UnidadesVenta
+                .AsNoTracking()
+                .OrderBy(u => u.Nombre)
+                .ToListAsync(ct);
+
+            return (IEnumerable<UnidadVentaDto>)_mapper.Map<List<UnidadVentaDto>>(unidades);
+        }) ?? [];
+    }
+
+    /// <summary>
+    /// Issue #147 slice 3 item 2: cuenta las dependencias históricas del
+    /// producto (pedido_items, recepcion_items, movimientos_garrafa) para
+    /// alimentar la UI de Delete con type-to-confirm. Ver
+    /// <see cref="IProductoService.GetDeleteImpactAsync"/> para el contrato
+    /// completo (sin filtro <c>deleted_at</c>, KeyNotFoundException si no
+    /// existe).
+    ///
+    /// <para><b>Importante sobre movimientos_garrafa</b>: la entity
+    /// <c>MovimientoGarrafa</c> NO tiene FK a <c>Producto</c> (ver entidad
+    /// y migración 20260102_000006_create_garrafas.sql). El vínculo
+    /// Producto↔Garrafa es implícito vía <c>capacidad_kg</c>: una garrafa
+    /// de 10kg corresponde al producto GARRAFA-10 (capacidad_kg=10).
+    /// Por eso el conteo va por JOIN a garrafas y filtra por capacidad.
+    /// Si el producto no maneja garrafas individuales, el conteo es 0
+    /// (sin sentido contar movimientos de garrafas para un producto
+    /// como bolsa de carbón).</para>
+    /// </summary>
+    public async Task<ProductoDeleteImpactDto> GetDeleteImpactAsync(ulong id, CancellationToken ct = default)
+    {
+        // Validación de existencia: igual que GetByIdAsync aplica el QueryFilter
+        // global, ocultando productos soft-deleted. Sin esto, un operador con
+        // /Delete/{id} podría ver dependencias de un producto ya desactivado.
+        var producto = await _context.Productos
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == id && p.DeletedAt == null, ct)
+            ?? throw new KeyNotFoundException($"Producto {id} no encontrado.");
+
+        // COUNT queries independientes — NO hay JOIN entre PedidoItems/
+        // RecepcionItems y NO filtramos por deleted_at (esas tablas no
+        // tienen la columna, ver exploración #43-45 y design.md "Critical
+        // correction"). AsNoTracking porque no vamos a modificar nada.
+        var pedidoItems = await _context.PedidoItems
+            .AsNoTracking()
+            .CountAsync(pi => pi.ProductoId == id, ct);
+
+        var recepcionItems = await _context.RecepcionItems
+            .AsNoTracking()
+            .CountAsync(ri => ri.ProductoId == id, ct);
+
+        // MovimientosGarrafa: la entity NO tiene ProductoId. Vinculamos vía
+        // Garrafa.CapacidadKg (byte, no decimal — la entity Garrafa tiene
+        // TINYINT UNSIGNED). Si el producto no maneja garrafas individuales,
+        // el conteo es 0 (las bolsas de carbón no tienen movimientos de
+        // garrafas, son unidades simples). Sin filtro por deleted_at en
+        // ninguna de las dos tablas (movimientos_garrafa no tiene la
+        // columna; garrafas sí, pero no aplica a este conteo — el admin
+        // quiere ver TODO el historial aunque haya garrafas soft-deleted).
+        int movimientosGarrafa = 0;
+        if (producto.ManejaGarrafaIndividual && producto.CapacidadKg.HasValue)
+        {
+            var capacidad = (byte)producto.CapacidadKg.Value;
+            movimientosGarrafa = await _context.MovimientosGarrafa
+                .AsNoTracking()
+                .Where(mg => mg.Garrafa != null && mg.Garrafa.CapacidadKg == capacidad)
+                .CountAsync(ct);
+        }
+
+        return new ProductoDeleteImpactDto(
+            ProductoId: (int)producto.Id,
+            Codigo: producto.Codigo,
+            PedidoItemsCount: pedidoItems,
+            RecepcionItemsCount: recepcionItems,
+            MovimientosGarrafaCount: movimientosGarrafa);
+    }
+
+    /// <summary>
     /// Paginación server-side del listado de Productos (issue #146.5).
     /// Reemplaza el patrón anterior (<c>GetAllAsync</c> + LINQ-to-Objects en
     /// Controller) que escaneaba toda la tabla y cargaba la navegación
@@ -173,7 +278,8 @@ public class ProductoService : IProductoService
 
         IQueryable<Producto> query = _context.Productos
             .AsNoTracking()
-            .Include(p => p.TipoProducto);
+            .Include(p => p.TipoProducto)
+            .Include(p => p.UnidadVentaRef);
 
         // Issue #146.5 + preservación de la UX existente: el checkbox "Solo
         // activos" del formulario filtra en SQL. Si el operador quiere ver
@@ -227,11 +333,26 @@ public class ProductoService : IProductoService
         // claro que el Controller traduce a ModelState.
         ProductoEditRules.ValidarGarrafaCapacidad(producto);
 
+        // Issue #147 slice 3 item 7: el DTO ahora exige UnidadVentaId
+        // (FK) en lugar del string libre. DataAnnotations [Required] +
+        // [Range(1, ulong.MaxValue)] cubren el caso null/0, pero una
+        // validación adicional en el Service protege contra bypasses
+        // (curl, código viejo, form cacheado).
+        if (!producto.UnidadVentaId.HasValue || producto.UnidadVentaId.Value == 0)
+        {
+            throw new ValidationException("Seleccione una unidad de venta válida.");
+        }
+
         // Issue #146.1: pre-check FK TipoProductoId. Sin esto, un
         // TipoProductoId inválido (form viejo en cache, integración rota,
         // bug de UI) explota a nivel MySQL con un FK error opaco que el
         // Controller envuelve en "No se pudo crear el producto".
         await ValidarTipoProductoExisteAsync(producto.TipoProductoId, ct);
+
+        // Issue #147 slice 3 item 7: pre-check de la nueva FK UnidadVentaId.
+        // Mismo rationale que ValidarTipoProductoExisteAsync: traduce el FK
+        // error opaco de MySQL en un ValidationException legible.
+        await ValidarUnidadVentaExisteAsync(producto.UnidadVentaId.Value, ct);
 
         // Issue #146.2: pre-check de Codigo duplicado. El índice único
         // `uq_productos_codigo` cubre el caso, pero dos requests
@@ -245,6 +366,12 @@ public class ProductoService : IProductoService
         // se persiste canónica para cubrir el índice único
         // `uq_productos_codigo` y matchear búsquedas case-insensitive.
         entity.Codigo = StringNormalizer.TrimAndUpper(entity.Codigo);
+        // Issue #147 slice 3 item 7: sincronizar la columna legacy
+        // `unidad_venta` (VARCHAR) con el FK durante la ventana de
+        // transición. Si el día de mañana se hace el DROP COLUMN cleanup,
+        // este código se elimina. Mientras tanto, garantiza que un
+        // SELECT con la columna legacy muestre el código correcto.
+        entity.UnidadVenta = await ResolverCodigoUnidadVentaAsync(entity.UnidadVentaId, ct);
         // Issue #114: Activo no viene del DTO. Lo setea el Service en true
         // porque es estado, no dato de carga del operador.
         entity.Activo = true;
@@ -275,8 +402,17 @@ public class ProductoService : IProductoService
         // explote tarde en RecepcionService.
         ProductoEditRules.ValidarGarrafaCapacidad(producto);
 
+        // Issue #147 slice 3 item 7: misma validación que CreateAsync.
+        if (!producto.UnidadVentaId.HasValue || producto.UnidadVentaId.Value == 0)
+        {
+            throw new ValidationException("Seleccione una unidad de venta válida.");
+        }
+
         // Issue #146.1: pre-check FK antes del Update.
         await ValidarTipoProductoExisteAsync(producto.TipoProductoId, ct);
+
+        // Issue #147 slice 3 item 7: pre-check de la nueva FK.
+        await ValidarUnidadVentaExisteAsync(producto.UnidadVentaId.Value, ct);
 
         // Issue #146.2: pre-check de Codigo duplicado. El `idAExcluir = Id`
         // es clave: si el operador está editando y deja su propio Codigo,
@@ -321,6 +457,10 @@ public class ProductoService : IProductoService
         // siempre canónico en BD" para que las búsquedas no dependan
         // de cómo tipeó el operador.
         entity.Codigo = StringNormalizer.TrimAndUpper(entity.Codigo);
+        // Issue #147 slice 3 item 7: sincronizar la columna legacy
+        // `unidad_venta` (VARCHAR) con el FK durante la ventana de
+        // transición. Mismo rationale que CreateAsync.
+        entity.UnidadVenta = await ResolverCodigoUnidadVentaAsync(entity.UnidadVentaId, ct);
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = usuarioId;
         ProductoEditRules.PreservarFlagsNoEditables(entity, activoOriginal);
@@ -512,6 +652,47 @@ public class ProductoService : IProductoService
     }
 
     /// <summary>
+    /// Issue #147 slice 3 item 7: pre-check del nuevo FK
+    /// <c>UnidadVentaId</c>. Réplica del patrón de
+    /// <see cref="ValidarTipoProductoExisteAsync"/>: traduce el FK error
+    /// opaco de MySQL en un ValidationException legible. El catálogo es
+    /// cerrado, así que los ids válidos son 1-4 (UNIDAD, GARRAFA, BOLSA,
+    /// KG) — pero validamos contra la BD para tolerar el caso (improbable)
+    /// de que el seed no haya corrido todavía.
+    /// </summary>
+    private async Task ValidarUnidadVentaExisteAsync(ulong unidadVentaId, CancellationToken ct)
+    {
+        var existe = await _context.UnidadesVenta
+            .AsNoTracking()
+            .AnyAsync(u => u.Id == unidadVentaId, ct);
+
+        if (!existe)
+            throw new ValidationException($"Unidad de venta inválida (id={unidadVentaId}).");
+    }
+
+    /// <summary>
+    /// Issue #147 slice 3 item 7: sincroniza la columna legacy
+    /// <c>unidad_venta</c> (VARCHAR) con el FK <c>UnidadVentaId</c>
+    /// durante la ventana de transición (expand-contract). Devuelve el
+    /// código (UNIDAD/GARRAFA/BOLSA/KG) correspondiente al id. Si el id
+    /// es null (caso edge de un producto creado antes de que el FK
+    /// exista), devuelve "UNIDAD" como fallback razonable (el default
+    /// histórico de la columna).
+    /// </summary>
+    private async Task<string> ResolverCodigoUnidadVentaAsync(ulong? unidadVentaId, CancellationToken ct)
+    {
+        if (!unidadVentaId.HasValue) return "UNIDAD";
+
+        var codigo = await _context.UnidadesVenta
+            .AsNoTracking()
+            .Where(u => u.Id == unidadVentaId.Value)
+            .Select(u => u.Codigo)
+            .FirstOrDefaultAsync(ct);
+
+        return codigo ?? "UNIDAD";
+    }
+
+    /// <summary>
     /// Verifica que el <c>Codigo</c> no esté usado por otro producto.
     /// Issue #146.2: el índice único <c>uq_productos_codigo</c> cubre el
     /// caso serial, pero dos requests concurrentes revientan a nivel MySQL
@@ -575,8 +756,12 @@ public class ProductoService : IProductoService
             cambios.Add($"TipoProductoId: {entity.TipoProductoId} → {dto.TipoProductoId}");
         if (entity.CapacidadKg != dto.CapacidadKg)
             cambios.Add($"CapacidadKg: {entity.CapacidadKg?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null"} → {dto.CapacidadKg?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null"}");
-        if (!string.Equals(entity.UnidadVenta, dto.UnidadVenta, StringComparison.Ordinal))
-            cambios.Add($"UnidadVenta: '{entity.UnidadVenta}' → '{dto.UnidadVenta}'");
+        // Issue #147 slice 3 item 7: la unidad de venta ahora vive en el FK
+        // `UnidadVentaId` (ulong?). Comparamos el id (no el string legacy)
+        // para que el log refleje el cambio de FK, no un side-effect del
+        // sync entre VARCHAR y FK.
+        if (entity.UnidadVentaId != dto.UnidadVentaId)
+            cambios.Add($"UnidadVentaId: {entity.UnidadVentaId?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null"} → {dto.UnidadVentaId?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null"}");
         if (entity.PrecioActual != dto.PrecioActual)
             cambios.Add($"PrecioActual: {entity.PrecioActual} → {dto.PrecioActual}");
         if (entity.ManejaGarrafaIndividual != dto.ManejaGarrafaIndividual)
@@ -629,8 +814,14 @@ public class ProductoService : IProductoService
             cambios.Add(("CapacidadKg",
                 entity.CapacidadKg?.ToString(inv),
                 dto.CapacidadKg?.ToString(inv)));
-        if (!string.Equals(entity.UnidadVenta, dto.UnidadVenta, StringComparison.Ordinal))
-            cambios.Add(("UnidadVenta", entity.UnidadVenta, dto.UnidadVenta));
+        // Issue #147 slice 3 item 7: auditar el cambio del FK
+        // UnidadVentaId (no la columna legacy string). La columna
+        // legacy `unidad_venta` se sincroniza automáticamente en cada
+        // Create/Update — auditarla sería duplicar info.
+        if (entity.UnidadVentaId != dto.UnidadVentaId)
+            cambios.Add(("UnidadVentaId",
+                entity.UnidadVentaId?.ToString(inv),
+                dto.UnidadVentaId?.ToString(inv)));
         if (entity.PrecioActual != dto.PrecioActual)
             cambios.Add(("PrecioActual",
                 entity.PrecioActual.ToString(inv),

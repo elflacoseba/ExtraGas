@@ -1,0 +1,127 @@
+@model ExtraGasMVC.DTOs.ProductoDeleteImpactDto
+@* Issue #147 slice 3 item 2: Delete con type-to-confirm.
+   - Si @Model.HasDependencies == false → form simple con confirm.
+   - Si @Model.HasDependencies == true → form exige tipear el codigo del
+     producto antes de habilitar el submit.
+   El JS en wwwroot/js/productos-delete.js hace la lógica de habilitar/
+   deshabilitar el botón cuando el input matchea. *@
+@{
+    ViewData["Title"] = $"Eliminar producto {Model.Codigo}";
+    ViewData["Breadcrumbs"] = new List<BreadcrumbItem>
+    {
+        new() { Label = "Productos", Controller = "Productos", Action = "Index" },
+        new() { Label = "Eliminar" }
+    };
+    var expectedCode = ViewBag.ExpectedCode as string ?? Model.Codigo;
+    var confirmError = ViewBag.ConfirmError as string;
+    var confirmInput = ViewBag.ConfirmInput as string;
+}
+@section PageHeader {
+    <div class="mb-3">
+        <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Volver</a>
+    </div>
+}
+<div class="card">
+    <div class="card-header bg-danger text-white">
+        <h3 class="card-title">Eliminar producto</h3>
+    </div>
+    <form asp-action="Delete" asp-route-id="@Model.ProductoId" method="post" class="js-producto-delete-form">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="id" value="@Model.ProductoId" />
+        <div class="card-body">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                Estás por eliminar (soft-delete) el producto
+                <strong>@Model.Codigo</strong>. Esta acción desactiva el
+                producto del catálogo pero preserva el histórico de
+                pedidos y recepciones.
+            </div>
+
+            @if (Model.HasDependencies)
+            {
+                <div class="alert alert-warning" role="alert">
+                    <h6 class="alert-heading">
+                        <i class="bi bi-link-45deg me-1"></i>
+                        Este producto tiene dependencias históricas
+                    </h6>
+                    <p class="mb-2">Contamos las siguientes referencias en la base:</p>
+                    <dl class="row mb-3">
+                        <dt class="col-sm-8">Items de pedido que lo referencian</dt>
+                        <dd class="col-sm-4"><span class="badge text-bg-secondary">@Model.PedidoItemsCount</span></dd>
+
+                        <dt class="col-sm-8">Items de recepción de proveedor</dt>
+                        <dd class="col-sm-4"><span class="badge text-bg-secondary">@Model.RecepcionItemsCount</span></dd>
+
+                        <dt class="col-sm-8">Movimientos de garrafas asociados (vía capacidad)</dt>
+                        <dd class="col-sm-4"><span class="badge text-bg-secondary">@Model.MovimientosGarrafaCount</span></dd>
+
+                        <dt class="col-sm-8 fw-bold">Total</dt>
+                        <dd class="col-sm-4"><span class="badge text-bg-warning">@Model.TotalCount</span></dd>
+                    </dl>
+                    <p class="mb-0">
+                        Por seguridad, tipeá el código exacto del producto
+                        (<code>@Model.Codigo</code>) para habilitar la confirmación.
+                    </p>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="confirmCode" class="form-label">
+                            Confirmación (tipear <code>@Model.Codigo</code>)
+                        </label>
+                        <input id="confirmCode"
+                               name="confirmCode"
+                               type="text"
+                               class="form-control js-producto-confirm-input"
+                               value="@confirmInput"
+                               autocomplete="off"
+                               autocapitalize="characters"
+                               spellcheck="false"
+                               data-expected-code="@expectedCode" />
+                        @if (!string.IsNullOrEmpty(confirmError))
+                        {
+                            <div class="text-danger small mt-1">@confirmError</div>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p>El producto no tiene items de pedido, recepciones ni
+                movimientos de garrafas asociados. La confirmación es
+                directa.</p>
+                <input type="hidden" name="confirmCode" value="@Model.Codigo" />
+            }
+        </div>
+        <div class="card-footer d-flex gap-2">
+            <button type="submit"
+                    class="btn btn-danger js-producto-confirm-submit"
+                    @(Model.HasDependencies ? "disabled" : "")>
+                <i class="bi bi-trash me-1"></i> Eliminar producto
+            </button>
+            <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
+        </div>
+    </form>
+</div>
+@section Scripts {
+@* Issue #147 slice 3 item 2: el botón submit queda deshabilitado hasta
+   que el input matchee exactamente el código esperado. JS standalone en
+   wwwroot/js/productos-delete.js (registrado en el layout). El bloque
+   inline acá es solo el bootstrapper que lee los data-attributes. *@
+<script>
+    (function () {
+        var input = document.querySelector('.js-producto-confirm-input');
+        var submit = document.querySelector('.js-producto-confirm-submit');
+        if (!input || !submit) return;
+        var expected = (input.getAttribute('data-expected-code') || '').trim();
+        function sync() {
+            var value = (input.value || '').trim();
+            submit.disabled = value !== expected;
+        }
+        input.addEventListener('input', sync);
+        sync();
+    })();
+</script>
+}
