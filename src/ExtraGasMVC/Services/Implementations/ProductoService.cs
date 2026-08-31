@@ -126,7 +126,7 @@ public class ProductoService : IProductoService
         // startup y servir idéntico por 1h"; un sliding extendería el TTL
         // indefinidamente bajo uso sostenido.
         //
-        // TODO forward-looking (issue #147 slice 3 / follow-up): si en el
+        // Nota forward-looking (issue #147 slice 3 / follow-up): si en el
         // futuro se agrega UI CRUD para TiposProducto, este cache key debe
         // evacuarse en Create/Update/Delete (escritura → RemoveAsync). Por
         // ahora la API no expone esos verbos — el catálogo es cerrado.
