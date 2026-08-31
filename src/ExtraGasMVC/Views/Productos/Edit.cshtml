@@ -50,8 +50,20 @@
                     <input asp-for="CapacidadKg" type="number" step="0.01" class="form-control" />
                 </div>
                 <div class="col-md-2">
-                    <label asp-for="UnidadVenta" class="form-label"></label>
-                    <input asp-for="UnidadVenta" class="form-control" />
+                    <label asp-for="UnidadVentaId" class="form-label"></label> <span class="text-danger">*</span>
+                    <select asp-for="UnidadVentaId" class="form-select">
+                        <option value="">-- Seleccionar --</option>
+                        @foreach (var u in (IEnumerable<ExtraGasMVC.DTOs.UnidadVentaDto>)ViewBag.UnidadesVenta)
+                        {
+                            <option value="@u.Id" selected="@(Model.UnidadVentaId == u.Id)">@u.Nombre (@u.Codigo)</option>
+                        }
+                    </select>
+                    <span asp-validation-for="UnidadVentaId" class="text-danger small"></span>
+                    @* Issue #147 slice 3 item 7: la columna legacy `UnidadVenta`
+                       (VARCHAR) queda como fallback en el modelo para la
+                       ventana de transición; el Service la sincroniza con
+                       el FK. El form solo expone el <select> (FK). *@
+                    <input type="hidden" asp-for="UnidadVenta" value="" />
                 </div>
                 <div class="col-md-2">
                     <label asp-for="PrecioActual" class="form-label"></label> <span class="text-danger">*</span>
