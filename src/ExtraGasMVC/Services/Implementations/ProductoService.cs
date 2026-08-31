@@ -7,26 +7,42 @@ using ExtraGasMVC.Extensions;
 using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ExtraGasMVC.Services.Implementations;
 
 public class ProductoService : IProductoService
 {
+    // Issue #147 item 1: clave de cache para GetTiposProductoAsync. El
+    // catálogo tipos_producto es seed-only (decisión documentada en el
+    // design #147 ADR #20 — pendiente de escritura en slice 3): no hay UI
+    // CRUD, nadie lo modifica desde la app. La lista no cambia durante la
+    // vida del proceso → cachear en memoria con TTL 1h es seguro y
+    // elimina 1 query por request.
+    private const string TiposProductoCacheKey = "tipos_producto";
+    private static readonly TimeSpan TiposProductoCacheTtl = TimeSpan.FromHours(1);
+
     private readonly ExtraGasDbContext _context;
     private readonly IMapper _mapper;
     // Issue #145 Slice 2: ILogger<ProductoService> inyectado para trazabilidad
     // del restore (operación privilegiada, AdminOnly). Issue #146.7 lo extiende
     // a las 4 operaciones de escritura (Create/Update/Delete/Restore).
     private readonly ILogger<ProductoService> _logger;
+    // Issue #147 item 1: IMemoryCache inyectado para envolver
+    // GetTiposProductoAsync. AddMemoryCache() ya está registrado en
+    // Program.cs:16, solo faltaba inyectar.
+    private readonly IMemoryCache _cache;
 
     public ProductoService(
         ExtraGasDbContext context,
         IMapper mapper,
-        ILogger<ProductoService> logger)
+        ILogger<ProductoService> logger,
+        IMemoryCache cache)
     {
         _context = context;
         _mapper = mapper;
         _logger = logger;
+        _cache = cache;
     }
 
     public async Task<ProductoDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
@@ -103,12 +119,28 @@ public class ProductoService : IProductoService
 
     public async Task<IEnumerable<TipoProductoDto>> GetTiposProductoAsync(CancellationToken ct = default)
     {
-        var tipos = await _context.TiposProducto
-            .AsNoTracking()
-            .OrderBy(t => t.Nombre)
-            .ToListAsync(ct);
+        // Issue #147 item 1: cache en memoria con TTL 1h. El catálogo
+        // tipos_producto es seed-only (ADR #20 pendiente en slice 3) — no
+        // hay UI CRUD que pueda invalidar el cache entre requests. TTL
+        // absoluto (no sliding) porque la lógica de uso es "cargar al
+        // startup y servir idéntico por 1h"; un sliding extendería el TTL
+        // indefinidamente bajo uso sostenido.
+        //
+        // TODO forward-looking (issue #147 slice 3 / follow-up): si en el
+        // futuro se agrega UI CRUD para TiposProducto, este cache key debe
+        // evacuarse en Create/Update/Delete (escritura → RemoveAsync). Por
+        // ahora la API no expone esos verbos — el catálogo es cerrado.
+        return await _cache.GetOrCreateAsync(TiposProductoCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TiposProductoCacheTtl;
 
-        return _mapper.Map<IEnumerable<TipoProductoDto>>(tipos);
+            var tipos = await _context.TiposProducto
+                .AsNoTracking()
+                .OrderBy(t => t.Nombre)
+                .ToListAsync(ct);
+
+            return (IEnumerable<TipoProductoDto>)_mapper.Map<List<TipoProductoDto>>(tipos);
+        }) ?? [];
     }
 
     /// <summary>

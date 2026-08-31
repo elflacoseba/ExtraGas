@@ -31,7 +31,12 @@ public class ProductoServiceTests
         // Issue #145 Slice 2: ILogger<ProductoService> requerido para trazabilidad
         // de operaciones de escritura (RestoreAsync). Los tests existentes no
         // asertan sobre el log; usamos NullLogger.
-        var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance);
+        // Issue #147 item 1: IMemoryCache requerido para GetTiposProductoAsync
+        // cacheado. Pasamos una instancia fresca de MemoryCache por test (clave
+        // de cache es constante; sin esto los tests interfieren entre sí).
+        var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
+            new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache);
 
         // Issue #146.1: el Service valida FK TipoProductoId antes de
         // SaveChanges. Los tests pre-existentes asumían un DbContext
@@ -325,7 +330,11 @@ public class ProductoServiceTests
         var mapperConfig = new MapperConfiguration(cfg => cfg.AddProfile<MappingProfile>());
         var mapper = mapperConfig.CreateMapper();
         var logger = new TestLogger<ProductoService>();
-        var service = new ProductoService(context, mapper, logger);
+        // Issue #147 item 1: IMemoryCache es parámetro del constructor.
+        // MemoryCache fresh por test — la cache key es constante.
+        var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
+            new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var service = new ProductoService(context, mapper, logger, cache);
 
         // Issue #146.1: el Service valida FK TipoProductoId antes de
         // SaveChanges. Sembramos el catálogo para que el helper NewCreateDto
@@ -719,5 +728,67 @@ public class ProductoServiceTests
         entity.CreatedBy.Should().BeNull(
             "null usuario → CreatedBy NULL en BD (operación sincrónica válida)");
         entity.UpdatedBy.Should().BeNull();
+    }
+
+    // ====================================================================
+    // Issue #147 item 1: cache de GetTiposProductoAsync con IMemoryCache.
+    // Spec scenario "2nd call within 1 h is cached": el segundo call
+    // dentro de la hora NO debe hit EF Core — debe servirse desde el
+    // cache en memoria.
+    // ====================================================================
+
+    [Fact]
+    public async Task GetTiposProductoAsync_SecondCall_HitsCache()
+    {
+        // Estrategia de verificación: spy sobre el DbContext no es trivial
+        // con InMemoryDatabase (no soporta interceptores). Lo que SÍ
+        // podemos verificar de forma robusta:
+        //   1. Sembrar 2 tipos (GAS, CARBON) en BD antes de la 1er call.
+        //   2. Llamar GetTiposProductoAsync → devuelve [GAS, CARBON].
+        //   3. Agregar un 3er tipo (LENA) directo al context SIN guardar
+        //      (simularía que la BD cambió, pero el cache no se entera).
+        //   4. Llamar GetTiposProductoAsync de nuevo → si la 2da call
+        //      hit BD, devolvería [GAS, CARBON, LENA]; si hit cache,
+        //      devuelve [GAS, CARBON] (sin el LENA recién agregado).
+        //
+        // Si el cache no estuviera implementado, la 2da call vería los 3
+        // tipos (porque EF InMemoryDb ve cualquier entity agregada al
+        // ChangeTracker, incluso sin SaveChanges).
+        var dbName = nameof(GetTiposProductoAsync_SecondCall_HitsCache);
+        var options = new DbContextOptionsBuilder<ExtraGasDbContext>()
+            .UseInMemoryDatabase(databaseName: dbName)
+            .Options;
+        using var context = new ExtraGasDbContext(options);
+        var mapperConfig = new MapperConfiguration(cfg => cfg.AddProfile<MappingProfile>());
+        var mapper = mapperConfig.CreateMapper();
+        var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
+            new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache);
+
+        // Seed inicial: 2 tipos visibles para el Service.
+        context.TiposProducto.AddRange(
+            new TipoProducto { Id = 1, Codigo = "GAS", Nombre = "Gas" },
+            new TipoProducto { Id = 2, Codigo = "CARBON", Nombre = "Carbón" });
+        await context.SaveChangesAsync();
+
+        // Primera llamada: pobla el cache.
+        var primera = (await service.GetTiposProductoAsync()).ToList();
+        primera.Should().HaveCount(2, "antes del cache hay 2 tipos sembrados");
+
+        // Simulamos un tercer tipo que aparece DESPUÉS de la 1era call.
+        // Si la 2da call hit BD, lo vería; si hit cache, NO.
+        context.TiposProducto.Add(new TipoProducto
+        {
+            Id = 3,
+            Codigo = "LENA",
+            Nombre = "Leña",
+        });
+        await context.SaveChangesAsync();
+
+        // Segunda llamada: debe hit cache (mismos 2 tipos, sin LENA).
+        var segunda = (await service.GetTiposProductoAsync()).ToList();
+        segunda.Should().HaveCount(2,
+            "la 2da call debe hit cache y NO incluir el LENA agregado después");
+        segunda.Select(t => t.Codigo).Should().BeEquivalentTo(new[] { "GAS", "CARBON" });
     }
 }

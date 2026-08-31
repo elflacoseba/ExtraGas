@@ -40,7 +40,13 @@ public class ProductoServiceRobustezTests
         var mapperConfig = new MapperConfiguration(cfg => cfg.AddProfile<MappingProfile>());
         var mapper = mapperConfig.CreateMapper();
         var logger = new TestLogger<ProductoService>();
-        var service = new ProductoService(context, mapper, logger);
+        // Issue #147 item 1: IMemoryCache es parámetro del constructor de
+        // ProductoService desde slice 1. Pasamos una instancia fresca de
+        // MemoryCache por test para evitar interferencia entre tests
+        // (la clave de cache es constante).
+        var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
+            new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var service = new ProductoService(context, mapper, logger, cache);
 
         // Sembrar el catálogo de tipos_producto para que las validaciones FK
         // que ya pasan el Helper (CreateAsync con TipoProductoId=1) no tiren

@@ -229,7 +229,11 @@ public class ProductoPrecioHistoricoIntegrationTests
             await context.SaveChangesAsync();
 
             var mapper = new MapperConfiguration(cfg => cfg.AddProfile<MappingProfile>()).CreateMapper();
-            var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance);
+            // Issue #147 item 1: IMemoryCache requerido para ProductoService
+            // (cache de GetTiposProductoAsync). MemoryCache fresh por test.
+            var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
+                new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+            var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache);
 
             // Update con cambio de precio 1000 → 1500 + motivo.
             var dto = new UpdateProductoDto
