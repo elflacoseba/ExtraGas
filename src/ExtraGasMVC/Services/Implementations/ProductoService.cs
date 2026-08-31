@@ -252,9 +252,13 @@ public class ProductoService : IProductoService
         // normal pero queremos reconstruir después quién dio de alta un
         // producto sensible (ej. GAS-10 en medio de un conflicto de
         // precios). Information, no Warning.
-        _logger.LogInformation(
-            "Producto {ProductoId} (codigo={Codigo}, nombre={Nombre}) creado por {UsuarioId}",
-            entity.Id, entity.Codigo, entity.Nombre, usuarioId);
+        // Issue #158 (CA1873): guard de logging condicional.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Producto {ProductoId} (codigo={Codigo}, nombre={Nombre}) creado por {UsuarioId}",
+                entity.Id, entity.Codigo, entity.Nombre, usuarioId);
+        }
 
         return _mapper.Map<ProductoDto>(entity);
     }
@@ -341,9 +345,14 @@ public class ProductoService : IProductoService
                 .Replace("\r", " ")
                 .Replace("\n", " ");
 
-            _logger.LogInformation(
-                "Producto {ProductoId} cambió de precio: {PrecioAnterior} → {PrecioNuevo} (motivo: {Motivo}, operador: {ChangedBy})",
-                entity.Id, precioAnterior, precioNuevo, motivoCambioPrecioLog, usuarioId);
+            // Issue #158 (CA1873): guard de logging condicional — evita el
+            // Replace().Replace() cuando Information está deshabilitado.
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "Producto {ProductoId} cambió de precio: {PrecioAnterior} → {PrecioNuevo} (motivo: {Motivo}, operador: {ChangedBy})",
+                    entity.Id, precioAnterior, precioNuevo, motivoCambioPrecioLog, usuarioId);
+            }
         }
 
         try
@@ -382,9 +391,14 @@ public class ProductoService : IProductoService
         if (cambios.Count > 0)
         {
             var cambiosLog = SanitizeForLog(string.Join(", ", cambios));
-            _logger.LogInformation(
-                "Producto {ProductoId} ({Codigo}) actualizado por {UsuarioId} — cambios: {Cambios}",
-                entity.Id, entity.Codigo, usuarioId, cambiosLog);
+            // Issue #158 (CA1873): guard de logging condicional — evita el
+            // SanitizeForLog + string.Join cuando Information está deshabilitado.
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "Producto {ProductoId} ({Codigo}) actualizado por {UsuarioId} — cambios: {Cambios}",
+                    entity.Id, entity.Codigo, usuarioId, cambiosLog);
+            }
         }
 
         return _mapper.Map<ProductoDto>(entity);
@@ -464,9 +478,13 @@ public class ProductoService : IProductoService
         // Trazabilidad: RestoreAsync es AdminOnly y revierte un soft-delete,
         // operación que el auditor quiere ver en logs. No loggeamos el caso
         // "no encontrado" porque es flujo esperado (404 desde la papelera).
-        _logger.LogInformation(
-            "Producto {ProductoId} reactivado por {UpdatedBy}",
-            producto.Id, updatedBy);
+        // Issue #158 (CA1873): guard de logging condicional.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Producto {ProductoId} reactivado por {UpdatedBy}",
+                producto.Id, updatedBy);
+        }
 
         return true;
     }

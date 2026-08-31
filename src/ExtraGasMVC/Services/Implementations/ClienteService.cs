@@ -165,9 +165,14 @@ public class ClienteService : IClienteService
 
         // Issue #116: trazabilidad del alta. Loggeamos el Id (no el DNI) porque
         // el DNI puede ser null y ademas ya quedo auditado en la entity.
-        _logger.LogInformation(
-            "Cliente {ClienteId} creado por {CreatedBy}",
-            entity.Id, createdBy);
+        // Issue #158 (CA1873): guard de logging condicional — evita construir
+        // los argumentos cuando Information está deshabilitado.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Cliente {ClienteId} creado por {CreatedBy}",
+                entity.Id, createdBy);
+        }
 
         return _mapper.Map<ClienteDto>(entity);
     }
@@ -232,9 +237,13 @@ public class ClienteService : IClienteService
         await SaveOrThrowDuplicateDniAsync(ct);
 
         // Issue #116: trazabilidad de la modificacion.
-        _logger.LogInformation(
-            "Cliente {ClienteId} actualizado por {UpdatedBy}",
-            entity.Id, updatedBy);
+        // Issue #158 (CA1873): guard de logging condicional.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Cliente {ClienteId} actualizado por {UpdatedBy}",
+                entity.Id, updatedBy);
+        }
 
         return _mapper.Map<ClienteDto>(entity);
     }
@@ -275,9 +284,13 @@ public class ClienteService : IClienteService
         // Issue #116: trazabilidad del soft-delete. No loggeamos el caso
         // "no encontrado" porque es un flujo esperado (404 de la papelera
         // cuando el operador hace doble click), no requiere investigación.
-        _logger.LogInformation(
-            "Cliente {ClienteId} soft-deleted por {UpdatedBy}",
-            cliente.Id, updatedBy);
+        // Issue #158 (CA1873): guard de logging condicional.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Cliente {ClienteId} soft-deleted por {UpdatedBy}",
+                cliente.Id, updatedBy);
+        }
 
         return true;
     }
@@ -301,9 +314,13 @@ public class ClienteService : IClienteService
         await _context.SaveChangesAsync(ct);
 
         // Issue #116: trazabilidad del restore desde la papelera.
-        _logger.LogInformation(
-            "Cliente {ClienteId} reactivado por {UpdatedBy}",
-            cliente.Id, updatedBy);
+        // Issue #158 (CA1873): guard de logging condicional.
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Cliente {ClienteId} reactivado por {UpdatedBy}",
+                cliente.Id, updatedBy);
+        }
 
         return true;
     }
