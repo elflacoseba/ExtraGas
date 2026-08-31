@@ -73,14 +73,9 @@ public class ClienteService : IClienteService
         // que un `Where(c => c.Activo)` adicional sería redundante. El nombre
         // del método se conserva por compatibilidad con los callers
         // (Home/Pagos/Garrafas/Pedidos) — "clientes activos" = "no
-        // soft-deleted".
-        var clientes = await _context.Clientes
-            .AsNoTracking()
-            .OrderBy(c => c.Apellido)
-            .ThenBy(c => c.Nombre)
-            .ToListAsync(ct);
-
-        return _mapper.Map<IEnumerable<ClienteDto>>(clientes);
+        // soft-deleted". Issue #158 (S4144): implementación idéntica a
+        // GetAllAsync, así que delegamos para eliminar la duplicación.
+        return await GetAllAsync(ct);
     }
 
     public async Task<PagedResult<ClienteDto>> SearchAsync(
