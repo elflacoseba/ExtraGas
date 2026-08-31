@@ -402,3 +402,41 @@ Mensaje de error de PedidoService: `"El producto {nombre} (id={id}) fue desactiv
 6. No hay sincronización con sistema de ARCA; los datos fiscales se manejan afuera.
 7. No hay manejo de devoluciones de producto (solo devolución de garrafas vacías por canje).
 8. El dueño actúa como ADMIN; los 2 empleados como OPERADOR.
+
+---
+
+## 20. Catálogos cerrados: `tipos_producto` y `unidades_venta` (issue #147 slice 3)
+
+**Contexto:** el sistema tiene dos lookup tables que categorizan el catálogo de productos:
+
+- `tipos_producto` — categoriza el producto por naturaleza (GAS, CARBON, LENA). Ya existe desde la migración inicial `20260102_000003`.
+- `unidades_venta` — unidad en que se vende el producto (UNIDAD, GARRAFA, BOLSA, KG). Issue #147 slice 3 item 7 la introduce como FK en lugar del VARCHAR libre anterior.
+
+Los valores son decisiones de negocio estables: hoy hay 3 tipos y 4 unidades, y la operatoria no requiere que un usuario cree nuevas categorías en runtime. Tanto el Service como los controllers exponen métodos `GetTiposProductoAsync()` / `GetUnidadesVentaAsync()` que devuelven la lista cacheada — pero no hay un ABM CRUD para estas tablas. La tabla `unidades_venta` no tiene ni siquiera un controller.
+
+**Decisión:** `tipos_producto` y `unidades_venta` son **catálogos cerrados por diseño**. NO se implementa UI CRUD para ninguno de los dos. Agregar un valor requiere una migración SQL explícita bajo `db/migrations/` que:
+1. Inserte la fila nueva (con `INSERT IGNORE` para idempotencia).
+2. Si la tabla ya está en producción, NO se permite el borrado lógico (`UPDATE ... SET deleted_at = NOW()`) sin migrar previamente las referencias — la FK `ON DELETE RESTRICT` lo bloquea a nivel BD.
+
+**Por qué:**
+
+- Consistencia con la realidad operativa: los tipos de producto y unidades de venta son estables. La empresa vende gas, carbón y leña — no aparece una nueva categoría cada 3 meses. Modelar CRUD UI para esto sería oro de tontos: una superficie de ataque sin beneficio.
+- Bloquea cambios accidentales: si mañana un operador con rol OPERADOR pudiera agregar `tipo_producto = 'GAS_INDUSTRIAL'` desde la UI, podría romper reportes, joins, o reglas de negocio downstream (ej. el `ManejaGarrafaIndividual` que es específico de GAS).
+- Coherencia con el patrón de seed-only que ya rige las tablas lookup en este sistema (`estados_pedido`, `estados_garrafa`, `formas_pago`, `canales_venta`, `medios_contacto_pedido`, `roles`, `provincias`). Ninguna de esas tiene UI CRUD; todas se cargan vía migración. Los dos catálogos de productos siguen el mismo principio.
+- ADR #4 (catálogos-en-lugar-de-ENUM) justificó usar tablas en lugar de `ENUM` por flexibilidad, no por operatividad — la flexibilidad está en poder agregar un valor cuando el negocio lo necesita, no en hacerlo clickeable desde la UI.
+
+**Consecuencias:**
+
+- El operador no puede crear tipos o unidades nuevas desde la app. Si necesita una nueva categoría, levanta un ticket y un dev hace una migración SQL.
+- El catálogo cerrado se preserva con un guard implícito: el ABM CRUD literalmente no existe (`/TiposProducto` y `/UnidadesVenta` no son rutas registradas).
+- El cache en memoria (`IMemoryCache.GetOrCreateAsync("tipos_producto"/"unidades_venta", TTL 1h)`) es seguro: el catálogo no muta durante la vida del proceso. Si en el futuro se rompe este invariante (alguien agrega UI CRUD), hay que agregar una eviction hook — issue follow-up.
+- La administración escapa al SQL: si un tipo o unidad se vuelve obsoleto, se aplica un soft-delete (`UPDATE ... SET deleted_at = NOW() WHERE id = ?`) directamente en la BD. La app lo oculta vía query filter. Esto requiere un ticket + DB access — el operador no lo puede hacer desde la UI.
+
+**When to revisit:**
+
+- Si el negocio crece y necesita múltiples unidades de negocio con catálogos distintos (ej. una subsidiaria que vende GLP industrial además de gas envasado), se reabre este ADR con propuesta de:
+  - CRUD UI con `[Authorize(Policy="AdminOnly")]` + invalidación de cache.
+  - Multi-tenancy: cada unidad de negocio tiene su propio set de catálogos.
+  - Outbox + eventual consistency para invalidación cross-instance.
+- Si aparece un caso de uso real que necesita 3+ tipos/unidades nuevas por año, también es señal de que el catálogo dejó de ser estable y el modelo cerrado se queda corto.
+- Si la administración directa por SQL se vuelve operacionalmente incómoda (ej. el dueño quiere hacerlo sin esperar al dev), se reabre con propuesta de admin-only UI + audit trail.
