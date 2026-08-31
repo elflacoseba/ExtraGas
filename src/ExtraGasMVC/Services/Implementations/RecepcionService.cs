@@ -101,13 +101,19 @@ public class RecepcionService : IRecepcionService
     /// <summary>
     /// Resuelve los IDs de productos del dto en una sola query y los devuelve
     /// en un diccionario para evitar lookups repetidos en el bucle principal.
+    /// Issue #145 Slice 4: filtra `Activo=true` además del QueryFilter global
+    /// sobre <c>DeletedAt</c>. Sin el filtro, un producto desactivado por un
+    /// admin (Activo=false, DeletedAt=null) pasaba el query y luego
+    /// <see cref="ValidarItemsPreCommitAsync"/> no podía detectarlo. El
+    /// invariante "producto en dropdown ⇒ Activo" es defended acá y
+    /// documentado en ADR #19 de db/docs/DECISIONES.md.
     /// </summary>
     private async Task<Dictionary<ulong, ProductoResumen>> LoadProductosByIdAsync(
         IEnumerable<CrearRecepcionItemDto> items, CancellationToken ct)
     {
         var productoIds = items.Select(i => i.ProductoId).Distinct().ToList();
         var rows = await _context.Productos.AsNoTracking()
-            .Where(p => productoIds.Contains(p.Id))
+            .Where(p => productoIds.Contains(p.Id) && p.Activo)
             .Select(p => new ProductoResumen(p.Id, p.ManejaGarrafaIndividual, p.CapacidadKg, p.Nombre))
             .ToListAsync(ct);
         return rows.ToDictionary(p => p.Id);

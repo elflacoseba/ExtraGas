@@ -6,6 +6,7 @@ using ExtraGasMVC.Mappings;
 using ExtraGasMVC.Services.Implementations;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -139,5 +140,181 @@ public class ProductoServiceTests
         var ok = await service.RestoreAsync(999_999UL, updatedBy: 1);
 
         ok.Should().BeFalse();
+    }
+
+    // ====================================================================
+    // Issue #145 Slice 3: hook de histórico de precios en UpdateAsync.
+    // El spec exige que producto_precios_historico reciba UNA fila por cambio
+    // real (precio_anterior != precio_nuevo && precio_anterior != 0). El
+    // guard precioAnterior != 0 evita phantom rows cuando se hace un primer
+    // update sobre un producto recién creado con precio=0.
+    // ====================================================================
+
+    /// <summary>
+    /// Helper para construir un UpdateProductoDto a partir de un entity
+    /// existente con un precio nuevo opcional. Mantiene todos los demás
+    /// campos invariantes para que el Mapper solo vea cambio de precio.
+    /// </summary>
+    private static UpdateProductoDto NewUpdateDto(ProductoDto creado, decimal nuevoPrecio)
+        => new()
+        {
+            Id = creado.Id,
+            Codigo = creado.Codigo,
+            Nombre = creado.Nombre,
+            Descripcion = creado.Descripcion,
+            TipoProductoId = creado.TipoProductoId,
+            CapacidadKg = creado.CapacidadKg,
+            UnidadVenta = creado.UnidadVenta,
+            PrecioActual = nuevoPrecio,
+            ManejaGarrafaIndividual = creado.ManejaGarrafaIndividual,
+            MotivoCambioPrecio = null,
+        };
+
+    [Fact]
+    public async Task UpdateAsync_PriceChange_CreatesHistoryRow()
+    {
+        // Spec task 3.1 (a): un cambio real de precio debe dejar exactamente
+        // una fila en producto_precios_historico con PrecioAnterior/PrecioNuevo
+        // correctos y ChangedBy igual al operator que invocó UpdateAsync.
+        var (service, context) = NewService(nameof(UpdateAsync_PriceChange_CreatesHistoryRow));
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: 1);
+        // PrecioActual del seed es 15000 — UpdateAsync lo sube a 18000.
+
+        var actualizado = await service.UpdateAsync(NewUpdateDto(creado, 18000m), usuarioId: 42);
+
+        actualizado.PrecioActual.Should().Be(18000m, "el update debe persistir el nuevo precio");
+        var filas = await context.ProductoPreciosHistorico
+            .AsNoTracking()
+            .Where(p => p.ProductoId == creado.Id)
+            .ToListAsync();
+        filas.Should().HaveCount(1, "un cambio real debe registrar exactamente una fila");
+        var fila = filas[0];
+        fila.PrecioAnterior.Should().Be(15000m, "el precio anterior se snapshot antes del Map");
+        fila.PrecioNuevo.Should().Be(18000m, "el precio nuevo es el que quedó en la entity");
+        fila.ChangedBy.Should().Be(42UL, "el operator se propaga al histórico");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_PriceUnchanged_NoHistoryRow()
+    {
+        // Spec task 3.1 (b): un update sin cambio de precio NO debe ensuciar
+        // la tabla append-only. Caso típico: el operador reenvía el form sin
+        // tocar el campo PrecioActual — el Service lo deja igual y el hook
+        // no inserta.
+        var (service, context) = NewService(nameof(UpdateAsync_PriceUnchanged_NoHistoryRow));
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: 1);
+
+        await service.UpdateAsync(NewUpdateDto(creado, creado.PrecioActual), usuarioId: 1);
+
+        var filas = await context.ProductoPreciosHistorico
+            .AsNoTracking()
+            .Where(p => p.ProductoId == creado.Id)
+            .ToListAsync();
+        filas.Should().BeEmpty(
+            "un update sin cambio de precio no debe generar fila de histórico");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_PriorZero_NoHistoryRow()
+    {
+        // Spec task 3.1 (c): guard `precioAnterior != 0`. Si la entity ya
+        // tenía PrecioActual=0 (caso raro: seed manual o backfill), el primer
+        // update a un valor real NO debe registrar histórico — sería un
+        // phantom row que documenta un cambio "desde 0", no un cambio real.
+        var (service, context) = NewService(nameof(UpdateAsync_PriorZero_NoHistoryRow));
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: 1);
+        // Sobreescribir PrecioActual a 0 vía context directo para simular el
+        // estado previo del phantom-guard. CreateAsync setea CreatedBy/Activo,
+        // pero el precio es data de carga — no hay invariante que impida 0.
+        var entity = await context.Productos.FirstAsync(p => p.Id == creado.Id);
+        entity.PrecioActual = 0m;
+        await context.SaveChangesAsync();
+
+        await service.UpdateAsync(NewUpdateDto(creado, 1000m), usuarioId: 1);
+
+        var filas = await context.ProductoPreciosHistorico
+            .AsNoTracking()
+            .Where(p => p.ProductoId == creado.Id)
+            .ToListAsync();
+        filas.Should().BeEmpty(
+            "el guard precioAnterior != 0 debe impedir phantom rows en el primer cambio");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_PriceChange_StoresMotivoCambioPrecio()
+    {
+        // Spec task 3.1 (d): cuando el operador documenta un motivo de cambio,
+        // el string se persiste tal cual en la fila del histórico. La columna
+        // es VARCHAR(255) NULL — null se persiste como null (no "" vacío).
+        var (service, context) = NewService(nameof(UpdateAsync_PriceChange_StoresMotivoCambioPrecio));
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: 1);
+        var dto = NewUpdateDto(creado, 18000m);
+        dto.MotivoCambioPrecio = "Ajuste por inflacion Q3";
+
+        await service.UpdateAsync(dto, usuarioId: 1);
+
+        var fila = await context.ProductoPreciosHistorico
+            .AsNoTracking()
+            .FirstAsync(p => p.ProductoId == creado.Id);
+        fila.MotivoCambioPrecio.Should().Be("Ajuste por inflacion Q3",
+            "el motivo del DTO debe persistirse verbatim en la fila del histórico");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_PriceChange_LogsInformation()
+    {
+        // Triangulación: además de la fila persistida, el Service debe loggear
+        // el evento a nivel Information para auditoría (operación que toca
+        // precios, sensible para el negocio). Usamos TestLogger spy (no Moq,
+        // no está en el repo).
+        var dbName = nameof(UpdateAsync_PriceChange_LogsInformation);
+        var options = new DbContextOptionsBuilder<ExtraGasDbContext>()
+            .UseInMemoryDatabase(databaseName: dbName)
+            .Options;
+        using var context = new ExtraGasDbContext(options);
+        var mapperConfig = new MapperConfiguration(cfg => cfg.AddProfile<MappingProfile>());
+        var mapper = mapperConfig.CreateMapper();
+        var logger = new TestLogger<ProductoService>();
+        var service = new ProductoService(context, mapper, logger);
+
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: 1);
+        var dto = NewUpdateDto(creado, 18000m);
+        dto.MotivoCambioPrecio = "Ajuste";
+
+        await service.UpdateAsync(dto, usuarioId: 7);
+
+        logger.Entries.Should().ContainSingle(
+            e => e.Level == LogLevel.Information && e.Message.Contains("cambió de precio"),
+            "el hook debe emitir un Information cuando registra histórico");
+        logger.Entries.Single().Message.Should().Contain("18000").And.Contain("Ajuste");
+    }
+
+    [Fact]
+    public void UpdateProductoDto_MotivoCambioPrecio_RechazaMasDe255Chars()
+    {
+        // DataAnnotations del DTO: la columna es VARCHAR(255) — el límite se
+        // enforce a nivel modelo para que el Controller rechace el POST antes
+        // de invocar al Service. Test plano sobre las anotaciones, sin EF.
+        var dto = new UpdateProductoDto
+        {
+            Id = 1,
+            Codigo = "GAS-10",
+            Nombre = "Garrafa 10kg",
+            TipoProductoId = 1,
+            UnidadVenta = "UNIDAD",
+            PrecioActual = 15000m,
+            ManejaGarrafaIndividual = true,
+            MotivoCambioPrecio = new string('x', 256), // 256 > 255
+        };
+
+        var ctx = new System.ComponentModel.DataAnnotations.ValidationContext(dto);
+        var results = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        var isValid = System.ComponentModel.DataAnnotations.Validator.TryValidateObject(
+            dto, ctx, results, validateAllProperties: true);
+
+        isValid.Should().BeFalse(
+            "un motivo de 256 chars debe fallar la validación [StringLength(255)] antes de llegar al Service");
+        results.Should().Contain(r =>
+            r.MemberNames.Contains(nameof(UpdateProductoDto.MotivoCambioPrecio)));
     }
 }
