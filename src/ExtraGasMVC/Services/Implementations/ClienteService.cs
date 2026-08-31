@@ -472,15 +472,26 @@ public class ClienteService : IClienteService
                 _logger.LogWarning(
                     ex,
                     "Race condition de DNI duplicado (errno 1062) al persistir cambios.");
+                // Issue #161 (S2139): `mapped` ya preserva `ex` como inner
+                // (MapDuplicateDniException devuelve InvalidOperationException(msg, ex)),
+                // así que el rethrow con stack completo cumple la regla.
                 throw mapped;
             }
-            // No es duplicate-DNI: error inesperado de BD. Lo loggeamos con el
-            // stack completo antes de re-throw para que el caller pueda
-            // registrar el error y nosotros tengamos el detalle abajo.
+            // No es duplicate-DNI: error inesperado de BD. Loggeamos el stack
+            // completo y re-lanzamos como una nueva DbUpdateException con un
+            // mensaje contextual. Esto satisface S2139 ("rethrow with
+            // contextual information") sin cambiar el contrato: el Controller
+            // de Clientes sigue catcheando `Exception` genérico y el test
+            // `CreateAsync_cuando_SaveChangesAsync_tira_otra_DbUpdate_*`
+            // espera exactamente DbUpdateException como tipo de salida.
             _logger.LogError(
                 ex,
                 "DbUpdateException no esperada al persistir cliente.");
-            throw;
+            throw new DbUpdateException(
+                "Error de base de datos no esperado al persistir el cliente. " +
+                "La causa original está preservada como inner exception. " +
+                $"Detalle original: {ex.Message}",
+                ex);
         }
     }
 }

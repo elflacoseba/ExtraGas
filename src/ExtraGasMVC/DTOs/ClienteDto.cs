@@ -32,8 +32,9 @@ public class ClienteDtoBase
     [Required(ErrorMessage = "El teléfono principal es obligatorio.")]
     [StringLength(25, ErrorMessage = "El teléfono no puede superar {1} caracteres.")]
     // Issue #117: regex estricto (mín 6 chars) — el regex anterior ^[0-9 +()\-.]*$
-    // permitía string vacío o todo separadores. La app no podía llamar/WhatsAppear
-    // a un cliente con un teléfono basura. Formato argentino típico: "+54 11 4455-6677".
+    // permitía string vacío o compuesto solo por separadores. La app no podía
+    // llamar/WhatsAppear a un cliente con un teléfono basura. Formato argentino
+    // típico: "+54 11 4455-6677".
     [RegularExpression("^[\\d\\s\\-\\+\\(\\)]{6,25}$", ErrorMessage = "El teléfono solo puede contener dígitos, espacios, guiones y signo +.")]
     public string TelefonoPrincipal { get; set; } = null!;
 

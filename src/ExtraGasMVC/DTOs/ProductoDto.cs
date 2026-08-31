@@ -82,12 +82,14 @@ public class CreateProductoDto
     public decimal PrecioActual { get; set; }
 
     [Display(Name = "Maneja garrafas individuales")]
-    // Issue #158 (S6964): [Required] en un bool no bloquea el under-posting
-    // (el binder igual lo llena con false si no se postea), pero cumple con
-    // la regla de SonarQube y blinda contra valores por default accidentales
-    // en consumidores no-MVC (tests, integration scripts).
-    [Required]
-    public bool ManejaGarrafaIndividual { get; set; }
+    // Issue #161 (S6964): C# 11 `required` keyword. [Required] (DataAnnotations)
+    // no alcanza para S6964 sobre un value-type en un DTO de MVC: Sonar exige
+    // una de tres variantes — `nullable`, `required` (keyword) o `[JsonRequired]`.
+    // El keyword es la opción moderna: enforce compile-time en consumers C# y
+    // el binder MVC lo sigue poblando via reflection sin cambios. Tests +
+    // ProductosController.Create (que arma un CreateProductoDto con un set
+    // initializer parcial) deben setear la propiedad explícitamente.
+    public required bool ManejaGarrafaIndividual { get; set; }
 }
 
 /// <summary>
@@ -135,9 +137,9 @@ public class UpdateProductoDto
     public decimal PrecioActual { get; set; }
 
     [Display(Name = "Maneja garrafas individuales")]
-    // Issue #158 (S6964): ver nota sobre [Required] en CreateProductoDto.
-    [Required]
-    public bool ManejaGarrafaIndividual { get; set; }
+    // Issue #161 (S6964): ver nota en CreateProductoDto — `required` keyword
+    // en lugar de [Required] para satisfacer Sonar S6964.
+    public required bool ManejaGarrafaIndividual { get; set; }
 
     /// <summary>
     /// Motivo del cambio de precio. Solo tiene sentido registrarlo cuando el

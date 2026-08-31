@@ -51,7 +51,7 @@ public class ProductosController : BaseController
         await LoadViewBagsAsync(ct);
         // Issue #114: CreateProductoDto ya no expone Activo — lo setea el
         // Service en true. UnidadVenta queda como default de UI.
-        return View(new CreateProductoDto { UnidadVenta = "UNIDAD" });
+        return View(new CreateProductoDto { UnidadVenta = "UNIDAD", ManejaGarrafaIndividual = false });
     }
 
     [HttpPost]

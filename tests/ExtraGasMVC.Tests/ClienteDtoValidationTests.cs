@@ -15,9 +15,12 @@ namespace ExtraGasMVC.Tests;
 /// </summary>
 public class ClienteDtoValidationTests
 {
-    // Issue #158 (CA1859): IReadOnlyList porque el caller nunca muta el
-    // resultado de Validator.TryValidateObject — comunica la intención.
-    private static IReadOnlyList<ValidationResult> Validar(object dto)
+    // Issue #161 (CA1859): cambiamos a `List<ValidationResult>` porque CA1859
+    // marca el uso de IReadOnlyList cuando el método siempre materializa una
+    // List internamente — el wrapper genérico agrega una capa sin beneficio de
+    // performance. Los callers siguen pudiendo tratar el resultado como
+    // IEnumerable<ValidationResult> sin cambios.
+    private static List<ValidationResult> Validar(object dto)
     {
         var ctx = new ValidationContext(dto);
         var results = new List<ValidationResult>();
