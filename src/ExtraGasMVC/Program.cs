@@ -71,6 +71,11 @@ builder.Services.AddScoped<IEmailSender, MailKitEmailSender>();
 builder.Services.AddScoped<IEmpleadoService, EmpleadoService>();
 builder.Services.AddScoped<IRecepcionService, RecepcionService>();
 builder.Services.AddScoped<IAuditoriaLoginService, AuditoriaLoginService>();
+// Issue #147 slice 2: IAuditLogger emite filas a la tabla genérica
+// audit_log desde ProductoService.UpdateAsync (y futuros callers).
+// Scoped para compartir el ExtraGasDbContext con el Service que invoca
+// y garantizar atomicidad en el SaveChangesAsync del caller.
+builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddSingleton<IPasswordPolicyService, PasswordPolicyService>();
 
 var app = builder.Build();
