@@ -9,6 +9,18 @@ public class Producto
     public ulong TipoProductoId { get; set; }
     public decimal? CapacidadKg { get; set; }
     public string UnidadVenta { get; set; } = "UNIDAD";
+
+    /// <summary>
+    /// Issue #147 slice 3 item 7: FK a la lookup <c>unidades_venta</c>.
+    /// Nullable para la ventana de transición: la columna legacy
+    /// <c>unidad_venta</c> (VARCHAR) convive con esta durante el
+    /// expand-contract hasta que se haga el DROP COLUMN en una migración
+    /// cleanup (ver design.md Open Questions #1 y ADR #12 pattern).
+    /// La app prefiere este FK si está populado y cae al VARCHAR como
+    /// fallback. Una vez completada la transición, este será NOT NULL.
+    /// </summary>
+    public ulong? UnidadVentaId { get; set; }
+
     public decimal PrecioActual { get; set; }
     public bool ManejaGarrafaIndividual { get; set; }
     public bool Activo { get; set; }
@@ -36,4 +48,15 @@ public class Producto
     public byte[]? RowVersion { get; set; }
 
     public virtual TipoProducto? TipoProducto { get; set; }
+
+    /// <summary>
+    /// Issue #147 slice 3 item 7: navigation property a la lookup
+    /// <see cref="UnidadVenta"/>. Usada por el Service para hidratar
+    /// <c>ProductoDto.UnidadVentaNombre</c> vía <c>.Include(p => p.UnidadVentaRef)</c>.
+    /// Se llama <c>UnidadVentaRef</c> para evitar colisión con la columna
+    /// legacy <c>UnidadVenta</c> (VARCHAR) — C# no permite dos members
+    /// con el mismo nombre. La configuración EF lo mapea explícitamente
+    /// vía <c>HasOne(p =&gt; p.UnidadVentaRef)</c>.
+    /// </summary>
+    public virtual UnidadVenta? UnidadVentaRef { get; set; }
 }

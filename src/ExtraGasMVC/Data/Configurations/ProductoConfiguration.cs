@@ -39,6 +39,13 @@ public class ProductoConfiguration : IEntityTypeConfiguration<Producto>
             .HasDefaultValue("UNIDAD")
             .IsRequired();
 
+        // Issue #147 slice 3 item 7: FK a la lookup `unidades_venta`.
+        // Nullable durante la ventana de transición (la columna legacy
+        // `unidad_venta` VARCHAR convive con esta hasta la migración
+        // cleanup que hará el DROP). El backfill de la migración
+        // 20260901_000002 resuelve el VARCHAR al FK id correspondiente.
+        builder.Property(p => p.UnidadVentaId).HasColumnName("unidad_venta_id");
+
         builder.Property(p => p.PrecioActual)
             .HasColumnName("precio_actual")
             .HasPrecision(12, 2)
@@ -96,6 +103,17 @@ public class ProductoConfiguration : IEntityTypeConfiguration<Producto>
             .HasForeignKey(p => p.TipoProductoId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_productos_tipo");
+
+        // Issue #147 slice 3 item 7: FK a `unidades_venta`. ON DELETE
+        // RESTRICT (mismo patrón que fk_productos_tipo): protege contra
+        // bajas accidentales de unidades referenciadas por productos.
+        // Navigation property se llama `UnidadVentaRef` para evitar
+        // colisión con la columna legacy `UnidadVenta` (VARCHAR).
+        builder.HasOne(p => p.UnidadVentaRef)
+            .WithMany()
+            .HasForeignKey(p => p.UnidadVentaId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_productos_unidad_venta");
 
         builder.HasOne<Usuario>()
             .WithMany()
