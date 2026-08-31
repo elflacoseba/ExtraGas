@@ -333,11 +333,11 @@ public class ProductoServiceTests
         entryPrecio.Message.Should().Contain("18000").And.Contain("Ajuste");
     }
 
-    [Fact]
+[Fact]
     public void UpdateProductoDto_MotivoCambioPrecio_RechazaMasDe255Chars()
     {
         // DataAnnotations del DTO: la columna es VARCHAR(255) — el límite se
-        // enforce a nivel modelo para que el Controller rechace el POST antes
+        // enforce a nivel modelo para que el Controller rechche el POST antes
         // de invocar al Service. Test plano sobre las anotaciones, sin EF.
         var dto = new UpdateProductoDto
         {
@@ -360,5 +360,93 @@ public class ProductoServiceTests
             "un motivo de 256 chars debe fallar la validación [StringLength(255)] antes de llegar al Service");
         results.Should().Contain(r =>
             r.MemberNames.Contains(nameof(UpdateProductoDto.MotivoCambioPrecio)));
+    }
+
+    // ====================================================================
+    // Issue #147 item 6: normalización de Codigo (trim + upper) en el Service.
+    // El operador puede tipear " gas-10 " en el form; el Service debe
+    // persistir "GAS-10" para que coincida con el índice único
+    // `uq_productos_codigo` y con futuras búsquedas.
+    // ====================================================================
+
+    [Fact]
+    public async Task CreateAsync_CodigoConEspaciosYLowercase_PersisteNormalizado()
+    {
+        // Spec scenario "Create persists normalized": input " gas-10 " →
+        // persistido "GAS-10". El DTO llega con el valor crudo del form;
+        // el Service es responsable de aplicar TrimAndUpper antes del INSERT.
+        var (service, context) = NewService(nameof(CreateAsync_CodigoConEspaciosYLowercase_PersisteNormalizado));
+        var dto = NewCreateDto(codigo: " gas-10 ");
+
+        var creado = await service.CreateAsync(dto, usuarioId: 1);
+
+        creado.Codigo.Should().Be("GAS-10",
+            "el Service debe normalizar Codigo (trim + upper) antes de persistir");
+        var entity = await context.Productos.AsNoTracking().FirstAsync(p => p.Id == creado.Id);
+        entity.Codigo.Should().Be("GAS-10",
+            "el valor normalizado debe quedar en la entity persistida");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_CodigoCambiaAFormaNormalizada_PersisteNormalizado()
+    {
+        // Spec scenario "Index search normalizes input" (vía Update): si el
+        // operador edita un producto y manda " gas-10 " desde el form, el
+        // Service debe persistir el valor canónico, no el input crudo.
+        var (service, context) = NewService(nameof(UpdateAsync_CodigoCambiaAFormaNormalizada_PersisteNormalizado));
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: 1);
+
+        var updateDto = new UpdateProductoDto
+        {
+            Id = creado.Id,
+            Codigo = " gas-10 ", // mismo codigo en lowercase+espacios
+            Nombre = creado.Nombre,
+            TipoProductoId = creado.TipoProductoId,
+            CapacidadKg = creado.CapacidadKg,
+            UnidadVenta = creado.UnidadVenta,
+            PrecioActual = creado.PrecioActual,
+            ManejaGarrafaIndividual = creado.ManejaGarrafaIndividual,
+        };
+
+        var actualizado = await service.UpdateAsync(updateDto, usuarioId: 2);
+
+        actualizado.Codigo.Should().Be("GAS-10",
+            "UpdateAsync debe normalizar Codigo igual que CreateAsync");
+        var entity = await context.Productos.AsNoTracking().FirstAsync(p => p.Id == creado.Id);
+        entity.Codigo.Should().Be("GAS-10");
+    }
+
+    [Fact]
+    public async Task GetByCodigoAsync_InputLowercase_MatcheaStoredUppercase()
+    {
+        // Spec scenario "GetByCodigoAsync matches normalized input":
+        // producto persistido como "GAS-10", query con "gas-10" → debe
+        // matchear. El Service normaliza el input del lookup igual que el
+        // persist (canónico a ambos lados).
+        var (service, _) = NewService(nameof(GetByCodigoAsync_InputLowercase_MatcheaStoredUppercase));
+        await service.CreateAsync(NewCreateDto(codigo: "GAS-10"), usuarioId: 1);
+
+        var encontrado = await service.GetByCodigoAsync("gas-10");
+
+        encontrado.Should().NotBeNull("la query normalizada debe matchear el producto persistido canónico");
+        encontrado!.Codigo.Should().Be("GAS-10");
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_BusquedaLowercase_MatcheaCodigoUppercase()
+    {
+        // Spec scenario "Index search normalizes input": busqueda " gas "
+        // debe matchear el Codigo "GAS-10" porque el LIKE corre contra el
+        // valor normalizado. La collation utf8mb4_unicode_ci ya hace el
+        // match case-insensitive, pero la normalización del input garantiza
+        // que espacios al borde no rompan la búsqueda.
+        var (service, _) = NewService(nameof(GetPagedAsync_BusquedaLowercase_MatcheaCodigoUppercase));
+        await service.CreateAsync(NewCreateDto(codigo: "GAS-10"), usuarioId: 1);
+
+        var resultado = await service.GetPagedAsync(busqueda: " gas ", soloActivos: true, page: 1, pageSize: 25);
+
+        resultado.Total.Should().Be(1,
+            "la búsqueda normalizada debe matchear el producto persistido");
+        resultado.Items.Should().ContainSingle().Which.Codigo.Should().Be("GAS-10");
     }
 }

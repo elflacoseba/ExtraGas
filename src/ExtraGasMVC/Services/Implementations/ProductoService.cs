@@ -41,10 +41,18 @@ public class ProductoService : IProductoService
 
     public async Task<ProductoDto?> GetByCodigoAsync(string codigo, CancellationToken ct = default)
     {
+        // Issue #147 item 6: normalizar el input igual que Create/Update.
+        // La columna se persiste canónica (upper, sin espacios) así que el
+        // lookup debe llegar canónico. La collation utf8mb4_unicode_ci del
+        // schema hace la comparación case-insensitive, pero TrimAndUpper
+        // también remueve espacios al borde — defensa en profundidad.
+        var codigoNormalizado = StringNormalizer.TrimAndUpper(codigo);
+        if (codigoNormalizado.Length == 0) return null;
+
         var producto = await _context.Productos
             .AsNoTracking()
             .Include(p => p.TipoProducto)
-            .FirstOrDefaultAsync(p => p.Codigo == codigo, ct);
+            .FirstOrDefaultAsync(p => p.Codigo == codigoNormalizado, ct);
 
         return producto is null ? null : _mapper.Map<ProductoDto>(producto);
     }
@@ -128,14 +136,16 @@ public class ProductoService : IProductoService
         {
             // EF.Functions.Like compila a un LIKE nativo de MySQL. La
             // collation utf8mb4_unicode_ci del schema ya hace la comparación
-            // case-insensitive, así que no hace falta lower() en ambos lados.
-            // Mismo criterio que la versión anterior para no cambiar el
-            // contrato del filtro.
-            var trimmed = busqueda.Trim();
+            // case-insensitive para los 3 campos, pero normalizar el input
+            // (trim + upper) garantiza consistencia con CreateAsync/UpdateAsync:
+            // si el operador busca "gas", matchea tanto "GAS-10" como
+            // "gas-10" porque el LIKE es bilateral.
+            // Issue #147 item 6.
+            var busquedaNormalizada = StringNormalizer.TrimAndUpper(busqueda);
             query = query.Where(p =>
-                EF.Functions.Like(p.Codigo, $"%{trimmed}%")
-                || EF.Functions.Like(p.Nombre, $"%{trimmed}%")
-                || (p.Descripcion != null && EF.Functions.Like(p.Descripcion, $"%{trimmed}%")));
+                EF.Functions.Like(p.Codigo, $"%{busquedaNormalizada}%")
+                || EF.Functions.Like(p.Nombre, $"%{busquedaNormalizada}%")
+                || (p.Descripcion != null && EF.Functions.Like(p.Descripcion, $"%{busquedaNormalizada}%")));
         }
 
         // Total antes de paginar — CountAsync traduce a SELECT COUNT(*)
@@ -181,6 +191,11 @@ public class ProductoService : IProductoService
         await ValidarCodigoNoDuplicadoAsync(producto.Codigo, idAExcluir: null, ct);
 
         var entity = _mapper.Map<Producto>(producto);
+        // Issue #147 item 6: normalizar Codigo en el borde del Service
+        // (trim + upper). El DTO trae el valor crudo del form; la columna
+        // se persiste canónica para cubrir el índice único
+        // `uq_productos_codigo` y matchear búsquedas case-insensitive.
+        entity.Codigo = StringNormalizer.TrimAndUpper(entity.Codigo);
         // Issue #114: Activo no viene del DTO. Lo setea el Service en true
         // porque es estado, no dato de carga del operador.
         entity.Activo = true;
@@ -246,6 +261,11 @@ public class ProductoService : IProductoService
         var cambios = DetectarCambiosProducto(entity, producto);
 
         _mapper.Map(producto, entity);
+        // Issue #147 item 6: normalizar Codigo (trim + upper) — mismo
+        // tratamiento que CreateAsync. Mantiene invariante "Codigo
+        // siempre canónico en BD" para que las búsquedas no dependan
+        // de cómo tipeó el operador.
+        entity.Codigo = StringNormalizer.TrimAndUpper(entity.Codigo);
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = usuarioId;
         ProductoEditRules.PreservarFlagsNoEditables(entity, activoOriginal);
