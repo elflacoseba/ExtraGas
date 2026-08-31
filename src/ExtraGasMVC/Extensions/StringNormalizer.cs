@@ -3,10 +3,11 @@ using System.Text;
 namespace ExtraGasMVC.Extensions;
 
 /// <summary>
-/// Helpers de normalización de strings de identidad/contacto del cliente.
-/// Garantizan que valores equivalentes por formato (con/sin espacios, con/sin
-/// separadores) se almacenen, validen y busquen de forma canónica.
-/// Issue #113.
+/// Helpers de normalización de strings de identidad/contacto del cliente y de
+/// códigos de producto. Garantizan que valores equivalentes por formato (con/sin
+/// espacios, con/sin separadores, mayúsculas/minúsculas) se almacenen,
+/// validen y busquen de forma canónica.
+/// Issue #113 (DNI / Teléfono) + issue #147 item 6 (TrimAndUpper).
 /// </summary>
 public static class StringNormalizer
 {
@@ -56,5 +57,22 @@ public static class StringNormalizer
         var longitudMinima = tieneMas ? 1 : 0;
         if (sb.Length <= longitudMinima) return null;
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Normaliza un código de producto: trim + uppercase invariante.
+    /// Devuelve <see cref="string.Empty"/> para null/empty/whitespace (no null),
+    /// porque <c>Producto.Codigo</c> es NOT NULL en BD. Diverge deliberadamente
+    /// de <see cref="NormalizarDni"/>/<see cref="NormalizarTelefono"/> que
+    /// devuelven null en entradas vacías — el dominio del código es "no hay
+    /// código canónico" en lugar de "código ausente".
+    /// Issue #147 item 6: garantiza que <c>" gas-10 "</c>, <c>"GAS-10"</c> y
+    /// <c>" gas-10 "</c> colapsan al mismo valor canónico, cubriendo el índice
+    /// único <c>uq_productos_codigo</c>.
+    /// </summary>
+    public static string TrimAndUpper(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+        return input.Trim().ToUpperInvariant();
     }
 }
