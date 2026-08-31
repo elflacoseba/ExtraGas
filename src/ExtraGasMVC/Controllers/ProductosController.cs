@@ -111,6 +111,16 @@ public class ProductosController : BaseController
         // como info read-only en la vista.
         ViewBag.Activo = producto.Activo;
 
+        // Issue #147 item 4: auditoría visible read-only al pie del form.
+        // UpdateProductoDto NO expone los 4 miembros de auditoría — el
+        // Service los necesita para escribir (UpdatedAt/UpdatedBy), no
+        // para bindear desde el form. Los exponemos via ViewBag desde el
+        // ProductoDto que ya cargó GetByIdAsync (que sí los pobló).
+        ViewBag.AuditCreatedAt = producto.CreatedAt;
+        ViewBag.AuditUpdatedAt = producto.UpdatedAt;
+        ViewBag.AuditCreatedBy = producto.CreatedByUserName;
+        ViewBag.AuditUpdatedBy = producto.UpdatedByUserName;
+
         await LoadViewBagsAsync(ct);
         return View(updateDto);
     }

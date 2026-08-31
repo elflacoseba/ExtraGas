@@ -7,26 +7,42 @@ using ExtraGasMVC.Extensions;
 using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ExtraGasMVC.Services.Implementations;
 
 public class ProductoService : IProductoService
 {
+    // Issue #147 item 1: clave de cache para GetTiposProductoAsync. El
+    // catálogo tipos_producto es seed-only (decisión documentada en el
+    // design #147 ADR #20 — pendiente de escritura en slice 3): no hay UI
+    // CRUD, nadie lo modifica desde la app. La lista no cambia durante la
+    // vida del proceso → cachear en memoria con TTL 1h es seguro y
+    // elimina 1 query por request.
+    private const string TiposProductoCacheKey = "tipos_producto";
+    private static readonly TimeSpan TiposProductoCacheTtl = TimeSpan.FromHours(1);
+
     private readonly ExtraGasDbContext _context;
     private readonly IMapper _mapper;
     // Issue #145 Slice 2: ILogger<ProductoService> inyectado para trazabilidad
     // del restore (operación privilegiada, AdminOnly). Issue #146.7 lo extiende
     // a las 4 operaciones de escritura (Create/Update/Delete/Restore).
     private readonly ILogger<ProductoService> _logger;
+    // Issue #147 item 1: IMemoryCache inyectado para envolver
+    // GetTiposProductoAsync. AddMemoryCache() ya está registrado en
+    // Program.cs:16, solo faltaba inyectar.
+    private readonly IMemoryCache _cache;
 
     public ProductoService(
         ExtraGasDbContext context,
         IMapper mapper,
-        ILogger<ProductoService> logger)
+        ILogger<ProductoService> logger,
+        IMemoryCache cache)
     {
         _context = context;
         _mapper = mapper;
         _logger = logger;
+        _cache = cache;
     }
 
     public async Task<ProductoDto?> GetByIdAsync(ulong id, CancellationToken ct = default)
@@ -36,15 +52,32 @@ public class ProductoService : IProductoService
             .Include(p => p.TipoProducto)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
-        return producto is null ? null : _mapper.Map<ProductoDto>(producto);
+        if (producto is null) return null;
+
+        var dto = _mapper.Map<ProductoDto>(producto);
+        // Issue #147 item 4: auditoría visible en Details. El MappingProfile
+        // deja CreatedByUserName/UpdatedByUserName en null (.Ignore()) y el
+        // Service los resuelve explícitamente. Mismo patrón que
+        // UsuarioService.LoadAuditUsersAsync (líneas 570-587).
+        var auditUsers = await LoadAuditUsersAsync(new[] { producto }, ct);
+        AplicarAudit(dto, producto, auditUsers);
+        return dto;
     }
 
     public async Task<ProductoDto?> GetByCodigoAsync(string codigo, CancellationToken ct = default)
     {
+        // Issue #147 item 6: normalizar el input igual que Create/Update.
+        // La columna se persiste canónica (upper, sin espacios) así que el
+        // lookup debe llegar canónico. La collation utf8mb4_unicode_ci del
+        // schema hace la comparación case-insensitive, pero TrimAndUpper
+        // también remueve espacios al borde — defensa en profundidad.
+        var codigoNormalizado = StringNormalizer.TrimAndUpper(codigo);
+        if (codigoNormalizado.Length == 0) return null;
+
         var producto = await _context.Productos
             .AsNoTracking()
             .Include(p => p.TipoProducto)
-            .FirstOrDefaultAsync(p => p.Codigo == codigo, ct);
+            .FirstOrDefaultAsync(p => p.Codigo == codigoNormalizado, ct);
 
         return producto is null ? null : _mapper.Map<ProductoDto>(producto);
     }
@@ -86,12 +119,28 @@ public class ProductoService : IProductoService
 
     public async Task<IEnumerable<TipoProductoDto>> GetTiposProductoAsync(CancellationToken ct = default)
     {
-        var tipos = await _context.TiposProducto
-            .AsNoTracking()
-            .OrderBy(t => t.Nombre)
-            .ToListAsync(ct);
+        // Issue #147 item 1: cache en memoria con TTL 1h. El catálogo
+        // tipos_producto es seed-only (ADR #20 pendiente en slice 3) — no
+        // hay UI CRUD que pueda invalidar el cache entre requests. TTL
+        // absoluto (no sliding) porque la lógica de uso es "cargar al
+        // startup y servir idéntico por 1h"; un sliding extendería el TTL
+        // indefinidamente bajo uso sostenido.
+        //
+        // TODO forward-looking (issue #147 slice 3 / follow-up): si en el
+        // futuro se agrega UI CRUD para TiposProducto, este cache key debe
+        // evacuarse en Create/Update/Delete (escritura → RemoveAsync). Por
+        // ahora la API no expone esos verbos — el catálogo es cerrado.
+        return await _cache.GetOrCreateAsync(TiposProductoCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TiposProductoCacheTtl;
 
-        return _mapper.Map<IEnumerable<TipoProductoDto>>(tipos);
+            var tipos = await _context.TiposProducto
+                .AsNoTracking()
+                .OrderBy(t => t.Nombre)
+                .ToListAsync(ct);
+
+            return (IEnumerable<TipoProductoDto>)_mapper.Map<List<TipoProductoDto>>(tipos);
+        }) ?? [];
     }
 
     /// <summary>
@@ -128,14 +177,16 @@ public class ProductoService : IProductoService
         {
             // EF.Functions.Like compila a un LIKE nativo de MySQL. La
             // collation utf8mb4_unicode_ci del schema ya hace la comparación
-            // case-insensitive, así que no hace falta lower() en ambos lados.
-            // Mismo criterio que la versión anterior para no cambiar el
-            // contrato del filtro.
-            var trimmed = busqueda.Trim();
+            // case-insensitive para los 3 campos, pero normalizar el input
+            // (trim + upper) garantiza consistencia con CreateAsync/UpdateAsync:
+            // si el operador busca "gas", matchea tanto "GAS-10" como
+            // "gas-10" porque el LIKE es bilateral.
+            // Issue #147 item 6.
+            var busquedaNormalizada = StringNormalizer.TrimAndUpper(busqueda);
             query = query.Where(p =>
-                EF.Functions.Like(p.Codigo, $"%{trimmed}%")
-                || EF.Functions.Like(p.Nombre, $"%{trimmed}%")
-                || (p.Descripcion != null && EF.Functions.Like(p.Descripcion, $"%{trimmed}%")));
+                EF.Functions.Like(p.Codigo, $"%{busquedaNormalizada}%")
+                || EF.Functions.Like(p.Nombre, $"%{busquedaNormalizada}%")
+                || (p.Descripcion != null && EF.Functions.Like(p.Descripcion, $"%{busquedaNormalizada}%")));
         }
 
         // Total antes de paginar — CountAsync traduce a SELECT COUNT(*)
@@ -181,6 +232,11 @@ public class ProductoService : IProductoService
         await ValidarCodigoNoDuplicadoAsync(producto.Codigo, idAExcluir: null, ct);
 
         var entity = _mapper.Map<Producto>(producto);
+        // Issue #147 item 6: normalizar Codigo en el borde del Service
+        // (trim + upper). El DTO trae el valor crudo del form; la columna
+        // se persiste canónica para cubrir el índice único
+        // `uq_productos_codigo` y matchear búsquedas case-insensitive.
+        entity.Codigo = StringNormalizer.TrimAndUpper(entity.Codigo);
         // Issue #114: Activo no viene del DTO. Lo setea el Service en true
         // porque es estado, no dato de carga del operador.
         entity.Activo = true;
@@ -246,6 +302,11 @@ public class ProductoService : IProductoService
         var cambios = DetectarCambiosProducto(entity, producto);
 
         _mapper.Map(producto, entity);
+        // Issue #147 item 6: normalizar Codigo (trim + upper) — mismo
+        // tratamiento que CreateAsync. Mantiene invariante "Codigo
+        // siempre canónico en BD" para que las búsquedas no dependan
+        // de cómo tipeó el operador.
+        entity.Codigo = StringNormalizer.TrimAndUpper(entity.Codigo);
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = usuarioId;
         ProductoEditRules.PreservarFlagsNoEditables(entity, activoOriginal);
@@ -491,5 +552,48 @@ public class ProductoService : IProductoService
             cambios.Add($"ManejaGarrafaIndividual: {entity.ManejaGarrafaIndividual} → {dto.ManejaGarrafaIndividual}");
 
         return cambios;
+    }
+
+    /// <summary>
+    /// Recolecta los IDs de CreatedBy/UpdatedBy de los productos y devuelve
+    /// un diccionario Id → Username para resolver auditores en una sola query.
+    /// Issue #147 item 4: replica <see cref="UsuarioService.LoadAuditUsersAsync"/>
+    /// (líneas 570-587) — los usernames NO viven en Producto, son FKs a
+    /// usuarios. Devuelve diccionario vacío si no hay IDs para evitar la
+    /// query.
+    /// </summary>
+    private async Task<Dictionary<ulong, string>> LoadAuditUsersAsync(
+        IEnumerable<Producto> productos, CancellationToken ct)
+    {
+        var auditUserIds = new HashSet<ulong>();
+        foreach (var producto in productos)
+        {
+            if (producto.CreatedBy.HasValue) auditUserIds.Add(producto.CreatedBy.Value);
+            if (producto.UpdatedBy.HasValue) auditUserIds.Add(producto.UpdatedBy.Value);
+        }
+
+        if (auditUserIds.Count == 0) return new Dictionary<ulong, string>();
+
+        return await _context.Usuarios
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(u => auditUserIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Username, ct);
+    }
+
+    /// <summary>
+    /// Copia el username del auditor (CreatedBy / UpdatedBy) en el DTO si
+    /// el auditor existe. Sin excepción si el auditor fue soft-deleted —
+    /// el Diccionario simplemente no tiene la entrada y los campos quedan
+    /// en null, que es la representación correcta (auditor desconocido).
+    /// </summary>
+    private static void AplicarAudit(
+        ProductoDto dto, Producto entity, Dictionary<ulong, string> auditUsers)
+    {
+        if (entity.CreatedBy.HasValue && auditUsers.TryGetValue(entity.CreatedBy.Value, out var creador))
+            dto.CreatedByUserName = creador;
+
+        if (entity.UpdatedBy.HasValue && auditUsers.TryGetValue(entity.UpdatedBy.Value, out var actualizador))
+            dto.UpdatedByUserName = actualizador;
     }
 }

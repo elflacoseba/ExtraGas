@@ -31,7 +31,12 @@ public class ProductoServiceTests
         // Issue #145 Slice 2: ILogger<ProductoService> requerido para trazabilidad
         // de operaciones de escritura (RestoreAsync). Los tests existentes no
         // asertan sobre el log; usamos NullLogger.
-        var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance);
+        // Issue #147 item 1: IMemoryCache requerido para GetTiposProductoAsync
+        // cacheado. Pasamos una instancia fresca de MemoryCache por test (clave
+        // de cache es constante; sin esto los tests interfieren entre sí).
+        var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
+            new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache);
 
         // Issue #146.1: el Service valida FK TipoProductoId antes de
         // SaveChanges. Los tests pre-existentes asumían un DbContext
@@ -50,6 +55,28 @@ public class ProductoServiceTests
         }
 
         return (service, context);
+    }
+
+    /// <summary>
+    /// Helper que siembra un Usuario con username único (issue #147 item 4:
+    /// LoadAuditUsersAsync resuelve las FKs de CreatedBy/UpdatedBy a usernames
+    /// legibles). Devuelve el Id del usuario sembrado.
+    /// </summary>
+    private static ulong SeedUsuario(ExtraGasDbContext context, string username)
+    {
+        var usuario = new Usuario
+        {
+            Id = (ulong)(context.Usuarios.Count() + 1) * 10,
+            Username = username,
+            PasswordHash = "test-hash",
+            RolId = 1,
+            Activo = true,
+            DebeCambiarPassword = false,
+        };
+        context.Usuarios.Add(usuario);
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+        return usuario.Id;
     }
 
     private static CreateProductoDto NewCreateDto(string codigo = "GAS-10") => new()
@@ -303,7 +330,11 @@ public class ProductoServiceTests
         var mapperConfig = new MapperConfiguration(cfg => cfg.AddProfile<MappingProfile>());
         var mapper = mapperConfig.CreateMapper();
         var logger = new TestLogger<ProductoService>();
-        var service = new ProductoService(context, mapper, logger);
+        // Issue #147 item 1: IMemoryCache es parámetro del constructor.
+        // MemoryCache fresh por test — la cache key es constante.
+        var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
+            new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var service = new ProductoService(context, mapper, logger, cache);
 
         // Issue #146.1: el Service valida FK TipoProductoId antes de
         // SaveChanges. Sembramos el catálogo para que el helper NewCreateDto
@@ -333,11 +364,11 @@ public class ProductoServiceTests
         entryPrecio.Message.Should().Contain("18000").And.Contain("Ajuste");
     }
 
-    [Fact]
+[Fact]
     public void UpdateProductoDto_MotivoCambioPrecio_RechazaMasDe255Chars()
     {
         // DataAnnotations del DTO: la columna es VARCHAR(255) — el límite se
-        // enforce a nivel modelo para que el Controller rechace el POST antes
+        // enforce a nivel modelo para que el Controller rechche el POST antes
         // de invocar al Service. Test plano sobre las anotaciones, sin EF.
         var dto = new UpdateProductoDto
         {
@@ -360,5 +391,404 @@ public class ProductoServiceTests
             "un motivo de 256 chars debe fallar la validación [StringLength(255)] antes de llegar al Service");
         results.Should().Contain(r =>
             r.MemberNames.Contains(nameof(UpdateProductoDto.MotivoCambioPrecio)));
+    }
+
+    // ====================================================================
+    // Issue #147 item 6: normalización de Codigo (trim + upper) en el Service.
+    // El operador puede tipear " gas-10 " en el form; el Service debe
+    // persistir "GAS-10" para que coincida con el índice único
+    // `uq_productos_codigo` y con futuras búsquedas.
+    // ====================================================================
+
+    [Fact]
+    public async Task CreateAsync_CodigoConEspaciosYLowercase_PersisteNormalizado()
+    {
+        // Spec scenario "Create persists normalized": input " gas-10 " →
+        // persistido "GAS-10". El DTO llega con el valor crudo del form;
+        // el Service es responsable de aplicar TrimAndUpper antes del INSERT.
+        var (service, context) = NewService(nameof(CreateAsync_CodigoConEspaciosYLowercase_PersisteNormalizado));
+        var dto = NewCreateDto(codigo: " gas-10 ");
+
+        var creado = await service.CreateAsync(dto, usuarioId: 1);
+
+        creado.Codigo.Should().Be("GAS-10",
+            "el Service debe normalizar Codigo (trim + upper) antes de persistir");
+        var entity = await context.Productos.AsNoTracking().FirstAsync(p => p.Id == creado.Id);
+        entity.Codigo.Should().Be("GAS-10",
+            "el valor normalizado debe quedar en la entity persistida");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_CodigoCambiaAFormaNormalizada_PersisteNormalizado()
+    {
+        // Spec scenario "Index search normalizes input" (vía Update): si el
+        // operador edita un producto y manda " gas-10 " desde el form, el
+        // Service debe persistir el valor canónico, no el input crudo.
+        var (service, context) = NewService(nameof(UpdateAsync_CodigoCambiaAFormaNormalizada_PersisteNormalizado));
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: 1);
+
+        var updateDto = new UpdateProductoDto
+        {
+            Id = creado.Id,
+            Codigo = " gas-10 ", // mismo codigo en lowercase+espacios
+            Nombre = creado.Nombre,
+            TipoProductoId = creado.TipoProductoId,
+            CapacidadKg = creado.CapacidadKg,
+            UnidadVenta = creado.UnidadVenta,
+            PrecioActual = creado.PrecioActual,
+            ManejaGarrafaIndividual = creado.ManejaGarrafaIndividual,
+        };
+
+        var actualizado = await service.UpdateAsync(updateDto, usuarioId: 2);
+
+        actualizado.Codigo.Should().Be("GAS-10",
+            "UpdateAsync debe normalizar Codigo igual que CreateAsync");
+        var entity = await context.Productos.AsNoTracking().FirstAsync(p => p.Id == creado.Id);
+        entity.Codigo.Should().Be("GAS-10");
+    }
+
+    [Fact]
+    public async Task GetByCodigoAsync_InputLowercase_MatcheaStoredUppercase()
+    {
+        // Spec scenario "GetByCodigoAsync matches normalized input":
+        // producto persistido como "GAS-10", query con "gas-10" → debe
+        // matchear. El Service normaliza el input del lookup igual que el
+        // persist (canónico a ambos lados).
+        var (service, _) = NewService(nameof(GetByCodigoAsync_InputLowercase_MatcheaStoredUppercase));
+        await service.CreateAsync(NewCreateDto(codigo: "GAS-10"), usuarioId: 1);
+
+        var encontrado = await service.GetByCodigoAsync("gas-10");
+
+        encontrado.Should().NotBeNull("la query normalizada debe matchear el producto persistido canónico");
+        encontrado!.Codigo.Should().Be("GAS-10");
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_BusquedaLowercase_MatcheaCodigoUppercase()
+    {
+        // Spec scenario "Index search normalizes input": busqueda " gas "
+        // debe matchear el Codigo "GAS-10" porque el LIKE corre contra el
+        // valor normalizado. La collation utf8mb4_unicode_ci ya hace el
+        // match case-insensitive, pero la normalización del input garantiza
+        // que espacios al borde no rompan la búsqueda.
+        var (service, _) = NewService(nameof(GetPagedAsync_BusquedaLowercase_MatcheaCodigoUppercase));
+        await service.CreateAsync(NewCreateDto(codigo: "GAS-10"), usuarioId: 1);
+
+        var resultado = await service.GetPagedAsync(busqueda: " gas ", soloActivos: true, page: 1, pageSize: 25);
+
+        resultado.Total.Should().Be(1,
+            "la búsqueda normalizada debe matchear el producto persistido");
+        resultado.Items.Should().ContainSingle().Which.Codigo.Should().Be("GAS-10");
+    }
+
+    // ====================================================================
+    // Issue #147 item 4: auditoría visible en Details/Edit.
+    // GetByIdAsync resuelve los usernames de CreatedBy/UpdatedBy via
+    // LoadAuditUsersAsync + AplicarAudit. Los timestamps los mapea
+    // AutoMapper por convención desde la entity.
+    // ====================================================================
+
+    [Fact]
+    public async Task GetByIdAsync_PopulatesAuditFields_WithResolvingUsernames()
+    {
+        // Spec scenario "ProductoDto populates 4 audit fields":
+        // sembramos 2 usuarios (creador y modificador), creamos un producto
+        // con uno, lo editamos con el otro, y verificamos que el DTO
+        // expone los 4 miembros con los usernames resueltos.
+        var (service, context) = NewService(nameof(GetByIdAsync_PopulatesAuditFields_WithResolvingUsernames));
+        var creadorId = SeedUsuario(context, "creador");
+        var modificadorId = SeedUsuario(context, "modificador");
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: creadorId);
+
+        // Re-edit con un usuario distinto para que UpdatedBy != CreatedBy.
+        var updateDto = new UpdateProductoDto
+        {
+            Id = creado.Id,
+            Codigo = creado.Codigo,
+            Nombre = creado.Nombre + " v2",
+            TipoProductoId = creado.TipoProductoId,
+            CapacidadKg = creado.CapacidadKg,
+            UnidadVenta = creado.UnidadVenta,
+            PrecioActual = creado.PrecioActual,
+            ManejaGarrafaIndividual = creado.ManejaGarrafaIndividual,
+        };
+        await service.UpdateAsync(updateDto, usuarioId: modificadorId);
+
+        var dto = await service.GetByIdAsync(creado.Id);
+
+        dto.Should().NotBeNull();
+        dto!.CreatedAt.Should().Be(creado.CreatedAt,
+            "CreatedAt del entity se mapea por convención desde Producto.CreatedAt");
+        dto.UpdatedAt.Should().BeAfter(creado.CreatedAt,
+            "UpdatedAt del entity se mapea por convención y debe ser posterior al Create");
+        dto.CreatedByUserName.Should().Be("creador",
+            "LoadAuditUsersAsync resuelve CreatedBy FK → username");
+        dto.UpdatedByUserName.Should().Be("modificador",
+            "LoadAuditUsersAsync resuelve UpdatedBy FK → username");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_AuditFields_NullWhenUsuarioNoExiste()
+    {
+        // Defensa: si el FK apunta a un usuario que fue hard-deleted (no
+        // debería pasar, pero el FK NO es restrict en BD para auditoría),
+        // el DTO debe devolver null en lugar de tirar. LoadAuditUsersAsync
+        // usa IgnoreQueryFilters() para incluir soft-deleted, pero no
+        // puede incluir hard-deleted — el TryGetValue devuelve false y
+        // el username queda null.
+        var (service, context) = NewService(nameof(GetByIdAsync_AuditFields_NullWhenUsuarioNoExiste));
+        var dto = NewCreateDto();
+        var entity = new Producto
+        {
+            Codigo = dto.Codigo,
+            Nombre = dto.Nombre,
+            TipoProductoId = dto.TipoProductoId,
+            CapacidadKg = dto.CapacidadKg,
+            UnidadVenta = dto.UnidadVenta,
+            PrecioActual = dto.PrecioActual,
+            ManejaGarrafaIndividual = dto.ManejaGarrafaIndividual,
+            Activo = true,
+            CreatedAt = DateTime.UtcNow.AddDays(-1),
+            UpdatedAt = DateTime.UtcNow.AddDays(-1),
+            CreatedBy = 999_999UL, // FK que NO existe
+            UpdatedBy = 999_998UL, // FK que NO existe
+        };
+        context.Productos.Add(entity);
+        await context.SaveChangesAsync();
+
+        var result = await service.GetByIdAsync(entity.Id);
+
+        result.Should().NotBeNull();
+        result!.CreatedByUserName.Should().BeNull(
+            "CreatedBy FK sin usuario → username null (no excepción)");
+        result.UpdatedByUserName.Should().BeNull(
+            "UpdatedBy FK sin usuario → username null (no excepción)");
+    }
+
+    // ====================================================================
+    // Issue #147 item 5: 7 branches faltantes en ProductoService. El
+    // código de producción YA maneja estos casos — los tests documentan
+    // el contrato explícitamente para evitar que un refactor los rompa
+    // silenciosamente. Patrón "approval tests for spec scenarios" del
+    // strict-tdd.md.
+    // ====================================================================
+
+    [Fact]
+    public async Task GetByCodigoAsync_NotFound_ReturnsNull()
+    {
+        // Spec scenario "GetByCodigoAsync missing → null": no hay producto
+        // con ese código → la query no devuelve filas → el método devuelve
+        // null (no lanza excepción).
+        var (service, _) = NewService(nameof(GetByCodigoAsync_NotFound_ReturnsNull));
+
+        var resultado = await service.GetByCodigoAsync("GAS-INEXISTENTE");
+
+        resultado.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByCodigoAsync_SoftDeleted_ReturnsNull()
+    {
+        // Spec scenario "GetByCodigoAsync soft-deleted → null": el
+        // QueryFilter global (`p => p.DeletedAt == null`) oculta los
+        // productos soft-deleted de las queries de lectura. Un producto
+        // con DeletedAt != null pero Codigo = "GAS-10" NO debe aparecer.
+        var (service, context) = NewService(nameof(GetByCodigoAsync_SoftDeleted_ReturnsNull));
+        var creado = await service.CreateAsync(NewCreateDto(codigo: "GAS-10"), usuarioId: 1);
+        await service.DeleteAsync(creado.Id, ct: default);
+        // Sanity: el producto realmente está soft-deleted en BD.
+        var entity = await context.Productos.IgnoreQueryFilters().FirstAsync(p => p.Id == creado.Id);
+        entity.DeletedAt.Should().NotBeNull();
+
+        var resultado = await service.GetByCodigoAsync("GAS-10");
+
+        resultado.Should().BeNull(
+            "el QueryFilter global oculta soft-deleted de GetByCodigoAsync");
+    }
+
+    [Fact]
+    public async Task GetByTipoAsync_UnknownTipo_ReturnsEmpty()
+    {
+        // Spec scenario "GetByTipoAsync empty list": no hay productos con
+        // ese tipo → lista vacía (no null, no excepción). El operador
+        // puede estar filtrando por un TipoProductoId recién creado y sin
+        // productos asignados.
+        var (service, _) = NewService(nameof(GetByTipoAsync_UnknownTipo_ReturnsEmpty));
+
+        var resultado = await service.GetByTipoAsync(999UL);
+
+        resultado.Should().NotBeNull().And.BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetActivosAsync_MixedStatus_ReturnsOnlyActive()
+    {
+        // Spec scenario "GetActivosAsync filters inactives": con un mix de
+        // activos + soft-deleted, solo Activo=true AND DeletedAt IS NULL
+        // llegan al resultado. Soft-deleted sin DeletedAt != null ya está
+        // excluido por el QueryFilter; este test verifica además que
+        // Activo=false (sin soft-delete) tampoco aparece.
+        var (service, context) = NewService(nameof(GetActivosAsync_MixedStatus_ReturnsOnlyActive));
+        var activo = await service.CreateAsync(NewCreateDto(codigo: "GAS-10"), usuarioId: 1);
+
+        // Producto soft-deleted: Activo=false + DeletedAt!=null → excluido
+        // por ambos (QueryFilter + filtro Activo).
+        var softDeleted = await service.CreateAsync(NewCreateDto(codigo: "GAS-15"), usuarioId: 1);
+        await service.DeleteAsync(softDeleted.Id, ct: default);
+
+        // Producto "inactivo" sin soft-delete (caso raro: Activo=false pero
+        // DeletedAt=null — un zombie). Configuración manual vía BD para
+        // forzar el estado.
+        var zombie = new Producto
+        {
+            Codigo = "GAS-45",
+            Nombre = "Garrafa 45kg",
+            TipoProductoId = 1,
+            UnidadVenta = "UNIDAD",
+            PrecioActual = 30000m,
+            ManejaGarrafaIndividual = false,
+            Activo = false, // sin soft-delete
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+        };
+        context.Productos.Add(zombie);
+        await context.SaveChangesAsync();
+
+        var resultado = (await service.GetActivosAsync()).ToList();
+
+        resultado.Should().ContainSingle()
+            .Which.Id.Should().Be(activo.Id,
+                "solo el producto activo (Activo=true + DeletedAt=null) debe aparecer");
+        resultado.Should().NotContain(p => p.Id == softDeleted.Id,
+            "soft-deleted debe estar excluido");
+        resultado.Should().NotContain(p => p.Id == zombie.Id,
+            "zombie (Activo=false sin soft-delete) debe estar excluido");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_UnknownId_ThrowsKeyNotFoundException()
+    {
+        // Spec scenario "UpdateAsync unknown Id → KeyNotFoundException": el
+        // FindAsync del Service devuelve null → el método lanza
+        // KeyNotFoundException con un mensaje claro. El Controller traduce
+        // eso a NotFound o ModelState según el patrón existente.
+        // Importante: CapacidadKg > 0 cuando ManejaGarrafaIndividual=true
+        // (issue #146.3). Sin esto, el método tira ValidationException
+        // ANTES de llegar al FindAsync y nunca veríamos el
+        // KeyNotFoundException que queremos verificar.
+        var (service, _) = NewService(nameof(UpdateAsync_UnknownId_ThrowsKeyNotFoundException));
+        var dto = new UpdateProductoDto
+        {
+            Id = 999_999UL, // no existe
+            Codigo = "GAS-10",
+            Nombre = "Garrafa 10kg",
+            TipoProductoId = 1,
+            UnidadVenta = "UNIDAD",
+            CapacidadKg = 10m,
+            PrecioActual = 15000m,
+            ManejaGarrafaIndividual = true,
+        };
+
+        var act = async () => await service.UpdateAsync(dto, usuarioId: 1);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("*999999*",
+                "el mensaje debe incluir el Id buscado para que el Controller pueda mostrarlo");
+    }
+
+    [Fact]
+    public async Task DeleteAsync_UnknownId_ReturnsFalse()
+    {
+        // Spec scenario "DeleteAsync unknown Id → false": a diferencia de
+        // UpdateAsync, Delete NO lanza — devuelve false para que el
+        // Controller mapee TempData[Error]. Coherente con RestoreAsync
+        // que también devuelve false para Id inexistente.
+        var (service, _) = NewService(nameof(DeleteAsync_UnknownId_ReturnsFalse));
+
+        var resultado = await service.DeleteAsync(999_999UL);
+
+        resultado.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateAsync_NullUser_Succeeds()
+    {
+        // Spec scenario "CreateAsync null userId → no crash": usado por
+        // tests automatizados, seeds y scripts de bootstrap que no tienen
+        // un usuario "humano" detrás. La entity persiste con
+        // CreatedBy=NULL/UpdatedBy=NULL — la auditoría queda "huérfana"
+        // pero la operación no falla.
+        var (service, context) = NewService(nameof(CreateAsync_NullUser_Succeeds));
+
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: null);
+
+        creado.Should().NotBeNull();
+        creado.Id.Should().BeGreaterThan(0);
+        var entity = await context.Productos.AsNoTracking().FirstAsync(p => p.Id == creado.Id);
+        entity.CreatedBy.Should().BeNull(
+            "null usuario → CreatedBy NULL en BD (operación sincrónica válida)");
+        entity.UpdatedBy.Should().BeNull();
+    }
+
+    // ====================================================================
+    // Issue #147 item 1: cache de GetTiposProductoAsync con IMemoryCache.
+    // Spec scenario "2nd call within 1 h is cached": el segundo call
+    // dentro de la hora NO debe hit EF Core — debe servirse desde el
+    // cache en memoria.
+    // ====================================================================
+
+    [Fact]
+    public async Task GetTiposProductoAsync_SecondCall_HitsCache()
+    {
+        // Estrategia de verificación: spy sobre el DbContext no es trivial
+        // con InMemoryDatabase (no soporta interceptores). Lo que SÍ
+        // podemos verificar de forma robusta:
+        //   1. Sembrar 2 tipos (GAS, CARBON) en BD antes de la 1er call.
+        //   2. Llamar GetTiposProductoAsync → devuelve [GAS, CARBON].
+        //   3. Agregar un 3er tipo (LENA) directo al context SIN guardar
+        //      (simularía que la BD cambió, pero el cache no se entera).
+        //   4. Llamar GetTiposProductoAsync de nuevo → si la 2da call
+        //      hit BD, devolvería [GAS, CARBON, LENA]; si hit cache,
+        //      devuelve [GAS, CARBON] (sin el LENA recién agregado).
+        //
+        // Si el cache no estuviera implementado, la 2da call vería los 3
+        // tipos (porque EF InMemoryDb ve cualquier entity agregada al
+        // ChangeTracker, incluso sin SaveChanges).
+        var dbName = nameof(GetTiposProductoAsync_SecondCall_HitsCache);
+        var options = new DbContextOptionsBuilder<ExtraGasDbContext>()
+            .UseInMemoryDatabase(databaseName: dbName)
+            .Options;
+        using var context = new ExtraGasDbContext(options);
+        var mapperConfig = new MapperConfiguration(cfg => cfg.AddProfile<MappingProfile>());
+        var mapper = mapperConfig.CreateMapper();
+        var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
+            new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var service = new ProductoService(context, mapper, NullLogger<ProductoService>.Instance, cache);
+
+        // Seed inicial: 2 tipos visibles para el Service.
+        context.TiposProducto.AddRange(
+            new TipoProducto { Id = 1, Codigo = "GAS", Nombre = "Gas" },
+            new TipoProducto { Id = 2, Codigo = "CARBON", Nombre = "Carbón" });
+        await context.SaveChangesAsync();
+
+        // Primera llamada: pobla el cache.
+        var primera = (await service.GetTiposProductoAsync()).ToList();
+        primera.Should().HaveCount(2, "antes del cache hay 2 tipos sembrados");
+
+        // Simulamos un tercer tipo que aparece DESPUÉS de la 1era call.
+        // Si la 2da call hit BD, lo vería; si hit cache, NO.
+        context.TiposProducto.Add(new TipoProducto
+        {
+            Id = 3,
+            Codigo = "LENA",
+            Nombre = "Leña",
+        });
+        await context.SaveChangesAsync();
+
+        // Segunda llamada: debe hit cache (mismos 2 tipos, sin LENA).
+        var segunda = (await service.GetTiposProductoAsync()).ToList();
+        segunda.Should().HaveCount(2,
+            "la 2da call debe hit cache y NO incluir el LENA agregado después");
+        segunda.Select(t => t.Codigo).Should().BeEquivalentTo(new[] { "GAS", "CARBON" });
     }
 }

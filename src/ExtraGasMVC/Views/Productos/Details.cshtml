@@ -35,3 +35,25 @@
         </dl>
     </div>
 </div>
+
+@* Issue #147 item 4: tarjeta de auditoría (separada del card principal para
+   que el operador la identifique visualmente como metadata, no como datos
+   editables). El DTO expone 4 miembros — CreatedAt/UpdatedAt se mapean por
+   convención desde la entity, CreatedByUserName/UpdatedByUserName los
+   resuelve el Service vía LoadAuditUsersAsync. Si el auditor fue borrado
+   los usernames quedan null ("-"). *@
+<div class="card mt-3">
+    <div class="card-header"><h3 class="card-title">Auditoría</h3></div>
+    <div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-3">@Html.DisplayNameFor(m => m.CreatedAt)</dt>
+            <dd class="col-sm-9">@Model.CreatedAt.ToShortDateTime()</dd>
+            <dt class="col-sm-3">@Html.DisplayNameFor(m => m.UpdatedAt)</dt>
+            <dd class="col-sm-9">@Model.UpdatedAt.ToShortDateTime()</dd>
+            <dt class="col-sm-3">@Html.DisplayNameFor(m => m.CreatedByUserName)</dt>
+            <dd class="col-sm-9">@(Model.CreatedByUserName ?? "-")</dd>
+            <dt class="col-sm-3">@Html.DisplayNameFor(m => m.UpdatedByUserName)</dt>
+            <dd class="col-sm-9">@(Model.UpdatedByUserName ?? "-")</dd>
+        </dl>
+    </div>
+</div>
