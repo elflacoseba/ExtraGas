@@ -81,19 +81,29 @@ public class CreateProductoDto
     [Range(0, 9999999999.99, ErrorMessage = "El precio debe estar entre {1} y {2}.")]
     public decimal PrecioActual { get; set; }
 
+    [Display(Name = "Maneja garrafas individuales")]
+    // Issue #158 (S6964): [Required] en un bool no bloquea el under-posting
+    // (el binder igual lo llena con false si no se postea), pero cumple con
+    // la regla de SonarQube y blinda contra valores por default accidentales
+    // en consumidores no-MVC (tests, integration scripts).
+    [Required]
     public bool ManejaGarrafaIndividual { get; set; }
 }
 
 /// <summary>
 /// DTO de edición de producto. NO incluye <c>Activo</c>: es estado y solo
 /// cambia vía Delete. Editarlo desde el form producía estados zombie
-/// (<c>Activo=false</c> con <c>DeletedAt=null</c>). El Service lo preserva
+/// (<c>Activo=false</c> con <c>DisposedAt=null</c>). El Service lo preserva
 /// vía <c>ProductoEditRules.PreservarFlagsNoEditables</c>. Issue #114.
 /// <c>ManejaGarrafaIndividual</c> sí es editable (config de negocio).
 /// </summary>
 public class UpdateProductoDto
 {
-    public ulong Id { get; set; }
+    // Issue #158 (S6964): Id nullable para defender contra under-posting. Si
+    // el form no incluye el campo, el binder lo deja en null y el Controller
+    // puede rechazar con BadRequest con un mensaje claro en lugar de comparar
+    // 0 contra el id de la ruta. Mismo patrón que UpdateClienteDto.Id (#136).
+    public ulong? Id { get; set; }
 
     [Display(Name = "Código")]
     [Required(ErrorMessage = "El código es obligatorio.")]
@@ -124,6 +134,9 @@ public class UpdateProductoDto
     [Range(0, 9999999999.99, ErrorMessage = "El precio debe estar entre {1} y {2}.")]
     public decimal PrecioActual { get; set; }
 
+    [Display(Name = "Maneja garrafas individuales")]
+    // Issue #158 (S6964): ver nota sobre [Required] en CreateProductoDto.
+    [Required]
     public bool ManejaGarrafaIndividual { get; set; }
 
     /// <summary>

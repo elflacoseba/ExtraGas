@@ -261,6 +261,15 @@ public class ProductoService : IProductoService
 
     public async Task<ProductoDto> UpdateAsync(UpdateProductoDto producto, ulong? usuarioId, CancellationToken ct = default)
     {
+        // Issue #158 (S6964): Id es nullable en el DTO para defender contra
+        // under-posting desde forms manipulados. El Controller ya devuelve
+        // 400 si Id == null, pero defendemos en profundidad porque el Service
+        // puede invocarse desde tests o desde otros callers que no pasaron
+        // por la validación del Controller.
+        if (producto.Id is null)
+            throw new ArgumentException("UpdateProductoDto.Id es obligatorio.", nameof(producto));
+        var productoId = producto.Id.Value;
+
         // Issue #146.3: igual que CreateAsync, validar GARRAFA ⇒ CapacidadKg
         // > 0 sobre el DTO post-Map. Misma justificación: rechazar al
         // operador en el borde con un mensaje claro, no dejar que el bug
@@ -273,11 +282,11 @@ public class ProductoService : IProductoService
         // Issue #146.2: pre-check de Codigo duplicado. El `idAExcluir = Id`
         // es clave: si el operador está editando y deja su propio Codigo,
         // el AnyAsync no debe chocar contra sí mismo.
-        await ValidarCodigoNoDuplicadoAsync(producto.Codigo, idAExcluir: producto.Id, ct);
+        await ValidarCodigoNoDuplicadoAsync(producto.Codigo, idAExcluir: productoId, ct);
 
-        var entity = await _context.Productos.FindAsync(new object[] { producto.Id }, ct);
+        var entity = await _context.Productos.FindAsync(new object[] { productoId }, ct);
         if (entity == null)
-            throw new KeyNotFoundException($"Producto con Id {producto.Id} no encontrado.");
+            throw new KeyNotFoundException($"Producto con Id {productoId} no encontrado.");
 
         // Snapshot de Activo ANTES del AutoMapper: el formulario de Edit no
         // debe poder modificarlo. Si el operador lo manda distinto (sea por
@@ -355,7 +364,7 @@ public class ProductoService : IProductoService
 
             _logger.LogWarning(ex,
                 "Producto {ProductoId} ({Codigo}) — conflicto de concurrencia al actualizar por {UsuarioId}",
-                producto.Id, producto.Codigo, usuarioId);
+                productoId, producto.Codigo, usuarioId);
             // Issue #158 (S2139): preservamos `ex` como inner exception para
             // que el stack trace original quede en logs sin perder el mensaje
             // de negocio que el Controller renderiza al operador.

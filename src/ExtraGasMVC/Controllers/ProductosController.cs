@@ -129,7 +129,10 @@ public class ProductosController : BaseController
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(ulong id, UpdateProductoDto producto, CancellationToken ct = default)
     {
-        if (id != producto.Id) return BadRequest();
+        // Issue #158 (S6964): Id es nullable en el DTO para defender contra
+        // under-posting. Si el form no lo incluye, BadRequest con un mensaje
+        // claro en lugar de comparar 0 contra el id de la ruta.
+        if (producto.Id is null || id != producto.Id.Value) return BadRequest();
         if (!ModelState.IsValid)
         {
             await LoadViewBagsAsync(ct);
