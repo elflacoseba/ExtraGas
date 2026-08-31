@@ -177,3 +177,55 @@
         </div>
     </div>
 }
+
+@* Issue #165: timeline de cambios de estado del pedido. Append-only, *@
+@* ordenada del más reciente al más antiguo (servicio garantiza ORDER BY *@
+@* created_at DESC, id DESC). La card se muestra solo si hay al menos una *@
+@* transición registrada — los pedidos recién creados no tienen historial *@
+@* hasta su primer cambio de estado. *@
+@if (ViewBag.HistorialEstados is IEnumerable<ExtraGasMVC.DTOs.PedidoEstadoHistoricoDto> historial && historial.Any())
+{
+    <div class="card mb-4">
+        <div class="card-header"><h3 class="card-title">Historial de estados</h3></div>
+        <div class="card-body table-responsive p-0">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Estado anterior</th>
+                        <th>Estado nuevo</th>
+                        <th>Usuario</th>
+                        <th>Motivo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var h in historial)
+                    {
+                        <tr>
+                            <td>@h.CreatedAt.ToShortDateTime()</td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(h.EstadoAnteriorCodigo))
+                                {
+                                    <span class="badge" style="background-color: @(h.EstadoAnteriorColor ?? "#6c757d")">
+                                        @(h.EstadoAnteriorNombre ?? h.EstadoAnteriorCodigo)
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">— (estado inicial)</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="badge" style="background-color: @(h.EstadoNuevoColor ?? "#6c757d")">
+                                    @(h.EstadoNuevoNombre ?? h.EstadoNuevoCodigo)
+                                </span>
+                            </td>
+                            <td>@(h.UsuarioNombre ?? "—")</td>
+                            <td class="text-danger">@(h.MotivoCancelacion ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

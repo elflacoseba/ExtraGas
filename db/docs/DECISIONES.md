@@ -392,6 +392,38 @@ Mensaje de error de PedidoService: `"El producto {nombre} (id={id}) fue desactiv
 
 ---
 
+## 20. Histórico append-only de cambios de estado de pedidos
+
+**Contexto:** `pedidos` solo guardaba `estado_pedido_id` + `updated_at` + `updated_by` + `motivo_cancelacion` (este último cuando aplicaba). Si un pedido recorría `PENDIENTE → CONFIRMADO → EN_PREPARACION → ENTREGADO`, el sistema perdía el rastro de los estados intermedios. Para auditoría (¿cuándo se confirmó? ¿cuánto tiempo estuvo en preparación? ¿quién lo canceló y por qué motivo en cada paso?) no había forma de reconstruirlo. Issue #165.
+
+**Decisión:** crear tabla `pedido_estados_historico` append-only, escrita exclusivamente desde un helper privado (`PedidoService.RegistrarCambioEstadoAsync`) invocado dentro del mismo `SaveChangesAsync` que muta `pedidos.estado_pedido_id`. Schema (`db/migrations/20260831_000002_create_pedido_estados_historico.sql`):
+
+- Columnas: `id`, `pedido_id` (FK RESTRICT), `estado_anterior_id` (FK RESTRICT, NULL permitido — solo se usaría para una hipotética fila de estado inicial, hoy no se inserta), `estado_nuevo_id` (FK RESTRICT, NOT NULL), `motivo_cancelacion` (VARCHAR(500) NULL, solo se setea cuando destino = CANCELADO), `usuario_id` (FK RESTRICT NULL), `created_at` (default CURRENT_TIMESTAMP).
+- Sin `updated_at`, sin `deleted_at` — append-only. Borrar una fila sería reescribir la historia.
+- Índice `(pedido_id, created_at DESC)` cubre la query más frecuente: `SELECT ... WHERE pedido_id = ? ORDER BY created_at DESC` que alimenta la timeline de `Details` y el endpoint `GET /Pedidos/{id}/historial-estados`.
+- FKs `RESTRICT` (no CASCADE) — no se puede borrar un pedido, estado o usuario que tengan historial registrado. Si un día hay que desvincular, se hace explícitamente, no por side-effect.
+
+**Por qué:**
+
+- **Append-only es el patrón del sistema.** `movimientos_garrafa` (ADR #2 implícito) y `producto_precios_historico` (ADR #18) ya usan este modelo. Consistencia interna: las tablas de auditoría NO se actualizan ni borran, solo se les agrega filas. Un PRD nuevo que pida "borrar el historial" se rechazaría por inconsistente con dos ADRs previos.
+- **El helper se invoca dentro del `SaveChangesAsync` que muta `pedido`**. Garantía atómica: si falla el `UPDATE` de `pedidos.estado_pedido_id`, no queda fila huérfana en el histórico. El path de canje (`AplicarCanjeYConfirmarAsync`) además abre una transacción ambiente (`BeginTransactionAsync` en `RegistrarCanjePedidoAsync`), así que si la fila de histórico falla por FK violada o cualquier otra razón, el rollback deshace también los `movimientos_garrafa` y la transición a CONFIRMADO. No hay estado intermedio observable.
+- **Trigger AFTER UPDATE descartado.** La alternativa más simple sería un trigger `AFTER UPDATE ON pedidos` que escriba la fila de historial. Se descartó porque perderíamos `usuario_id` y `motivo_cancelacion` confiables: los triggers no tienen contexto del usuario actual salvo vía `CURRENT_USER()` o variables de sesión, y no reciben el motivo de cancelación como parámetro. Hacer una variable de sesión por cada transición es complejidad innecesaria cuando el código de la app ya conoce esos valores.
+- **FKs RESTRICT.** Mismo razonamiento que ADR #18: la trazabilidad es más importante que la limpieza. Borrar un usuario debería ser una operación consciente (desvincular primero el historial explícitamente), no un side-effect de CASCADE.
+- **`estado_anterior_id` NULLABLE** aunque hoy la app nunca inserta NULL — la fila de creación del pedido no se registra (el estado inicial siempre es PENDIENTE, conocido por convención). Dejar la columna NULLABLE permite un eventual seed de migración / import inicial que represente el estado inicial sin tocar el schema. Si en el futuro alguien quiere auditar también la fila de creación (quién la creó y cuándo), basta agregar el INSERT en `CreateAsync` sin migración.
+- **`motivo_cancelacion` se persiste crudo desde el helper.** El Service ya hace `.Trim()` antes de guardarlo en `pedidos.motivo_cancelacion`, pero el helper recibe el valor original (que en ese punto ya fue validado no-vacío). Funcionalmente equivalente: si no es vacío al ingresar, después del trim sigue siendo no-vacío.
+- **No se inserta fila en `CreateAsync`**. Solo se registran TRANSICIONES. La app no expone la creación del pedido como "estado inicial explícito"; el estado inicial se deriva de la convención (PENDIENTE) más la fila 1 del historial cuando ocurre la primera transición. Si alguien pide auditar también el INSERT inicial, se agrega el helper en `CreateAsync` con `estado_anterior_id = null` — sin migración.
+
+**Implicancia:**
+
+- Cualquier futuro flujo que cambie `pedidos.estado_pedido_id` DEBE invocar `RegistrarCambioEstadoAsync`. Hoy son tres: `CambiarEstadoAsync` (path genérico), `ConfirmarSinCanjeAsync` (caso degenerado VENTA-only), `AplicarCanjeYConfirmarAsync` (path canje). Si mañana se agrega un flujo tipo "cancelación masiva de pedidos vencidos", ese flujo debe llamar al helper en su `SaveChanges` final.
+- El helper NO llama `SaveChanges` por sí mismo — se invoca dentro del `SaveChangesAsync` del caller. Esta restricción está documentada en el XMLDoc del método y protegida por los tests (`PedidoServiceCambiarEstadoTests`: la fila aparece después del `CambiarEstadoAsync`, no antes).
+- El `CreatedAt` se setea explícitamente en C# (`DateTime.UtcNow`) como defensa contra el desfase entre el reloj de la app y el del servidor MySQL — mismo patrón que ADR #18. El default `CURRENT_TIMESTAMP` de la columna es el fallback si alguien hace `INSERT` manual sin setearlo.
+- La vista `Details.cshtml` muestra la timeline solo si hay al menos una entrada. Un pedido recién creado no muestra la card hasta su primera transición — comportamiento correcto, no es un bug.
+- El endpoint `GET /Pedidos/{id}/historial-estados` es la API pública del modelo de auditoría. Devuelve 404 si el pedido no existe; 200 con array (posiblemente vacío) si existe pero no tiene transiciones.
+- Si en el futuro hay que revertir una transición "mal registrada", NO se borra la fila del histórico. Se hace un nuevo INSERT con `motivo_cancelacion = "Reversión de ID=X"` o, si el cambio fue correcto, se acepta como parte de la historia. La trazabilidad es preservar la verdad de lo que pasó, no maquillar los errores.
+
+---
+
 ## Supuestos explícitos (no validados con el usuario)
 
 1. No hay delivery con zonas / tarifas distintas. Un pedido = una dirección.

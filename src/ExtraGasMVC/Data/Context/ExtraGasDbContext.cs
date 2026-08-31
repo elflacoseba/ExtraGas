@@ -38,6 +38,8 @@ public class ExtraGasDbContext : DbContext
     public DbSet<Pedido> Pedidos => Set<Pedido>();
     public DbSet<PedidoItem> PedidoItems => Set<PedidoItem>();
     public DbSet<Pago> Pagos => Set<Pago>();
+    // Issue #165: histórico append-only de cambios de estado de pedidos.
+    public DbSet<PedidoEstadoHistorico> PedidoEstadosHistorico => Set<PedidoEstadoHistorico>();
 
     // ============== Recepciones y pagos a proveedor ==============
     public DbSet<RecepcionProveedor> RecepcionesProveedor => Set<RecepcionProveedor>();

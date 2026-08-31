@@ -349,9 +349,21 @@ public class PedidoService : IPedidoService
             pedido.MotivoCancelacion = motivoCancelacion.Trim();
         }
 
+        // Issue #165: capturar el estado previo ANTES de pisar el entity.
+        // Si capturáramos después, estadoAnteriorId == nuevoEstadoId y la
+        // fila de historial diría "transición de X a X".
+        var estadoAnteriorId = pedido.EstadoPedidoId;
+
         pedido.EstadoPedidoId = nuevoEstadoId;
         pedido.UpdatedAt = DateTime.UtcNow;
         pedido.UpdatedBy = usuarioId;
+
+        // Issue #165: append-only audit. Se inserta dentro del MISMO
+        // SaveChangesAsync que persiste la mutación de pedido — si el
+        // SaveChanges falla, ni el cambio de estado ni la fila de historial
+        // quedan persistidas. Atomicidad garantizada por compartir el
+        // SaveChanges (no hace falta transacción explícita acá).
+        await RegistrarCambioEstadoAsync(id, estadoAnteriorId, nuevoEstadoId, usuarioId, motivoCancelacion, ct);
 
         await _context.SaveChangesAsync(ct);
 
@@ -718,9 +730,18 @@ public class PedidoService : IPedidoService
     private async Task<bool> ConfirmarSinCanjeAsync(
         Pedido pedido, ulong estadoConfirmadoId, ulong? usuarioId, CancellationToken ct)
     {
+        // Issue #165: capturar estado previo antes de la mutación.
+        var estadoAnteriorId = pedido.EstadoPedidoId;
+
         pedido.EstadoPedidoId = estadoConfirmadoId;
         pedido.UpdatedAt = DateTime.UtcNow;
         pedido.UpdatedBy = usuarioId;
+
+        // Append-only audit. ConfirmarSinCanjeAsync no abre transacción
+        // propia (es un único SaveChanges); el helper y la mutación del
+        // pedido commitean atómicamente juntos.
+        await RegistrarCambioEstadoAsync(pedido.Id, estadoAnteriorId, estadoConfirmadoId, usuarioId, motivo: null, ct);
+
         await _context.SaveChangesAsync(ct);
         return true;
     }
@@ -890,9 +911,21 @@ public class PedidoService : IPedidoService
                 estadoDestinoId, clienteIdParaCanje, ctx.UsuarioId, ct);
         }
 
+        // Issue #165: capturar estado previo antes de la mutación. La
+        // transición a CONFIRMADO via canje puede partir de PENDIENTE
+        // (caso normal) o EN_PREPARACION (post-#144), por eso leemos el
+        // id vigente en el entity en lugar de hardcodear.
+        var estadoAnteriorId = ctx.Pedido.EstadoPedidoId;
+
         ctx.Pedido.EstadoPedidoId = ctx.EstadoConfirmadoId;
         ctx.Pedido.UpdatedAt = DateTime.UtcNow;
         ctx.Pedido.UpdatedBy = ctx.UsuarioId;
+
+        // Append-only audit. La transacción ambiente abierta por
+        // RegistrarCanjePedidoAsync cubre este SaveChanges — si la fila de
+        // historial falla por cualquier razón (FK violada, etc.), la
+        // transacción rollbackea y el pedido queda en su estado original.
+        await RegistrarCambioEstadoAsync(ctx.PedidoId, estadoAnteriorId, ctx.EstadoConfirmadoId, ctx.UsuarioId, motivo: null, ct);
 
         await _context.SaveChangesAsync(ct);
     }
@@ -936,6 +969,44 @@ public class PedidoService : IPedidoService
 
     #endregion
 
+    /// <summary>
+    /// Issue #165: helper privado que registra una fila append-only en
+    /// <c>pedido_estados_historico</c>. NO llama a <c>SaveChanges</c> por
+    /// sí mismo — se invoca dentro del mismo <c>SaveChangesAsync</c> del
+    /// caller para garantizar atomicidad con la mutación de
+    /// <c>pedidos.estado_pedido_id</c>. Si el SaveChanges falla, ni el
+    /// cambio de estado ni la fila de historial quedan persistidas.
+    /// </summary>
+    /// <param name="estadoAnteriorId">
+    /// Id del estado del pedido ANTES de la transición. El caller debe
+    /// capturar este valor de <c>pedido.EstadoPedidoId</c> ANTES de
+    /// pisarlo, o la fila diría "transición de X a X".
+    /// </param>
+    /// <param name="motivo">
+    /// Motivo de cancelación cuando aplica. Coincide con el valor
+    /// persistido en <c>pedidos.motivo_cancelacion</c>; null en cualquier
+    /// transición cuyo destino no sea CANCELADO.
+    /// </param>
+    private Task RegistrarCambioEstadoAsync(
+        ulong pedidoId,
+        ulong? estadoAnteriorId,
+        ulong estadoNuevoId,
+        ulong? usuarioId,
+        string? motivo,
+        CancellationToken ct = default)
+    {
+        _context.PedidoEstadosHistorico.Add(new PedidoEstadoHistorico
+        {
+            PedidoId = pedidoId,
+            EstadoAnteriorId = estadoAnteriorId,
+            EstadoNuevoId = estadoNuevoId,
+            UsuarioId = usuarioId,
+            MotivoCancelacion = motivo,
+            CreatedAt = DateTime.UtcNow,
+        });
+        return Task.CompletedTask;
+    }
+
     #region State & Lookups
 
     public async Task<List<EstadoPedidoDto>> GetTransicionesDisponiblesAsync(ulong pedidoId, CancellationToken ct = default)
@@ -973,6 +1044,33 @@ public class PedidoService : IPedidoService
                 .ToListAsync(ct);
             return _mapper.Map<List<EstadoPedidoDto>>(estados);
         }) ?? [];
+    }
+
+    /// <summary>
+    /// Issue #165: devuelve el historial append-only de cambios de estado
+    /// del pedido, ordenado del más reciente al más antiguo. Cubre la
+    /// timeline de <c>Pedidos/Details.cshtml</c> y el endpoint
+    /// <c>/Pedidos/{id}/historial-estados</c>.
+    ///
+    /// El índice <c>idx_peh_pedido_created (pedido_id, created_at DESC)</c>
+    /// cubre exactamente esta query. El <c>Id DESC</c> como tiebreaker
+    /// garantiza orden estable cuando dos filas comparten timestamp (caso
+    /// raro pero posible bajo clock skew entre la app y MySQL).
+    /// </summary>
+    public async Task<IEnumerable<PedidoEstadoHistoricoDto>> GetHistorialEstadosAsync(
+        ulong pedidoId, CancellationToken ct = default)
+    {
+        var entries = await _context.PedidoEstadosHistorico
+            .AsNoTracking()
+            .Include(h => h.EstadoAnterior)
+            .Include(h => h.EstadoNuevo)
+            .Include(h => h.Usuario)
+            .Where(h => h.PedidoId == pedidoId)
+            .OrderByDescending(h => h.CreatedAt)
+            .ThenByDescending(h => h.Id)
+            .ToListAsync(ct);
+
+        return _mapper.Map<IEnumerable<PedidoEstadoHistoricoDto>>(entries);
     }
 
     public async Task<List<CanalVentaDto>> GetCanalesVentaAsync(CancellationToken ct = default)

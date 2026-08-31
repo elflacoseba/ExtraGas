@@ -416,6 +416,191 @@ public class PedidoServiceCambiarEstadoTests
     // PedidoServiceSearchTests.NotImplementedGarrafaService.
     // ====================================================================
 
+    // ====================================================================
+    // Audit: pedido_estados_historico (issue #165)
+    //
+    // El helper privado RegistrarCambioEstadoAsync NO se invoca desde afuera
+    // (es private). Estos tests verifican su efecto observable: el helper
+    // debe crear exactamente una fila de historial por transición efectiva,
+    // con estado_anterior_id reflejando el estado previo y motivo solo
+    // cuando destino == CANCELADO.
+    //
+    // Patrón: InMemory provee PedidoEstadosHistorico porque el DbSet se
+    // aplica vía ApplyConfigurationsFromAssembly — InMemory no exige FKs.
+    // ====================================================================
+
+    [Fact]
+    public async Task CambiarEstadoAsync_TransicionValida_PersisteFilaEnHistorico()
+    {
+        var (service, context) = NewService(
+            nameof(CambiarEstadoAsync_TransicionValida_PersisteFilaEnHistorico));
+        var pedidoId = Seed(context, PedidoEstados.Pendiente);
+
+        var pendienteId = context.EstadosPedido.Single(e => e.Codigo == PedidoEstados.Pendiente).Id;
+        var confirmadoId = context.EstadosPedido.Single(e => e.Codigo == PedidoEstados.Confirmado).Id;
+
+        await service.CambiarEstadoAsync(pedidoId, confirmadoId, motivoCancelacion: null, usuarioId: 7);
+
+        var rows = await context.PedidoEstadosHistorico
+            .Where(h => h.PedidoId == pedidoId)
+            .ToListAsync();
+
+        rows.Should().HaveCount(1);
+        var row = rows[0];
+        row.EstadoAnteriorId.Should().Be(pendienteId,
+            "el helper debe capturar el estado previo ANTES de pisar el entity");
+        row.EstadoNuevoId.Should().Be(confirmadoId);
+        row.UsuarioId.Should().Be(7);
+        row.MotivoCancelacion.Should().BeNull(
+            "en transiciones cuyo destino no es CANCELADO, el motivo queda null");
+    }
+
+    [Fact]
+    public async Task CambiarEstadoAsync_DestinoCanceladoConMotivo_PersisteMotivoEnHistorico()
+    {
+        var (service, context) = NewService(
+            nameof(CambiarEstadoAsync_DestinoCanceladoConMotivo_PersisteMotivoEnHistorico));
+        var pedidoId = Seed(context, PedidoEstados.Pendiente);
+
+        var canceladoId = context.EstadosPedido.Single(e => e.Codigo == PedidoEstados.Cancelado).Id;
+
+        await service.CambiarEstadoAsync(
+            pedidoId, canceladoId, motivoCancelacion: "Cliente canceló por lluvia", usuarioId: 3);
+
+        var row = await context.PedidoEstadosHistorico
+            .SingleAsync(h => h.PedidoId == pedidoId);
+
+        row.MotivoCancelacion.Should().Be("Cliente canceló por lluvia",
+            "el motivo se persiste igual que en pedidos.motivo_cancelacion");
+        row.UsuarioId.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task CambiarEstadoAsync_MismoEstado_NoCreaFilaEnHistorico()
+    {
+        var (service, context) = NewService(
+            nameof(CambiarEstadoAsync_MismoEstado_NoCreaFilaEnHistorico));
+        var pedidoId = Seed(context, PedidoEstados.Pendiente);
+        var pendienteId = context.EstadosPedido.Single(e => e.Codigo == PedidoEstados.Pendiente).Id;
+
+        var ok = await service.CambiarEstadoAsync(
+            pedidoId, pendienteId, motivoCancelacion: null, usuarioId: 99);
+
+        ok.Should().BeTrue();
+        var rows = await context.PedidoEstadosHistorico
+            .Where(h => h.PedidoId == pedidoId)
+            .ToListAsync();
+        rows.Should().BeEmpty(
+            "el no-op (mismo estado actual que destino) no debe persistir fila de historial");
+    }
+
+    [Fact]
+    public async Task CambiarEstadoAsync_PedidoNoExiste_NoCreaFilaEnHistorico()
+    {
+        var (service, context) = NewService(
+            nameof(CambiarEstadoAsync_PedidoNoExiste_NoCreaFilaEnHistorico));
+
+        var ok = await service.CambiarEstadoAsync(
+            id: 9999, nuevoEstadoId: 1, motivoCancelacion: null, usuarioId: 1);
+
+        ok.Should().BeFalse();
+        var rows = await context.PedidoEstadosHistorico.ToListAsync();
+        rows.Should().BeEmpty(
+            "si el pedido no existe, no debe persistirse nada — ni el pedido ni el historial");
+    }
+
+    [Fact]
+    public async Task CambiarEstadoAsync_TransicionNoPermitida_NoCreaFilaEnHistorico()
+    {
+        // Defensa en profundidad: si la validación de la matriz de
+        // transiciones lanza, el helper no debe haber sido invocado (ni
+        // siquiera en el DbSet tracker, porque SaveChanges rollbackea).
+        var (service, context) = NewService(
+            nameof(CambiarEstadoAsync_TransicionNoPermitida_NoCreaFilaEnHistorico));
+        var pedidoId = Seed(context, PedidoEstados.Pendiente);
+        var entregadoId = context.EstadosPedido.Single(e => e.Codigo == PedidoEstados.Entregado).Id;
+
+        var act = async () => await service.CambiarEstadoAsync(
+            pedidoId, entregadoId, motivoCancelacion: null, usuarioId: 1);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Transición no permitida*");
+
+        var rows = await context.PedidoEstadosHistorico.ToListAsync();
+        rows.Should().BeEmpty("una transición rechazada no debe dejar fila de historial");
+    }
+
+    [Fact]
+    public async Task CambiarEstadoAsync_FlujoCompleto_CreaUnaFilaPorTransicion()
+    {
+        // Cubre el contrato central del helper: una fila por transición,
+        // no más, no menos. El estado_anterior de cada fila debe ser el
+        // estado_nuevo de la anterior — invariante crítico para reconstruir
+        // la timeline sin huecos.
+        var (service, context) = NewService(
+            nameof(CambiarEstadoAsync_FlujoCompleto_CreaUnaFilaPorTransicion));
+        var pedidoId = Seed(context, PedidoEstados.Pendiente);
+
+        var pendienteId = context.EstadosPedido.Single(e => e.Codigo == PedidoEstados.Pendiente).Id;
+        var confirmadoId = context.EstadosPedido.Single(e => e.Codigo == PedidoEstados.Confirmado).Id;
+        var enPreparacionId = context.EstadosPedido.Single(e => e.Codigo == PedidoEstados.EnPreparacion).Id;
+        var canceladoId = context.EstadosPedido.Single(e => e.Codigo == PedidoEstados.Cancelado).Id;
+
+        // PENDIENTE → CONFIRMADO
+        await service.CambiarEstadoAsync(pedidoId, confirmadoId, null, usuarioId: 1);
+        // CONFIRMADO → EN_PREPARACION
+        await service.CambiarEstadoAsync(pedidoId, enPreparacionId, null, usuarioId: 2);
+        // EN_PREPARACION → CANCELADO con motivo
+        await service.CambiarEstadoAsync(pedidoId, canceladoId, "Lluvia", usuarioId: 3);
+
+        var rows = await context.PedidoEstadosHistorico
+            .Where(h => h.PedidoId == pedidoId)
+            .OrderBy(h => h.Id)
+            .ToListAsync();
+
+        rows.Should().HaveCount(3, "tres transiciones efectivas = tres filas");
+
+        rows[0].EstadoAnteriorId.Should().Be(pendienteId);
+        rows[0].EstadoNuevoId.Should().Be(confirmadoId);
+        rows[0].UsuarioId.Should().Be(1);
+        rows[0].MotivoCancelacion.Should().BeNull();
+
+        rows[1].EstadoAnteriorId.Should().Be(confirmadoId);
+        rows[1].EstadoNuevoId.Should().Be(enPreparacionId);
+        rows[1].UsuarioId.Should().Be(2);
+        rows[1].MotivoCancelacion.Should().BeNull();
+
+        rows[2].EstadoAnteriorId.Should().Be(enPreparacionId);
+        rows[2].EstadoNuevoId.Should().Be(canceladoId);
+        rows[2].UsuarioId.Should().Be(3);
+        rows[2].MotivoCancelacion.Should().Be("Lluvia");
+    }
+
+    [Fact]
+    public async Task CambiarEstadoAsync_DestinoCanceladoSinMotivo_NoCreaFilaEnHistorico()
+    {
+        // Si la validación de "CANCELADO requiere motivo" lanza, el helper
+        // no debe haberse invocado. Misma defensa que transición no
+        // permitida pero específica del path de cancelación.
+        var (service, context) = NewService(
+            nameof(CambiarEstadoAsync_DestinoCanceladoSinMotivo_NoCreaFilaEnHistorico));
+        var pedidoId = Seed(context, PedidoEstados.Pendiente);
+        var canceladoId = context.EstadosPedido.Single(e => e.Codigo == PedidoEstados.Cancelado).Id;
+
+        var act = async () => await service.CambiarEstadoAsync(
+            pedidoId, canceladoId, motivoCancelacion: null, usuarioId: 1);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Debe ingresar un motivo de cancelación.");
+
+        var rows = await context.PedidoEstadosHistorico.ToListAsync();
+        rows.Should().BeEmpty();
+    }
+
+    // ====================================================================
+    // Fin sección Audit (issue #165)
+    // ====================================================================
+
     private sealed class NotImplementedGarrafaService : IGarrafaService
     {
         public Task<GarrafaDto?> GetByIdAsync(ulong id, CancellationToken ct = default) => throw new NotImplementedException();

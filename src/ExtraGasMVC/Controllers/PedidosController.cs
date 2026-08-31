@@ -70,6 +70,12 @@ public class PedidosController : BaseController
         var movimientosGarrafa = await _garrafaService.GetMovimientosByPedidoAsync(id, ct);
         ViewBag.MovimientosGarrafa = movimientosGarrafa;
 
+        // Issue #165: timeline de cambios de estado. Append-only, ordenada
+        // del más reciente al más antiguo. La card se rendera solo cuando
+        // hay al menos una transición registrada.
+        var historialEstados = await _pedidoService.GetHistorialEstadosAsync(id, ct);
+        ViewBag.HistorialEstados = historialEstados;
+
         return View(pedido);
     }
 
@@ -322,6 +328,27 @@ public class PedidosController : BaseController
     {
         var pedidos = await _pedidoService.GetPendientesAsync(ct);
         return View(pedidos);
+    }
+
+    /// <summary>
+    /// Issue #165: endpoint que devuelve el historial append-only de
+    /// cambios de estado del pedido en formato JSON, ordenado del más
+    /// reciente al más antiguo. Alimenta integraciones AJAX (futuro) y
+    /// sirve como contrato público del modelo de auditoría.
+    /// </summary>
+    /// <returns>
+    /// 404 si el pedido no existe (mismo contrato que Details); 200 con
+    /// array (posiblemente vacío) si existe. Un pedido recién creado no
+    /// tiene entradas en el histórico hasta su primera transición.
+    /// </returns>
+    [HttpGet]
+    public async Task<IActionResult> HistorialEstados(ulong id, CancellationToken ct = default)
+    {
+        var pedido = await _pedidoService.GetByIdAsync(id, ct);
+        if (pedido is null) return NotFound();
+
+        var historial = await _pedidoService.GetHistorialEstadosAsync(id, ct);
+        return Ok(historial);
     }
 
     // ---- Items del pedido ----
