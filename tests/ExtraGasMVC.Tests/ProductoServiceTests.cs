@@ -789,6 +789,14 @@ public class ProductoServiceTests
         var segunda = (await service.GetTiposProductoAsync()).ToList();
         segunda.Should().HaveCount(2,
             "la 2da call debe hit cache y NO incluir el LENA agregado después");
-        segunda.Select(t => t.Codigo).Should().BeEquivalentTo(new[] { "GAS", "CARBON" });
+        segunda.Select(t => t.Codigo).Should().BeEquivalentTo(ProductoServiceTestsCacheKeys.CodigosGasYCarbon);
+    }
+
+    // Issue #158 (CA1861): agrupamos los arrays literales repetidos en un
+    // contenedor estático para que la regla no flaggee "constant array as
+    // argument".
+    private static class ProductoServiceTestsCacheKeys
+    {
+        public static readonly string[] CodigosGasYCarbon = { "GAS", "CARBON" };
     }
 }

@@ -26,6 +26,10 @@ namespace ExtraGasMVC.Tests;
 /// </summary>
 public class ClienteServiceReadTests
 {
+    // Issue #158 (CA1861): static readonly array — sin reasignación en cada
+    // llamada, reduce allocaciones y deja el patrón explícito.
+    private static readonly string[] ApellidosEsperadosZA = { "Alvarez", "Brown", "Zapata" };
+
     private static (ClienteService service, ExtraGasDbContext context) NewService(string dbName)
     {
         var options = new DbContextOptionsBuilder<ExtraGasDbContext>()
@@ -113,7 +117,7 @@ public class ClienteServiceReadTests
 
         var todos = await service.GetAllAsync();
 
-        todos.Select(c => c.Apellido).Should().Equal(new[] { "Alvarez", "Brown", "Zapata" },
+        todos.Select(c => c.Apellido).Should().Equal(ApellidosEsperadosZA,
             "GetAllAsync debe ordenar por Apellido ascendente para que la lista sea estable");
     }
 

@@ -219,7 +219,9 @@ public class ProductoActivoRaceIntegrationTests : IClassFixture<PedidoCanjeMySql
         return proveedor;
     }
 
-    private async Task<RacePedidoSeed> SeedPedidoActivoAsync(ExtraGasDbContext ctx)
+    // Issue #158 (CA1822): static — no usa estado de instancia, recibe el
+    // DbContext como parámetro.
+    private static async Task<RacePedidoSeed> SeedPedidoActivoAsync(ExtraGasDbContext ctx)
     {
         var now = DateTime.UtcNow;
         var fecha = DateOnly.FromDateTime(now);

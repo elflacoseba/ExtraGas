@@ -290,7 +290,7 @@ public class ProductoServiceRobustezTests
         typeof(Producto).GetProperty(nameof(Producto.RowVersion))
             .Should().NotBeNull("la entity debe exponer RowVersion para IsConcurrencyToken");
         typeof(Producto).GetProperty(nameof(Producto.RowVersion))!
-            .PropertyType.Should().Be(typeof(byte[]));
+            .PropertyType.Should().Be<byte[]>(); // Issue #158 (CA2263): generic overload
     }
 
     [Fact]
@@ -505,7 +505,7 @@ public class ProductoServiceRobustezTests
               && e.Message.Contains("Nombre"),
             "UpdateAsync debe loggear el cambio de Nombre");
         logger.Entries.Should().NotContain(
-            e => e.Message.Contains("7")
+            e => e.Message.Contains('7') // Issue #158 (CA1847): char overload
               && !e.Message.Contains("18000")
               && !e.Message.Contains("Nombre")
               && !e.Message.Contains("GAS-10"),
@@ -542,7 +542,7 @@ public class ProductoServiceRobustezTests
         logger.Entries.Should().ContainSingle(
             e => e.Level == LogLevel.Warning
               && e.Message.Contains("GAS-10")
-              && e.Message.Contains("5"),
+              && e.Message.Contains('5'), // Issue #158 (CA1847): char overload
             "DeleteAsync debe loggear a nivel Warning con código y usuario");
     }
 }
