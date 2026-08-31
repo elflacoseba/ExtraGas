@@ -15,19 +15,27 @@ public static class PedidoEstados
 
     /// <summary>
     /// States that are considered final — no further transitions allowed.
+    /// Exposed as <see cref="IReadOnlySet{T}"/> so callers can query membership
+    /// without being able to mutate the underlying set (S3887).
     /// </summary>
-    public static readonly HashSet<string> EstadosFinales = new()
+    private static readonly HashSet<string> _estadosFinales = new()
     {
         Entregado,
         Cancelado
     };
 
+    public static readonly IReadOnlySet<string> EstadosFinales = _estadosFinales;
+
     /// <summary>
     /// States where only DireccionEntrega and Observaciones can be edited.
+    /// Exposed as <see cref="IReadOnlySet{T}"/> so callers can query membership
+    /// without being able to mutate the underlying set (S3887).
     /// </summary>
-    public static readonly HashSet<string> EstadosSoloLecturaParcial = new()
+    private static readonly HashSet<string> _estadosSoloLecturaParcial = new()
     {
         Confirmado,
         EnPreparacion
     };
+
+    public static readonly IReadOnlySet<string> EstadosSoloLecturaParcial = _estadosSoloLecturaParcial;
 }
