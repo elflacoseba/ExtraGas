@@ -20,6 +20,21 @@ public class RecepcionService : IRecepcionService
     /// </summary>
     private sealed record ProductoResumen(ulong Id, bool ManejaGarrafaIndividual, decimal? CapacidadKg, string Nombre);
 
+    /// <summary>
+    /// Agrupa los parámetros compartidos por los helpers de creación de garrafas
+    /// dentro de una recepción. Issue #158 (S107): sin este record, los métodos
+    /// privados llevaban 8 parámetros cada uno (umbral de SonarQube). Al extraer
+    /// los datos de contexto, las firmas bajan a 2-3 parámetros y queda explícito
+    /// qué estado comparten los dos métodos.
+    /// </summary>
+    private sealed record GarrafaRecepcionContext(
+        RecepcionProveedor Recepcion,
+        ulong EmpleadoId,
+        ulong? UsuarioId,
+        ulong EstadoLlenaDepositoId,
+        ulong TipoCompraId,
+        CancellationToken Ct);
+
     private readonly ExtraGasDbContext _context;
     private readonly IProductoService _productoService;
 
@@ -71,6 +86,17 @@ public class RecepcionService : IRecepcionService
             _context.RecepcionesProveedor.Add(recepcion);
             await _context.SaveChangesAsync(ct);   // trigger llena recepcion.Numero
 
+            // Issue #158 (S107): contexto compartido por los helpers de creación
+            // de garrafas — evita repetir los 5 parámetros correlacionados en cada
+            // llamada y baja la firma de los helpers de 8 a 3 parámetros.
+            var context = new GarrafaRecepcionContext(
+                Recepcion: recepcion,
+                EmpleadoId: empleadoId,
+                UsuarioId: usuarioId,
+                EstadoLlenaDepositoId: estadoLlenaDepositoId,
+                TipoCompraId: tipoCompraId,
+                Ct: ct);
+
             foreach (var itemDto in dto.Items)
             {
                 _context.RecepcionItems.Add(new RecepcionItem
@@ -83,8 +109,7 @@ public class RecepcionService : IRecepcionService
 
                 if (!productoById[itemDto.ProductoId].ManejaGarrafaIndividual) continue;
                 await CrearGarrafasYMovimientosAsync(
-                    itemDto, recepcion, empleadoId, usuarioId,
-                    productoById[itemDto.ProductoId], estadoLlenaDepositoId, tipoCompraId, ct);
+                    itemDto, productoById[itemDto.ProductoId], context);
             }
 
             await tx.CommitAsync(ct);
@@ -212,13 +237,8 @@ public class RecepcionService : IRecepcionService
     /// </summary>
     private async Task CrearGarrafasYMovimientosAsync(
         CrearRecepcionItemDto itemDto,
-        RecepcionProveedor recepcion,
-        ulong empleadoId,
-        ulong? usuarioId,
         ProductoResumen producto,
-        ulong estadoLlenaDepositoId,
-        ulong tipoCompraId,
-        CancellationToken ct)
+        GarrafaRecepcionContext context)
     {
         var capacidad = (byte)decimal.Truncate(producto.CapacidadKg!.Value);
         var codigosUnicos = (itemDto.CodigosGarrafa ?? new List<string>())
@@ -226,9 +246,7 @@ public class RecepcionService : IRecepcionService
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         foreach (var codigo in codigosUnicos)
-            await CrearUnaGarrafaConSuMovimientoAsync(
-                codigo, capacidad, recepcion, empleadoId, usuarioId,
-                estadoLlenaDepositoId, tipoCompraId, ct);
+            await CrearUnaGarrafaConSuMovimientoAsync(codigo, capacidad, context);
     }
 
     /// <summary>
@@ -239,33 +257,28 @@ public class RecepcionService : IRecepcionService
     private async Task CrearUnaGarrafaConSuMovimientoAsync(
         string codigo,
         byte capacidad,
-        RecepcionProveedor recepcion,
-        ulong empleadoId,
-        ulong? usuarioId,
-        ulong estadoLlenaDepositoId,
-        ulong tipoCompraId,
-        CancellationToken ct)
+        GarrafaRecepcionContext context)
     {
         var now = DateTime.UtcNow;
         _context.Garrafas.Add(new Garrafa
         {
             Codigo = codigo,
             CapacidadKg = capacidad,
-            ProveedorId = recepcion.ProveedorId,
-            RecepcionId = recepcion.Id,
-            FechaCompra = DateOnly.FromDateTime(recepcion.Fecha),
-            EstadoGarrafaId = estadoLlenaDepositoId,
+            ProveedorId = context.Recepcion.ProveedorId,
+            RecepcionId = context.Recepcion.Id,
+            FechaCompra = DateOnly.FromDateTime(context.Recepcion.Fecha),
+            EstadoGarrafaId = context.EstadoLlenaDepositoId,
             Activo = true,
             CreatedAt = now,
             UpdatedAt = now,
-            CreatedBy = usuarioId,
-            UpdatedBy = usuarioId,
+            CreatedBy = context.UsuarioId,
+            UpdatedBy = context.UsuarioId,
         });
 
         Garrafa garrafa;
         try
         {
-            await _context.SaveChangesAsync(ct);
+            await _context.SaveChangesAsync(context.Ct);
             garrafa = _context.Garrafas.Local.Single(g => g.Codigo == codigo);
         }
         catch (DbUpdateException dbex) when (dbex.InnerException is MySqlException my && my.Number == 1062)
@@ -276,16 +289,16 @@ public class RecepcionService : IRecepcionService
         _context.MovimientosGarrafa.Add(new MovimientoGarrafa
         {
             GarrafaId = garrafa.Id,
-            Fecha = recepcion.Fecha,
-            TipoMovimientoId = tipoCompraId,
-            RecepcionId = recepcion.Id,
-            EstadoOrigenId = estadoLlenaDepositoId,
-            EstadoDestinoId = estadoLlenaDepositoId,
-            EmpleadoId = empleadoId,
-            Observaciones = $"Compra - {recepcion.Numero}",
-            CreatedBy = usuarioId,
+            Fecha = context.Recepcion.Fecha,
+            TipoMovimientoId = context.TipoCompraId,
+            RecepcionId = context.Recepcion.Id,
+            EstadoOrigenId = context.EstadoLlenaDepositoId,
+            EstadoDestinoId = context.EstadoLlenaDepositoId,
+            EmpleadoId = context.EmpleadoId,
+            Observaciones = $"Compra - {context.Recepcion.Numero}",
+            CreatedBy = context.UsuarioId,
         });
-        await _context.SaveChangesAsync(ct);
+        await _context.SaveChangesAsync(context.Ct);
     }
 
     public async Task<bool> ReversarAsync(ulong recepcionId, ulong? usuarioId, CancellationToken ct = default)
