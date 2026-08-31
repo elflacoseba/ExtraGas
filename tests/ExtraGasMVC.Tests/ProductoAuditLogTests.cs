@@ -49,6 +49,14 @@ public class ProductoAuditLogTests
             context.ChangeTracker.Clear();
         }
 
+        // Issue #147 slice 3 item 7: sembrar UNIDAD (id=1) para el nuevo FK.
+        if (!context.UnidadesVenta.Any())
+        {
+            context.UnidadesVenta.Add(new UnidadVenta { Id = 1, Codigo = "UNIDAD", Nombre = "Unidad" });
+            context.SaveChanges();
+            context.ChangeTracker.Clear();
+        }
+
         return (service, context);
     }
 
@@ -58,7 +66,8 @@ public class ProductoAuditLogTests
         Nombre = "Garrafa 10kg",
         TipoProductoId = 1,
         CapacidadKg = 10m,
-        UnidadVenta = "UNIDAD",
+        // Issue #147 slice 3 item 7: el FK es ahora obligatorio.
+        UnidadVentaId = 1,
         PrecioActual = 1000m,
         ManejaGarrafaIndividual = true,
     };
@@ -72,6 +81,7 @@ public class ProductoAuditLogTests
         TipoProductoId = creado.TipoProductoId,
         CapacidadKg = creado.CapacidadKg,
         UnidadVenta = creado.UnidadVenta,
+        UnidadVentaId = creado.UnidadVentaId,
         PrecioActual = nuevoPrecio ?? creado.PrecioActual,
         ManejaGarrafaIndividual = creado.ManejaGarrafaIndividual,
         MotivoCambioPrecio = null,
@@ -135,6 +145,7 @@ public class ProductoAuditLogTests
             TipoProductoId = creado.TipoProductoId,
             CapacidadKg = creado.CapacidadKg,
             UnidadVenta = creado.UnidadVenta,
+            UnidadVentaId = creado.UnidadVentaId ?? 1,
             PrecioActual = 1500m,                // cambio 3
             ManejaGarrafaIndividual = creado.ManejaGarrafaIndividual,
         };

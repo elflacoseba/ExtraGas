@@ -252,6 +252,9 @@ public class ProductoPrecioHistoricoIntegrationTests
                 // precios — que es lo que este test cubre.
                 CapacidadKg = producto.CapacidadKg,
                 UnidadVenta = producto.UnidadVenta,
+                // Issue #147 slice 3 item 7: el FK ahora es obligatorio.
+                // El producto seed tiene unidad_venta='UNIDAD' (id=1).
+                UnidadVentaId = producto.UnidadVentaId ?? 1,
                 PrecioActual = 1500m,
                 ManejaGarrafaIndividual = producto.ManejaGarrafaIndividual,
                 MotivoCambioPrecio = "Ajuste por inflacion",
@@ -525,6 +528,7 @@ public class ProductoPrecioHistoricoMySqlFixture : IAsyncLifetime
             tipo_producto_id BIGINT UNSIGNED NOT NULL,
             capacidad_kg DECIMAL(8,2) NULL,
             unidad_venta VARCHAR(20) NOT NULL DEFAULT 'UNIDAD',
+            unidad_venta_id BIGINT UNSIGNED NULL, -- Issue #147 slice 3 item 7: nueva FK
             precio_actual DECIMAL(12,2) NOT NULL DEFAULT 0,
             maneja_garrafa_individual TINYINT(1) NOT NULL DEFAULT 0,
             activo TINYINT(1) NOT NULL DEFAULT 1,
@@ -553,12 +557,12 @@ public class ProductoPrecioHistoricoMySqlFixture : IAsyncLifetime
         INSERT IGNORE INTO usuarios (id, username, password_hash, rol_id) VALUES (1, 'system', 'noop', 1);
 
         -- Issue #147 slice 2: ProductoService.UpdateAsync ahora emite
-        -- filas a audit_log en el mismo SaveChangesAsync que la mutación
-        -- del producto. Si la tabla no existe, el SaveChanges revienta
-        -- y estos tests focused de producto_precios_historico se rompen
-        -- con un error colateral. Creamos la tabla mínima con el shape
-        -- de la migración 20260901_000001_create_audit_log.sql para
-        -- que la atomicidad no nos sabotee el path bajo prueba.
+         -- filas a audit_log en el mismo SaveChangesAsync que la mutación
+         -- del producto. Si la tabla no existe, el SaveChanges revienta
+         -- y estos tests focused de producto_precios_historico se rompen
+         -- con un error colateral. Creamos la tabla mínima con el shape
+         -- de la migración 20260901_000001_create_audit_log.sql para
+         -- que la atomicidad no nos sabotee el path bajo prueba.
         CREATE TABLE IF NOT EXISTS audit_log (
             id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             entidad         VARCHAR(50)     NOT NULL,
@@ -572,5 +576,21 @@ public class ProductoPrecioHistoricoMySqlFixture : IAsyncLifetime
             KEY idx_audit_entidad_registro (entidad, registro_id, changed_at),
             KEY idx_audit_changed_at (changed_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        -- unidades_venta (issue #147 slice 3 item 7): ProductoService
+        -- sincroniza la columna legacy unidad_venta con el FK via lookup.
+        -- Sin la tabla el sync falla con "Table doesn't exist".
+        CREATE TABLE IF NOT EXISTS unidades_venta (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            codigo VARCHAR(20) NOT NULL,
+            nombre VARCHAR(50) NOT NULL,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            deleted_at DATETIME NULL, -- query filter global
+            UNIQUE KEY uk_unidades_venta_codigo (codigo)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+        INSERT IGNORE INTO unidades_venta (id, codigo, nombre) VALUES (1, 'UNIDAD', 'Unidad');
         """;
 }

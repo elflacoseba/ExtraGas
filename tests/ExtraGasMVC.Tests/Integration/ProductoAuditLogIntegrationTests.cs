@@ -113,6 +113,11 @@ public class ProductoAuditLogIntegrationTests
                 TipoProductoId = 1,
                 CapacidadKg = 10m,
                 UnidadVenta = "UNIDAD",
+                // Issue #147 slice 3 item 7: el FK ahora es la fuente de verdad
+                // para la unidad. Seteamos el id del seed "UNIDAD" para que
+                // el DTO del Update no genere diff en UnidadVentaId (el
+                // test cubre especificamente el path de PrecioActual).
+                UnidadVentaId = 1,
                 PrecioActual = 1000m,
                 ManejaGarrafaIndividual = true,
                 Activo = true,
@@ -139,6 +144,8 @@ public class ProductoAuditLogIntegrationTests
                 TipoProductoId = producto.TipoProductoId,
                 CapacidadKg = producto.CapacidadKg,
                 UnidadVenta = producto.UnidadVenta,
+                // Issue #147 slice 3 item 7: el FK es ahora obligatorio.
+                UnidadVentaId = producto.UnidadVentaId ?? 1,
                 PrecioActual = 1500m,
                 ManejaGarrafaIndividual = producto.ManejaGarrafaIndividual,
             };
@@ -426,6 +433,7 @@ public class ProductoAuditLogMySqlFixture : IAsyncLifetime
             tipo_producto_id BIGINT UNSIGNED NOT NULL,
             capacidad_kg DECIMAL(8,2) NULL,
             unidad_venta VARCHAR(20) NOT NULL DEFAULT 'UNIDAD',
+            unidad_venta_id BIGINT UNSIGNED NULL, -- Issue #147 slice 3 item 7: nueva FK
             precio_actual DECIMAL(12,2) NOT NULL DEFAULT 0,
             maneja_garrafa_individual TINYINT(1) NOT NULL DEFAULT 0,
             activo TINYINT(1) NOT NULL DEFAULT 1,
@@ -455,6 +463,21 @@ public class ProductoAuditLogMySqlFixture : IAsyncLifetime
             KEY idx_pph_producto_changed (producto_id, changed_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+        -- unidades_venta: lookup table (issue #147 slice 3 item 7).
+        -- ProductoService.CreateAsync/UpdateAsync sincroniza la columna
+        -- legacy unidad_venta (VARCHAR) con el FK via lookup — el seed
+        -- mínimo permite que el SELECT del codigo no falle.
+        CREATE TABLE IF NOT EXISTS unidades_venta (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            codigo VARCHAR(20) NOT NULL,
+            nombre VARCHAR(50) NOT NULL,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            deleted_at DATETIME NULL, -- query filter global (issue #147 slice 3)
+            UNIQUE KEY uk_unidades_venta_codigo (codigo)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
         DROP TRIGGER IF EXISTS trg_productos_bu_rowversion;
         CREATE TRIGGER trg_productos_bu_rowversion
         BEFORE UPDATE ON productos
@@ -463,5 +486,6 @@ public class ProductoAuditLogMySqlFixture : IAsyncLifetime
 
         INSERT IGNORE INTO tipos_producto (id, codigo, nombre) VALUES (1, 'GAS', 'Gas');
         INSERT IGNORE INTO usuarios (id, username, password_hash, rol_id) VALUES (1, 'system', 'noop', 1);
+        INSERT IGNORE INTO unidades_venta (id, codigo, nombre) VALUES (1, 'UNIDAD', 'Unidad');
         """;
 }

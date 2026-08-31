@@ -913,6 +913,7 @@ public class PedidoCanjeMySqlFixture : IAsyncLifetime
             tipo_producto_id BIGINT UNSIGNED NOT NULL,
             capacidad_kg DECIMAL(8,2) NULL,
             unidad_venta VARCHAR(20) NOT NULL DEFAULT 'UNIDAD',
+            unidad_venta_id BIGINT UNSIGNED NULL, -- Issue #147 slice 3 item 7: nueva FK
             precio_actual DECIMAL(12,2) NOT NULL DEFAULT 0,
             maneja_garrafa_individual TINYINT(1) NOT NULL DEFAULT 0,
             activo TINYINT(1) NOT NULL DEFAULT 1,

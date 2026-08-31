@@ -60,6 +60,25 @@ public class ProductoServiceTests
             context.ChangeTracker.Clear();
         }
 
+        // Issue #147 slice 3 item 7: el nuevo FK UnidadVentaId también
+        // se valida en el Service. Sembramos los 4 valores canónicos
+        // (réplica del seed de la migración 20260901_000002) para que
+        // NewCreateDto(codigo, unidadVentaId: 1-4) siempre tenga un
+        // destino válido. Tests específicos de unidades_venta usan
+        // SeedUnidadesVenta explícito; acá sembramos solo UNIDAD (id=1)
+        // que es lo que usa el default helper.
+        if (!context.UnidadesVenta.Any())
+        {
+            context.UnidadesVenta.Add(new UnidadVenta
+            {
+                Id = 1,
+                Codigo = "UNIDAD",
+                Nombre = "Unidad",
+            });
+            context.SaveChanges();
+            context.ChangeTracker.Clear();
+        }
+
         return (service, context);
     }
 
@@ -85,7 +104,7 @@ public class ProductoServiceTests
         return usuario.Id;
     }
 
-    private static CreateProductoDto NewCreateDto(string codigo = "GAS-10") => new()
+    private static CreateProductoDto NewCreateDto(string codigo = "GAS-10", ulong unidadVentaId = 1) => new()
     {
         Codigo = codigo,
         Nombre = "Garrafa 10kg",
@@ -100,7 +119,11 @@ public class ProductoServiceTests
         // el flag sin capacidad; seteamos 10m para mantener el escenario
         // "producto GARRAFA estándar" y seguir cubriendo los asserts.
         CapacidadKg = 10m,
-        UnidadVenta = "UNIDAD",
+        // Issue #147 slice 3 item 7: el FK UnidadVentaId es ahora
+        // obligatorio en CreateAsync (DataAnnotations + pre-check en
+        // Service). Seteamos el id=1 por default (semilla "UNIDAD") y
+        // el parámetro permite a los tests override si lo necesitan.
+        UnidadVentaId = unidadVentaId,
         PrecioActual = 15000m,
         ManejaGarrafaIndividual = true,
     };
@@ -129,6 +152,7 @@ public class ProductoServiceTests
             TipoProductoId = creado.TipoProductoId,
             CapacidadKg = creado.CapacidadKg,
             UnidadVenta = creado.UnidadVenta,
+            UnidadVentaId = creado.UnidadVentaId ?? 1,
             PrecioActual = creado.PrecioActual,
             ManejaGarrafaIndividual = creado.ManejaGarrafaIndividual,
             // Activo NO esta en UpdateProductoDto.
@@ -225,7 +249,13 @@ public class ProductoServiceTests
             Descripcion = creado.Descripcion,
             TipoProductoId = creado.TipoProductoId,
             CapacidadKg = creado.CapacidadKg,
+            // Issue #147 slice 3 item 7: el DTO ahora exige UnidadVentaId.
+            // El Mapper deja UnidadVentaId con el valor del DTO entrante.
+            // Si el creado lo trae populado, lo propagamos; si no, cae a null
+            // y el pre-check del Service lo rechaza (cubre el caso de un
+            // update con dto incompleto).
             UnidadVenta = creado.UnidadVenta,
+            UnidadVentaId = creado.UnidadVentaId,
             PrecioActual = nuevoPrecio,
             ManejaGarrafaIndividual = creado.ManejaGarrafaIndividual,
             MotivoCambioPrecio = null,
@@ -355,6 +385,15 @@ public class ProductoServiceTests
             Codigo = "GAS",
             Nombre = "Gas",
         });
+        // Issue #147 slice 3 item 7: el nuevo FK UnidadVentaId también
+        // se valida en el Service. Sembramos UNIDAD (id=1) para que
+        // NewCreateDto + el path de Update no tiren por FK inválida.
+        context.UnidadesVenta.Add(new UnidadVenta
+        {
+            Id = 1,
+            Codigo = "UNIDAD",
+            Nombre = "Unidad",
+        });
         context.SaveChanges();
         context.ChangeTracker.Clear();
 
@@ -443,6 +482,7 @@ public class ProductoServiceTests
             TipoProductoId = creado.TipoProductoId,
             CapacidadKg = creado.CapacidadKg,
             UnidadVenta = creado.UnidadVenta,
+            UnidadVentaId = creado.UnidadVentaId ?? 1,
             PrecioActual = creado.PrecioActual,
             ManejaGarrafaIndividual = creado.ManejaGarrafaIndividual,
         };
@@ -517,6 +557,7 @@ public class ProductoServiceTests
             TipoProductoId = creado.TipoProductoId,
             CapacidadKg = creado.CapacidadKg,
             UnidadVenta = creado.UnidadVenta,
+            UnidadVentaId = creado.UnidadVentaId ?? 1,
             PrecioActual = creado.PrecioActual,
             ManejaGarrafaIndividual = creado.ManejaGarrafaIndividual,
         };
@@ -692,6 +733,7 @@ public class ProductoServiceTests
             Nombre = "Garrafa 10kg",
             TipoProductoId = 1,
             UnidadVenta = "UNIDAD",
+            UnidadVentaId = 1, // Issue #147 slice 3: el FK ahora es obligatorio
             CapacidadKg = 10m,
             PrecioActual = 15000m,
             ManejaGarrafaIndividual = true,
