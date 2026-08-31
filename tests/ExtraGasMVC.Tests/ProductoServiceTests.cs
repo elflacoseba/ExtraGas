@@ -555,4 +555,169 @@ public class ProductoServiceTests
         result.UpdatedByUserName.Should().BeNull(
             "UpdatedBy FK sin usuario → username null (no excepción)");
     }
+
+    // ====================================================================
+    // Issue #147 item 5: 7 branches faltantes en ProductoService. El
+    // código de producción YA maneja estos casos — los tests documentan
+    // el contrato explícitamente para evitar que un refactor los rompa
+    // silenciosamente. Patrón "approval tests for spec scenarios" del
+    // strict-tdd.md.
+    // ====================================================================
+
+    [Fact]
+    public async Task GetByCodigoAsync_NotFound_ReturnsNull()
+    {
+        // Spec scenario "GetByCodigoAsync missing → null": no hay producto
+        // con ese código → la query no devuelve filas → el método devuelve
+        // null (no lanza excepción).
+        var (service, _) = NewService(nameof(GetByCodigoAsync_NotFound_ReturnsNull));
+
+        var resultado = await service.GetByCodigoAsync("GAS-INEXISTENTE");
+
+        resultado.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByCodigoAsync_SoftDeleted_ReturnsNull()
+    {
+        // Spec scenario "GetByCodigoAsync soft-deleted → null": el
+        // QueryFilter global (`p => p.DeletedAt == null`) oculta los
+        // productos soft-deleted de las queries de lectura. Un producto
+        // con DeletedAt != null pero Codigo = "GAS-10" NO debe aparecer.
+        var (service, context) = NewService(nameof(GetByCodigoAsync_SoftDeleted_ReturnsNull));
+        var creado = await service.CreateAsync(NewCreateDto(codigo: "GAS-10"), usuarioId: 1);
+        await service.DeleteAsync(creado.Id, ct: default);
+        // Sanity: el producto realmente está soft-deleted en BD.
+        var entity = await context.Productos.IgnoreQueryFilters().FirstAsync(p => p.Id == creado.Id);
+        entity.DeletedAt.Should().NotBeNull();
+
+        var resultado = await service.GetByCodigoAsync("GAS-10");
+
+        resultado.Should().BeNull(
+            "el QueryFilter global oculta soft-deleted de GetByCodigoAsync");
+    }
+
+    [Fact]
+    public async Task GetByTipoAsync_UnknownTipo_ReturnsEmpty()
+    {
+        // Spec scenario "GetByTipoAsync empty list": no hay productos con
+        // ese tipo → lista vacía (no null, no excepción). El operador
+        // puede estar filtrando por un TipoProductoId recién creado y sin
+        // productos asignados.
+        var (service, _) = NewService(nameof(GetByTipoAsync_UnknownTipo_ReturnsEmpty));
+
+        var resultado = await service.GetByTipoAsync(999UL);
+
+        resultado.Should().NotBeNull().And.BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetActivosAsync_MixedStatus_ReturnsOnlyActive()
+    {
+        // Spec scenario "GetActivosAsync filters inactives": con un mix de
+        // activos + soft-deleted, solo Activo=true AND DeletedAt IS NULL
+        // llegan al resultado. Soft-deleted sin DeletedAt != null ya está
+        // excluido por el QueryFilter; este test verifica además que
+        // Activo=false (sin soft-delete) tampoco aparece.
+        var (service, context) = NewService(nameof(GetActivosAsync_MixedStatus_ReturnsOnlyActive));
+        var activo = await service.CreateAsync(NewCreateDto(codigo: "GAS-10"), usuarioId: 1);
+
+        // Producto soft-deleted: Activo=false + DeletedAt!=null → excluido
+        // por ambos (QueryFilter + filtro Activo).
+        var softDeleted = await service.CreateAsync(NewCreateDto(codigo: "GAS-15"), usuarioId: 1);
+        await service.DeleteAsync(softDeleted.Id, ct: default);
+
+        // Producto "inactivo" sin soft-delete (caso raro: Activo=false pero
+        // DeletedAt=null — un zombie). Configuración manual vía BD para
+        // forzar el estado.
+        var zombie = new Producto
+        {
+            Codigo = "GAS-45",
+            Nombre = "Garrafa 45kg",
+            TipoProductoId = 1,
+            UnidadVenta = "UNIDAD",
+            PrecioActual = 30000m,
+            ManejaGarrafaIndividual = false,
+            Activo = false, // sin soft-delete
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+        };
+        context.Productos.Add(zombie);
+        await context.SaveChangesAsync();
+
+        var resultado = (await service.GetActivosAsync()).ToList();
+
+        resultado.Should().ContainSingle()
+            .Which.Id.Should().Be(activo.Id,
+                "solo el producto activo (Activo=true + DeletedAt=null) debe aparecer");
+        resultado.Should().NotContain(p => p.Id == softDeleted.Id,
+            "soft-deleted debe estar excluido");
+        resultado.Should().NotContain(p => p.Id == zombie.Id,
+            "zombie (Activo=false sin soft-delete) debe estar excluido");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_UnknownId_ThrowsKeyNotFoundException()
+    {
+        // Spec scenario "UpdateAsync unknown Id → KeyNotFoundException": el
+        // FindAsync del Service devuelve null → el método lanza
+        // KeyNotFoundException con un mensaje claro. El Controller traduce
+        // eso a NotFound o ModelState según el patrón existente.
+        // Importante: CapacidadKg > 0 cuando ManejaGarrafaIndividual=true
+        // (issue #146.3). Sin esto, el método tira ValidationException
+        // ANTES de llegar al FindAsync y nunca veríamos el
+        // KeyNotFoundException que queremos verificar.
+        var (service, _) = NewService(nameof(UpdateAsync_UnknownId_ThrowsKeyNotFoundException));
+        var dto = new UpdateProductoDto
+        {
+            Id = 999_999UL, // no existe
+            Codigo = "GAS-10",
+            Nombre = "Garrafa 10kg",
+            TipoProductoId = 1,
+            UnidadVenta = "UNIDAD",
+            CapacidadKg = 10m,
+            PrecioActual = 15000m,
+            ManejaGarrafaIndividual = true,
+        };
+
+        var act = async () => await service.UpdateAsync(dto, usuarioId: 1);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage("*999999*",
+                "el mensaje debe incluir el Id buscado para que el Controller pueda mostrarlo");
+    }
+
+    [Fact]
+    public async Task DeleteAsync_UnknownId_ReturnsFalse()
+    {
+        // Spec scenario "DeleteAsync unknown Id → false": a diferencia de
+        // UpdateAsync, Delete NO lanza — devuelve false para que el
+        // Controller mapee TempData[Error]. Coherente con RestoreAsync
+        // que también devuelve false para Id inexistente.
+        var (service, _) = NewService(nameof(DeleteAsync_UnknownId_ReturnsFalse));
+
+        var resultado = await service.DeleteAsync(999_999UL);
+
+        resultado.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateAsync_NullUser_Succeeds()
+    {
+        // Spec scenario "CreateAsync null userId → no crash": usado por
+        // tests automatizados, seeds y scripts de bootstrap que no tienen
+        // un usuario "humano" detrás. La entity persiste con
+        // CreatedBy=NULL/UpdatedBy=NULL — la auditoría queda "huérfana"
+        // pero la operación no falla.
+        var (service, context) = NewService(nameof(CreateAsync_NullUser_Succeeds));
+
+        var creado = await service.CreateAsync(NewCreateDto(), usuarioId: null);
+
+        creado.Should().NotBeNull();
+        creado.Id.Should().BeGreaterThan(0);
+        var entity = await context.Productos.AsNoTracking().FirstAsync(p => p.Id == creado.Id);
+        entity.CreatedBy.Should().BeNull(
+            "null usuario → CreatedBy NULL en BD (operación sincrónica válida)");
+        entity.UpdatedBy.Should().BeNull();
+    }
 }
