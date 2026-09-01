@@ -30,24 +30,46 @@ public class MappingProfile : Profile
     // Mapea los nombres legibles de los estados (anterior/nuevo) y del
     // usuario para alimentar la timeline en Details.cshtml y el endpoint
     // /Pedidos/{id}/historial-estados.
+    //
+    // Las lambdas de AutoMapper MapFrom son EXPRESSION TREES, no delegados
+    // regulares: no admiten `?.`, `??`, ni otras features que requieren
+    // semantica no-evaluable. Para bajar la Cognitive Complexity (21 -> un
+    // digito) sin romper expression trees, se extrae cada ternario a un
+    // helper estatico privado y el cuerpo del ConfigureX queda como una
+    // lista plana de invocaciones. Mismo patron que ConfigureMovimientoGarrafa
+    // y ConfigurePedido en este archivo.
     private void ConfigurePedidoEstadoHistorico()
     {
         CreateMap<PedidoEstadoHistorico, PedidoEstadoHistoricoDto>()
-            .ForMember(d => d.EstadoAnteriorCodigo, o => o.MapFrom(s =>
-                s.EstadoAnterior != null ? s.EstadoAnterior.Codigo : null))
-            .ForMember(d => d.EstadoAnteriorNombre, o => o.MapFrom(s =>
-                s.EstadoAnterior != null ? s.EstadoAnterior.Nombre : null))
-            .ForMember(d => d.EstadoAnteriorColor, o => o.MapFrom(s =>
-                s.EstadoAnterior != null ? s.EstadoAnterior.Color : null))
-            .ForMember(d => d.EstadoNuevoCodigo, o => o.MapFrom(s =>
-                s.EstadoNuevo != null ? s.EstadoNuevo.Codigo : string.Empty))
-            .ForMember(d => d.EstadoNuevoNombre, o => o.MapFrom(s =>
-                s.EstadoNuevo != null ? s.EstadoNuevo.Nombre : string.Empty))
-            .ForMember(d => d.EstadoNuevoColor, o => o.MapFrom(s =>
-                s.EstadoNuevo != null ? s.EstadoNuevo.Color : null))
-            .ForMember(d => d.UsuarioNombre, o => o.MapFrom(s =>
-                s.Usuario != null ? s.Usuario.Username : null));
+            .ForMember(d => d.EstadoAnteriorCodigo, o => o.MapFrom(s => EstadoAnteriorCodigo(s)))
+            .ForMember(d => d.EstadoAnteriorNombre, o => o.MapFrom(s => EstadoAnteriorNombre(s)))
+            .ForMember(d => d.EstadoAnteriorColor, o => o.MapFrom(s => EstadoAnteriorColor(s)))
+            .ForMember(d => d.EstadoNuevoCodigo, o => o.MapFrom(s => EstadoNuevoCodigo(s)))
+            .ForMember(d => d.EstadoNuevoNombre, o => o.MapFrom(s => EstadoNuevoNombre(s)))
+            .ForMember(d => d.EstadoNuevoColor, o => o.MapFrom(s => EstadoNuevoColor(s)))
+            .ForMember(d => d.UsuarioNombre, o => o.MapFrom(s => UsuarioNombre(s)));
     }
+
+    private static string? EstadoAnteriorCodigo(PedidoEstadoHistorico s)
+        => s.EstadoAnterior != null ? s.EstadoAnterior.Codigo : null;
+
+    private static string? EstadoAnteriorNombre(PedidoEstadoHistorico s)
+        => s.EstadoAnterior != null ? s.EstadoAnterior.Nombre : null;
+
+    private static string? EstadoAnteriorColor(PedidoEstadoHistorico s)
+        => s.EstadoAnterior != null ? s.EstadoAnterior.Color : null;
+
+    private static string EstadoNuevoCodigo(PedidoEstadoHistorico s)
+        => s.EstadoNuevo != null ? s.EstadoNuevo.Codigo : string.Empty;
+
+    private static string EstadoNuevoNombre(PedidoEstadoHistorico s)
+        => s.EstadoNuevo != null ? s.EstadoNuevo.Nombre : string.Empty;
+
+    private static string? EstadoNuevoColor(PedidoEstadoHistorico s)
+        => s.EstadoNuevo != null ? s.EstadoNuevo.Color : null;
+
+    private static string? UsuarioNombre(PedidoEstadoHistorico s)
+        => s.Usuario != null ? s.Usuario.Username : null;
 
     // Issue #109: mapping de la vista v_saldo_clientes para evitar N+1 en
     // CuentasCorrientes. AutoMapper proyecta las 5 columnas 1:1 (mismo nombre).

@@ -404,7 +404,7 @@ public class PedidoService : IPedidoService
         // SaveChanges falla, ni el cambio de estado ni la fila de historial
         // quedan persistidas. Atomicidad garantizada por compartir el
         // SaveChanges (no hace falta transacción explícita acá).
-        await RegistrarCambioEstadoAsync(id, estadoAnteriorId, nuevoEstadoId, usuarioId, motivoCancelacion, ct);
+        await RegistrarCambioEstadoAsync(id, estadoAnteriorId, nuevoEstadoId, usuarioId, motivoCancelacion);
 
         await _context.SaveChangesAsync(ct);
 
@@ -781,7 +781,7 @@ public class PedidoService : IPedidoService
         // Append-only audit. ConfirmarSinCanjeAsync no abre transacción
         // propia (es un único SaveChanges); el helper y la mutación del
         // pedido commitean atómicamente juntos.
-        await RegistrarCambioEstadoAsync(pedido.Id, estadoAnteriorId, estadoConfirmadoId, usuarioId, motivo: null, ct);
+        await RegistrarCambioEstadoAsync(pedido.Id, estadoAnteriorId, estadoConfirmadoId, usuarioId, motivo: null);
 
         await _context.SaveChangesAsync(ct);
         return true;
@@ -966,7 +966,7 @@ public class PedidoService : IPedidoService
         // RegistrarCanjePedidoAsync cubre este SaveChanges — si la fila de
         // historial falla por cualquier razón (FK violada, etc.), la
         // transacción rollbackea y el pedido queda en su estado original.
-        await RegistrarCambioEstadoAsync(ctx.PedidoId, estadoAnteriorId, ctx.EstadoConfirmadoId, ctx.UsuarioId, motivo: null, ct);
+        await RegistrarCambioEstadoAsync(ctx.PedidoId, estadoAnteriorId, ctx.EstadoConfirmadoId, ctx.UsuarioId, motivo: null);
 
         await _context.SaveChangesAsync(ct);
     }
@@ -1028,13 +1028,14 @@ public class PedidoService : IPedidoService
     /// persistido en <c>pedidos.motivo_cancelacion</c>; null en cualquier
     /// transición cuyo destino no sea CANCELADO.
     /// </param>
+    // Cuerpo sincronico: solo agrega la fila al change tracker. El SaveChangesAsync
+    // (que SI usa el CancellationToken del caller) ocurre en el llamador.
     private Task RegistrarCambioEstadoAsync(
         ulong pedidoId,
         ulong? estadoAnteriorId,
         ulong estadoNuevoId,
         ulong? usuarioId,
-        string? motivo,
-        CancellationToken ct = default)
+        string? motivo)
     {
         _context.PedidoEstadosHistorico.Add(new PedidoEstadoHistorico
         {

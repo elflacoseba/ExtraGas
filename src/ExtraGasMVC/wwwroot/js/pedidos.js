@@ -25,6 +25,7 @@
             if (parsed.origin !== window.location.origin) return null;
             return parsed.href;
         } catch (e) {
+            console.warn('sanitizeActionUrl: URL inválida', { raw: raw, error: e?.message });
             return null;
         }
     }
@@ -204,7 +205,7 @@
                 cancelButtonText: 'Volver',
                 reverseButtons: true,
                 inputValidator: function (value) {
-                    if (!value || !value.trim()) {
+                    if (!value?.trim()) {
                         return 'Debe ingresar un motivo de cancelación';
                     }
                     if (value.length > 500) {
