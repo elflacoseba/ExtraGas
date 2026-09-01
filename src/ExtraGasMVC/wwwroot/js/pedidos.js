@@ -15,16 +15,6 @@
         DEVOLUCION: 'Devolución'
     };
 
-    var PEDIDO_URLS = {
-        cambiarEstado: null // se setea desde el data-action del primer .js-*-btn presente
-    };
-
-    function esc(s) {
-        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-        });
-    }
-
     function sanitizeActionUrl(action) {
         if (typeof action !== 'string') return null;
         var raw = action.trim();
@@ -35,6 +25,7 @@
             if (parsed.origin !== window.location.origin) return null;
             return parsed.href;
         } catch (e) {
+            console.warn('sanitizeActionUrl: URL inválida', { raw: raw, error: e?.message });
             return null;
         }
     }
@@ -91,13 +82,13 @@
         }).then(function (result) {
             if (!result.isConfirmed) return;
             var campos = {
-                id: btn.getAttribute('data-pedido-id'),
-                nuevoEstadoId: btn.getAttribute('data-nuevo-estado-id')
+                id: btn.dataset.pedidoId,
+                nuevoEstadoId: btn.dataset.nuevoEstadoId
             };
             if (codigosPorItem) {
                 campos.codigosGarrafaJson = JSON.stringify(codigosPorItem);
             }
-            submitPost(btn.getAttribute('data-action'), campos);
+            submitPost(btn.dataset.action, campos);
         });
     }
 
@@ -144,10 +135,10 @@
     // ============================================================
     document.querySelectorAll('.js-remove-item-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            var itemId = btn.getAttribute('data-item-id');
-            var pedidoId = btn.getAttribute('data-pedido-id');
-            var producto = btn.getAttribute('data-producto') || 'este item';
-            var action = btn.getAttribute('data-action');
+            var itemId = btn.dataset.itemId;
+            var pedidoId = btn.dataset.pedidoId;
+            var producto = btn.dataset.producto || 'este item';
+            var action = btn.dataset.action;
             Swal.fire({
                 title: '¿Eliminar item?',
                 html: 'Se eliminará <strong>' + producto + '</strong> del pedido. Esta acción no se puede deshacer.',
@@ -186,9 +177,9 @@
                 reverseButtons: true
             }).then(function (result) {
                 if (result.isConfirmed) {
-                    submitPost(btn.getAttribute('data-action'), {
-                        id: btn.getAttribute('data-pedido-id'),
-                        nuevoEstadoId: btn.getAttribute('data-nuevo-estado-id')
+                    submitPost(btn.dataset.action, {
+                        id: btn.dataset.pedidoId,
+                        nuevoEstadoId: btn.dataset.nuevoEstadoId
                     });
                 }
             });
@@ -214,7 +205,7 @@
                 cancelButtonText: 'Volver',
                 reverseButtons: true,
                 inputValidator: function (value) {
-                    if (!value || !value.trim()) {
+                    if (!value?.trim()) {
                         return 'Debe ingresar un motivo de cancelación';
                     }
                     if (value.length > 500) {
@@ -223,9 +214,9 @@
                 }
             }).then(function (result) {
                 if (result.isConfirmed) {
-                    submitPost(btn.getAttribute('data-action'), {
-                        id: btn.getAttribute('data-pedido-id'),
-                        nuevoEstadoId: btn.getAttribute('data-nuevo-estado-id'),
+                    submitPost(btn.dataset.action, {
+                        id: btn.dataset.pedidoId,
+                        nuevoEstadoId: btn.dataset.nuevoEstadoId,
                         motivoCancelacion: result.value.trim()
                     });
                 }
@@ -239,7 +230,7 @@
     document.querySelectorAll('.js-preparacion-btn').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
             e.preventDefault();
-            var estadoNombre = btn.getAttribute('data-estado-nombre');
+            var estadoNombre = btn.dataset.estadoNombre;
             Swal.fire({
                 title: '¿Cambiar estado?',
                 html: 'El pedido pasará a estado <strong>' + estadoNombre + '</strong>.',
@@ -252,9 +243,9 @@
                 reverseButtons: true
             }).then(function (result) {
                 if (result.isConfirmed) {
-                    submitPost(btn.getAttribute('data-action'), {
-                        id: btn.getAttribute('data-pedido-id'),
-                        nuevoEstadoId: btn.getAttribute('data-nuevo-estado-id')
+                    submitPost(btn.dataset.action, {
+                        id: btn.dataset.pedidoId,
+                        nuevoEstadoId: btn.dataset.nuevoEstadoId
                     });
                 }
             });
@@ -267,8 +258,8 @@
     document.querySelectorAll('.js-confirmar-btn').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
             e.preventDefault();
-            var tieneItems = btn.getAttribute('data-tiene-items') === 'true';
-            var tieneItemsCanje = btn.getAttribute('data-tiene-items-canje') === 'true';
+            var tieneItems = btn.dataset.tieneItems === 'true';
+            var tieneItemsCanje = btn.dataset.tieneItemsCanje === 'true';
 
             if (!tieneItems) {
                 Swal.fire({
@@ -323,8 +314,8 @@
             var codigosPorItem = {};
 
             textareas.forEach(function (ta) {
-                var itemId = ta.getAttribute('data-item-id');
-                var esperada = parseInt(ta.getAttribute('data-esperada'), 10);
+                var itemId = ta.dataset.itemId;
+                var esperada = Number.parseInt(ta.dataset.esperada, 10);
                 var codigos = (ta.value || '')
                     .split(/\r?\n/)
                     .map(function (s) { return s.trim(); })
@@ -410,10 +401,10 @@
         var descuento = document.getElementById('js-descuento');
         var totalDisplay = document.getElementById('js-total');
         var subtotalValue = Number(window.__PEDIDOS_SUBTOTAL__);
-        if (!descuento || !totalDisplay || isNaN(subtotalValue)) return;
+        if (!descuento || !totalDisplay || Number.isNaN(subtotalValue)) return;
 
         function recalcularTotal() {
-            var d = parseFloat(descuento.value) || 0;
+            var d = Number.parseFloat(descuento.value) || 0;
             if (d < 0) d = 0;
             if (d > 100) d = 100;
             var result = subtotalValue - (subtotalValue * d / 100);
@@ -422,9 +413,9 @@
 
         descuento.addEventListener('blur', recalcularTotal);
         descuento.addEventListener('input', function () {
-            var v = parseFloat(descuento.value);
-            if (!isNaN(v) && v > 100) descuento.value = 100;
-            if (!isNaN(v) && v < 0) descuento.value = 0;
+            var v = Number.parseFloat(descuento.value);
+            if (!Number.isNaN(v) && v > 100) descuento.value = 100;
+            if (!Number.isNaN(v) && v < 0) descuento.value = 0;
         });
     })();
 })();
