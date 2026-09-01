@@ -55,6 +55,20 @@ public class PedidoService : IPedidoService
         ulong EstadoConfirmadoId,
         ulong? UsuarioId);
 
+    /// <summary>
+    /// Projection of <c>garrafas</c> joined with <c>estados_garrafa</c> for the
+    /// canje validation flow. Captures only the columns needed by
+    /// <see cref="ValidarCodigoContraReglasDeCanje"/> so EF Core can translate
+    /// the <c>.Select(...)</c> to a single SQL query. Replaces the previous
+    /// anonymous type passed as <c>dynamic</c> (issue #167).
+    /// </summary>
+    private sealed record GarrafaCanjeInfo(
+        ulong Id,
+        string Codigo,
+        ulong EstadoGarrafaId,
+        ulong? ClienteId,
+        string EstadoCodigo);
+
     public PedidoService(
         ExtraGasDbContext context,
         IMapper mapper,
@@ -869,7 +883,7 @@ public class PedidoService : IPedidoService
             .AsNoTracking()
             .Include(g => g.EstadoGarrafa)
             .Where(g => codigos.Contains(g.Codigo))
-            .Select(g => new { g.Id, g.Codigo, g.EstadoGarrafaId, g.ClienteId, EstadoCodigo = g.EstadoGarrafa!.Codigo })
+            .Select(g => new GarrafaCanjeInfo(g.Id, g.Codigo, g.EstadoGarrafaId, g.ClienteId, g.EstadoGarrafa!.Codigo))
             .ToListAsync(ct);
 
         var encontrados = garrafas.ToDictionary(g => g.Codigo, g => g, StringComparer.Ordinal);
@@ -890,7 +904,7 @@ public class PedidoService : IPedidoService
     /// del mismo cliente del pedido.
     /// </summary>
     private static void ValidarCodigoContraReglasDeCanje(
-        string codigo, dynamic garrafa, PedidoItem item, Pedido pedido)
+        string codigo, GarrafaCanjeInfo garrafa, PedidoItem item, Pedido pedido)
     {
         if (item.TipoLinea == TipoLinea.ENTREGA)
         {
