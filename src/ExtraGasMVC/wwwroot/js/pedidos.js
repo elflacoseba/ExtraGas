@@ -25,14 +25,34 @@
         });
     }
 
+    function sanitizeActionUrl(action) {
+        if (typeof action !== 'string') return null;
+        var raw = action.trim();
+        if (!raw) return null;
+
+        try {
+            var parsed = new URL(raw, window.location.origin);
+            if (parsed.origin !== window.location.origin) return null;
+            return parsed.href;
+        } catch (e) {
+            return null;
+        }
+    }
+
     /// Construye un <form> POST oculto con antiforgery + un set de campos
     /// hidden provistos como { nombre: valor }, y lo dispara. Usado por todos
     /// los handlers de transición de estado / eliminación para evitar repetir
     /// la misma lógica en cada listener.
     function submitPost(action, campos) {
+        var safeAction = sanitizeActionUrl(action);
+        if (!safeAction) {
+            console.warn('submitPost bloqueado: data-action inválido o fuera de origen.', action);
+            return;
+        }
+
         var form = document.createElement('form');
         form.method = 'post';
-        form.action = action;
+        form.action = safeAction;
 
         var tokenSrc = document.querySelector('input[name="__RequestVerificationToken"]');
         if (tokenSrc) {
