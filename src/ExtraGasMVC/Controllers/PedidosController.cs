@@ -324,10 +324,17 @@ public class PedidosController : BaseController
             : RedirectToAction(nameof(Edit), new { id });
     }
 
-    public async Task<IActionResult> Pendientes(CancellationToken ct = default)
+    /// <summary>
+    /// Issue #166: vista paginada de pedidos con saldo pendiente. Recibe
+    /// <c>pagina</c>/<c>tamanio</c> como query params y los propaga al
+    /// service. La normalización (clamp de pagina/tamanio) vive en el
+    /// service, no acá — el Controller es un binder de query string puro.
+    /// </summary>
+    public async Task<IActionResult> Pendientes(
+        int pagina = 1, int tamanio = 25, CancellationToken ct = default)
     {
-        var pedidos = await _pedidoService.GetPendientesAsync(ct);
-        return View(pedidos);
+        var resultado = await _pedidoService.GetPendientesAsync(pagina, tamanio, ct);
+        return View(resultado);
     }
 
     /// <summary>
