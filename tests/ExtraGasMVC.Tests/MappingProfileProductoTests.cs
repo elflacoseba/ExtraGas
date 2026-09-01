@@ -99,4 +99,46 @@ public class MappingProfileProductoTests
         dto.UpdatedByUserName.Should().BeNull(
             "el DTO sale del Map sin UpdatedByUserName — el Service lo setea via LoadAuditUsersAsync");
     }
+
+    /// <summary>
+    /// Cobertura de la rama no-null del lookup <c>TipoProductoNombre</c> en
+    /// <see cref="MappingProfile.ConfigureProducto"/> (líneas 187-188): cuando
+    /// el navigation <c>TipoProducto</c> viene poblado por el <c>Include</c>
+    /// del Service, el DTO debe recibir el nombre legible del catálogo.
+    /// El test anterior solo ejercita la rama null porque su entity no setea
+    /// la navigation.
+    /// </summary>
+    [Fact]
+    public void Producto_TipoProductoPoblado_NombreSeResuelveEnDto()
+    {
+        var mapper = NewMapper();
+        var entity = new Producto
+        {
+            Id = 10,
+            Codigo = "GAS-10",
+            Nombre = "Garrafa 10kg",
+            TipoProductoId = 1,
+            UnidadVenta = "UNIDAD",
+            PrecioActual = 15000m,
+            ManejaGarrafaIndividual = true,
+            Activo = true,
+            CreatedAt = DateTime.UtcNow.AddYears(-1),
+            UpdatedAt = DateTime.UtcNow.AddDays(-3),
+            CreatedBy = 5,
+            UpdatedBy = 7,
+            TipoProducto = new TipoProducto
+            {
+                Id = 1,
+                Codigo = "GAS",
+                Nombre = "Gas envasado",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+            },
+        };
+
+        var dto = mapper.Map<ProductoDto>(entity);
+
+        dto.TipoProductoNombre.Should().Be("Gas envasado",
+            "el helper `s.TipoProducto != null ? s.TipoProducto.Nombre : null` debe proyectar el nombre cuando el Include cargó la navigation");
+    }
 }

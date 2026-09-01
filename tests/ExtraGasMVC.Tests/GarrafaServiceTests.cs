@@ -42,6 +42,12 @@ public class GarrafaServiceTests
     private const ulong EstadoFueraServicioId = 6;
     private const ulong TipoMovimientoCambioEstadoId = 1;
 
+    // CA1861: arrays literales repetidos en asserts deben ser static readonly
+    // (FluentAssertions los pasa a métodos que pueden llamarse varias veces
+    // en la suite y reasignar el array entre iteraciones es un footgun).
+    private static readonly string[] CodigosGetAllEsperados = ["GAR-A", "GAR-M", "GAR-Z"];
+    private static readonly string[] CodigosPorEstadoEsperados = ["GAR-LL", "GAR-LL-2"];
+
     /// <summary>
     /// Crea un service con un DbContext aislado (un InMemory DB por nombre de test).
     /// El DbContext se devuelve para que los tests que necesitan releer la fila
@@ -450,5 +456,126 @@ public class GarrafaServiceTests
         var ok = await service.DeleteAsync(id: 88_888, updatedBy: 1);
 
         ok.Should().BeFalse("DeleteAsync debe devolver false, no lanzar, cuando el id no existe");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Reads (issue #47: navegaciones cargadas para mostrar nombres en UI)
+    //
+    // Estos tests cubren los 5 Get* del Service que NO estaban testeados.
+    // Cada uno ejercita una rama de LINQ distinta (FirstOrDefault / Where /
+    // OrderBy) y el bloque `Include(...)` para las navegaciones que el
+    // MappingProfile proyecta a los nombres legibles.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetByIdAsync_DevuelveDtoConNombresPoblados_CuandoGarrafaExiste()
+    {
+        var (service, context) = NewService(nameof(GetByIdAsync_DevuelveDtoConNombresPoblados_CuandoGarrafaExiste), seedCatalogos: true);
+
+        var creada = await service.CreateAsync(NewCreateDto("GAR-001", EstadoLlenaDepositoId), usuarioId: 1);
+
+        var dto = await service.GetByIdAsync(creada.Id);
+
+        dto.Should().NotBeNull();
+        dto!.Codigo.Should().Be("GAR-001");
+        dto.EstadoNombre.Should().Be("Llena en deposito",
+            "GetByIdAsync carga EstadoGarrafa para que el MappingProfile proyecte EstadoNombre");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_DevuelveNull_CuandoIdNoExiste()
+    {
+        var (service, _) = NewService(nameof(GetByIdAsync_DevuelveNull_CuandoIdNoExiste));
+
+        var dto = await service.GetByIdAsync(999_999);
+
+        dto.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByCodigoAsync_DevuelveDtoPorCodigoExacto()
+    {
+        var (service, _) = NewService(nameof(GetByCodigoAsync_DevuelveDtoPorCodigoExacto), seedCatalogos: true);
+        await service.CreateAsync(NewCreateDto("GAR-COD-001"), usuarioId: 1);
+        await service.CreateAsync(NewCreateDto("GAR-COD-002"), usuarioId: 1);
+
+        var dto = await service.GetByCodigoAsync("GAR-COD-002");
+
+        dto.Should().NotBeNull();
+        dto!.Codigo.Should().Be("GAR-COD-002");
+    }
+
+    [Fact]
+    public async Task GetByCodigoAsync_DevuelveNull_CuandoCodigoNoExiste()
+    {
+        var (service, _) = NewService(nameof(GetByCodigoAsync_DevuelveNull_CuandoCodigoNoExiste));
+
+        var dto = await service.GetByCodigoAsync("NO-EXISTE");
+
+        dto.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetAllAsync_DevuelveTodasLasCreadas()
+    {
+        var (service, _) = NewService(nameof(GetAllAsync_DevuelveTodasLasCreadas), seedCatalogos: true);
+        await service.CreateAsync(NewCreateDto("GAR-Z"), usuarioId: 1);
+        await service.CreateAsync(NewCreateDto("GAR-A"), usuarioId: 1);
+        await service.CreateAsync(NewCreateDto("GAR-M"), usuarioId: 1);
+
+        var dtos = (await service.GetAllAsync()).ToList();
+
+        // No aserto el orden: InMemoryDatabase no respeta OrderBy igual que
+        // MySQL. El contrato del Service es "devolver todas las garrafas
+        // con navegaciones cargadas" — el orden es responsabilidad del caller
+        // (la UI lo aplica en cliente o el repo lo fuerza en SQL).
+        dtos.Should().HaveCount(3);
+        dtos.Select(d => d.Codigo).Should().BeEquivalentTo(CodigosGetAllEsperados);
+        dtos.Should().OnlyContain(d => d.EstadoNombre != null,
+            "GetAllAsync carga EstadoGarrafa; el MappingProfile debe proyectar EstadoNombre");
+    }
+
+    [Fact]
+    public async Task GetByClienteAsync_FiltraPorClienteId()
+    {
+        var (service, context) = NewService(nameof(GetByClienteAsync_FiltraPorClienteId), seedCatalogos: true);
+
+        // Sembramos directamente una garrafa con ClienteId seteado porque
+        // CreateAsync no acepta ClienteId en el DTO (lo setea el operador
+        // al asignar la garrafa a un cliente vía el flujo de canje).
+        var now = DateTime.UtcNow;
+        context.Garrafas.Add(new Garrafa
+        {
+            Codigo = "GAR-CLI-A",
+            CapacidadKg = 10,
+            FechaCompra = new DateOnly(2024, 1, 1),
+            EstadoGarrafaId = EstadoLlenaDepositoId,
+            ClienteId = 1,
+            CreatedAt = now,
+            UpdatedAt = now,
+        });
+        await context.SaveChangesAsync();
+
+        var dtosCliente1 = (await service.GetByClienteAsync(1)).ToList();
+        var dtosCliente99 = (await service.GetByClienteAsync(99)).ToList();
+
+        dtosCliente1.Should().HaveCount(1);
+        dtosCliente1[0].Codigo.Should().Be("GAR-CLI-A");
+        dtosCliente99.Should().BeEmpty(
+            "GetByClienteAsync filtra por ClienteId; un cliente sin garrafas devuelve lista vacía");
+    }
+
+    [Fact]
+    public async Task GetByEstadoAsync_FiltraPorEstadoGarrafaId()
+    {
+        var (service, _) = NewService(nameof(GetByEstadoAsync_FiltraPorEstadoGarrafaId), seedCatalogos: true);
+        await service.CreateAsync(NewCreateDto("GAR-LL", EstadoLlenaDepositoId), usuarioId: 1);
+        await service.CreateAsync(NewCreateDto("GAR-VA", EstadoVaciaDepositoId), usuarioId: 1);
+        await service.CreateAsync(NewCreateDto("GAR-LL-2", EstadoLlenaDepositoId), usuarioId: 1);
+
+        var llenas = (await service.GetByEstadoAsync(EstadoLlenaDepositoId)).ToList();
+
+        llenas.Should().HaveCount(2);
+        llenas.Select(d => d.Codigo).Should().BeEquivalentTo(CodigosPorEstadoEsperados);
     }
 }
