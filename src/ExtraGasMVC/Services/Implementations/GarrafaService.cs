@@ -125,11 +125,21 @@ public class GarrafaService : IGarrafaService
 
         if (!string.IsNullOrWhiteSpace(codigo))
         {
+            // Issue #182 T08: escapar `%` y `_` del input antes de envolver
+            // entre wildcards. Sin esto, buscar "%" devuelve TODAS las garrafas
+            // porque % se interpreta como wildcard en SQL (y un POST
+            // hand-crafted con codigo=% rompe la paginacion). Tercer argumento
+            // = caracter de escape, soportado por MySQL (Pomelo) y por el
+            // provider InMemory en EF Core 9.
+            var sanitized = codigo.Trim()
+                .Replace(@"\", @"\\")
+                .Replace("%", @"\%")
+                .Replace("_", @"\_");
             // EF.Functions.Like compila a un LIKE nativo de MySQL. La
             // collation utf8mb4_unicode_ci del schema ya hace la comparación
             // case-insensitive, así que no hace falta lower() en ambos lados.
-            var pattern = $"%{codigo.Trim()}%";
-            query = query.Where(g => EF.Functions.Like(g.Codigo, pattern));
+            var pattern = $"%{sanitized}%";
+            query = query.Where(g => EF.Functions.Like(g.Codigo, pattern, @"\"));
         }
 
         if (capacidad.HasValue)
@@ -238,6 +248,11 @@ public class GarrafaService : IGarrafaService
         // excluye los soft-deleted, así que AnyAsync alcanza.
         await ValidarClienteActivoAsync(garrafa.ClienteId, ct);
 
+        // Issue #182 T10: mismo criterio para ProveedorId. La cobertura por
+        // dropdown (que filtra Activos) no alcanza para un POST hand-crafted
+        // con un id soft-deleted.
+        await ValidarProveedorActivoAsync(garrafa.ProveedorId, ct);
+
         var entity = _mapper.Map<Garrafa>(garrafa);
         // Issue #114: Activo no viene del DTO. Lo setea el Service en true
         // porque es estado (soft-delete), no dato de carga del operador.
@@ -301,6 +316,11 @@ public class GarrafaService : IGarrafaService
         // validar que exista y no esté soft-deleted. La cobertura por dropdown
         // no alcanza para un POST hand-crafted con un id soft-deleted.
         await ValidarClienteActivoAsync(entity.ClienteId, ct);
+
+        // Issue #182 T10: analogo para ProveedorId. UpdateAsync permite
+        // cambiar el ProveedorId (no asi EstadoGarrafaId/ClienteId que estan
+        // gateados por el backdoor de T01), asi que la validacion va aqui.
+        await ValidarProveedorActivoAsync(entity.ProveedorId, ct);
 
         try
         {
@@ -736,6 +756,25 @@ public class GarrafaService : IGarrafaService
         if (!existe)
             throw new InvalidOperationException(
                 $"El cliente con Id {clienteId.Value} no existe o fue dado de baja.");
+    }
+
+    /// <summary>
+    /// Valida que el proveedor referenciado exista y no esté soft-deleted.
+    /// Mismo criterio que <see cref="ValidarClienteActivoAsync"/>: el query
+    /// filter global de proveedores excluye los soft-deleted, asi que
+    /// <c>AnyAsync</c> alcanza. Issue #182 T10.
+    /// </summary>
+    private async Task ValidarProveedorActivoAsync(ulong? proveedorId, CancellationToken ct)
+    {
+        if (!proveedorId.HasValue) return;
+
+        var existe = await _context.Proveedores
+            .AsNoTracking()
+            .AnyAsync(p => p.Id == proveedorId.Value, ct);
+
+        if (!existe)
+            throw new InvalidOperationException(
+                $"El proveedor con Id {proveedorId.Value} no existe o fue dado de baja.");
     }
 
     public async Task<IEnumerable<VStockGarrafa>> GetStockAsync(CancellationToken ct = default)
