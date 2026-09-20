@@ -793,8 +793,20 @@ public class GarrafaService : IGarrafaService
             .ThenBy(r => r.EstadoNombre);
     }
 
-    public async Task<IEnumerable<VGarrafaEnCliente>> GetEnClientesAsync(ulong? clienteId, CancellationToken ct = default)
+    public async Task<PagedResult<VGarrafaEnCliente>> GetEnClientesAsync(
+        ulong? clienteId = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken ct = default)
     {
+        // Issue #182 T11: misma normalización defensiva que GetPagedAsync —
+        // page y pageSize llegan del query string (no son confiables). Si el
+        // usuario manda pageSize=10000 o page=-3, la query no debería
+        // explotar ni devolver el universo entero.
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100;
+
         // Issue #51: leemos v_garrafas_en_clientes (que ya filtra por estado
         // EN_CLIENTE y calcula dias_en_cliente en SQL). Pasamos el filtro
         // opcional de cliente al WHERE para respetar el comportamiento previo
@@ -804,6 +816,48 @@ public class GarrafaService : IGarrafaService
         if (clienteId.HasValue)
             query = query.Where(v => v.ClienteId == clienteId.Value);
 
-        return await query.ToListAsync(ct);
+        // Total antes de paginar — CountAsync traduce a SELECT COUNT(*)
+        // sobre el WHERE aplicado, sin cargar filas. La vista ya excluye
+        // soft-deleted por lo que el count coincide con lo que la UI muestra.
+        var total = await query.CountAsync(ct);
+
+        // Orden estable por GarrafaId para que la paginación sea
+        // determinística entre requests. La vista no define un ORDER BY
+        // propio, así que lo fijamos acá (el Id correlativo de inserción es
+        // buen tiebreaker).
+        var items = await query
+            .OrderBy(v => v.GarrafaId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return new PagedResult<VGarrafaEnCliente>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ulong> GetEstadoIdByCodigoAsync(string codigo, CancellationToken ct = default)
+    {
+        // Issue #182 T12: lookup puntual por código canónico. Reemplaza el
+        // hardcode EstadoGarrafaId=1 en GarrafasController.Create para que
+        // un reorden del seed no rompa el alta en silencio.
+        //
+        // Nota: si en el futuro hay alta concurrencia de altas, este lookup
+        // podría cachearse en memoria (los códigos del catálogo son estáticos).
+        // Por ahora no hace falta — el costo es 1 query AsNoTracking con
+        // índice unique por codigo, y la cantidad de altas concurrentes es
+        // despreciable.
+        if (string.IsNullOrWhiteSpace(codigo))
+            return 0;
+
+        return await _context.EstadosGarrafa
+            .AsNoTracking()
+            .Where(e => e.Codigo == codigo)
+            .Select(e => e.Id)
+            .FirstOrDefaultAsync(ct);
     }
 }

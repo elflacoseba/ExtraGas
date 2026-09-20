@@ -136,11 +136,31 @@ public interface IGarrafaService
     Task<IEnumerable<VStockGarrafa>> GetStockAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Devuelve las garrafas que están en poder de un cliente, leyendo de la
+    /// Devuelve una página de garrafas en poder de clientes, leyendo de la
     /// vista <c>v_garrafas_en_clientes</c> (issue #51). La vista ya filtra
-    /// por estado <c>EN_CLIENTE</c> y calcula <c>dias_en_cliente</c>. Cuando
-    /// <paramref name="clienteId"/> es null devuelve todas las garrafas en
-    /// cliente; cuando se especifica, filtra a ese cliente.
+    /// por estado <c>EN_CLIENTE</c> y calcula <c>dias_en_cliente</c>.
+    /// Cuando <paramref name="clienteId"/> es null devuelve todas; cuando
+    /// se especifica, filtra a ese cliente. El total devuelto en
+    /// <see cref="PagedResult{T}.Total"/> refleja el conteo SIN paginar
+    /// para que la UI muestre los controles correctos.
+    /// Issue #182 T11.
     /// </summary>
-    Task<IEnumerable<VGarrafaEnCliente>> GetEnClientesAsync(ulong? clienteId, CancellationToken ct = default);
+    /// <param name="page">Número de página 1-based. Valores &lt; 1 se
+    /// normalizan a 1 (mismo patrón que <see cref="GetPagedAsync"/>).</param>
+    /// <param name="pageSize">Tamaño de página. Default 20. Tope máximo de
+    /// 100 para evitar queries enormes accidentales.</param>
+    Task<PagedResult<VGarrafaEnCliente>> GetEnClientesAsync(
+        ulong? clienteId = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Resuelve el <c>Id</c> numérico de un estado de garrafa a partir de su
+    /// código canónico (ej. <c>LLENA_DEPOSITO</c>). Devuelve <c>0</c> cuando
+    /// el código no existe en el catálogo <c>estados_garrafa</c>. Usado por
+    /// el Controller para asignar el estado inicial del alta sin depender del
+    /// Id físico (que puede cambiar si el seed se reordena). Issue #182 T12.
+    /// </summary>
+    Task<ulong> GetEstadoIdByCodigoAsync(string codigo, CancellationToken ct = default);
 }

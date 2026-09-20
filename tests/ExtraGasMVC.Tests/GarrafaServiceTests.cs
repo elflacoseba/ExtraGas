@@ -2,8 +2,10 @@ using AutoMapper;
 using ExtraGasMVC.Constants;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.Data.Entities.Views;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Mappings;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Implementations;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -1346,14 +1348,19 @@ public class GarrafaServiceTests
     {
         // Idem GetStockAsync: la view v_garrafas_en_clientes no existe en
         // InMemory. El metodo acepta clienteId=null (todas) o clienteId=X
-        // (filtra); ambos devuelven vacio sin lanzar.
+        // (filtra); ambos devuelven PagedResult vacio sin lanzar.
+        // Issue #182 T11: la firma ahora devuelve PagedResult<VGarrafaEnCliente>.
         var (service, _) = NewService(
             nameof(GetEnClientesAsync_DevuelveEnumerableVacio_CuandoVistaEstaVaciaEnInMemory_SinFiltro));
 
         var enClientes = await service.GetEnClientesAsync(clienteId: null);
 
-        enClientes.Should().NotBeNull();
-        enClientes.Should().BeEmpty();
+        enClientes.Items.Should().NotBeNull();
+        enClientes.Items.Should().BeEmpty();
+        enClientes.Total.Should().Be(0,
+            "el count de la view en InMemory es 0 — CountAsync traduce a SELECT COUNT(*) que no devuelve filas");
+        enClientes.Page.Should().Be(1, "page default = 1 cuando no se especifica");
+        enClientes.PageSize.Should().Be(20, "pageSize default = 20 cuando no se especifica");
     }
 
     [Fact]
@@ -1361,13 +1368,210 @@ public class GarrafaServiceTests
     {
         // Acepta clienteId sin lanzar — el controller puede pasar el filtro
         // del dropdown sin necesidad de chequear si la view tiene datos.
+        // Issue #182 T11: paginación en SQL, count = 0, items vacio.
         var (service, _) = NewService(
             nameof(GetEnClientesAsync_DevuelveEnumerableVacio_CuandoVistaEstaVaciaEnInMemory_ConFiltro));
 
         var enClientes = await service.GetEnClientesAsync(clienteId: 1);
 
-        enClientes.Should().NotBeNull();
-        enClientes.Should().BeEmpty();
+        enClientes.Items.Should().NotBeNull();
+        enClientes.Items.Should().BeEmpty();
+        enClientes.Total.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetEnClientesAsync_NormalizaPageNegativoAPagina1()
+    {
+        // Issue #182 T11: page < 1 cae a 1 — la query no debe explotar ni
+        // devolver un universo. Mismo patron defensivo que GetPagedAsync.
+        var (service, _) = NewService(
+            nameof(GetEnClientesAsync_NormalizaPageNegativoAPagina1));
+
+        var enClientes = await service.GetEnClientesAsync(clienteId: null, page: -5);
+
+        enClientes.Page.Should().Be(1, "page < 1 debe normalizarse a 1");
+        enClientes.Items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEnClientesAsync_NormalizaPageSizeExcedidoACap100()
+    {
+        // Issue #182 T11: pageSize > 100 cae a 100 (cap defensivo). Patron
+        // identico a GetPagedAsync.pageSize>100 -> 100.
+        var (service, _) = NewService(
+            nameof(GetEnClientesAsync_NormalizaPageSizeExcedidoACap100));
+
+        var enClientes = await service.GetEnClientesAsync(clienteId: null, pageSize: 50_000);
+
+        enClientes.PageSize.Should().Be(100, "pageSize > 100 debe capearse a 100");
+    }
+
+    [Fact]
+    public async Task GetEnClientesAsync_NormalizaPageSizeCeroODefault()
+    {
+        // Issue #182 T11: pageSize <= 0 cae a 20 (default razonable).
+        var (service, _) = NewService(
+            nameof(GetEnClientesAsync_NormalizaPageSizeCeroODefault));
+
+        var enClientes = await service.GetEnClientesAsync(clienteId: null, pageSize: 0);
+
+        enClientes.PageSize.Should().Be(20, "pageSize <= 0 debe caer al default (20)");
+    }
+
+    [Fact]
+    public async Task GetEnClientesAsync_PaginaDos_UsaSkipCorrecto()
+    {
+        // Issue #182 T11: page=2 con pageSize=10 debe traducirse a
+        // Skip((2-1)*10)=Skip(10). En InMemory la view no se popula, asi
+        // que validamos que la query no lance y devuelva items vacios (la
+        // cobertura real del Skip se valida contra MySQL en el Controller).
+        var (service, _) = NewService(
+            nameof(GetEnClientesAsync_PaginaDos_UsaSkipCorrecto));
+
+        var enClientes = await service.GetEnClientesAsync(clienteId: null, page: 2, pageSize: 10);
+
+        enClientes.Page.Should().Be(2,
+            "page=2 debe respetarse despues de la normalizacion (pageSize valido)");
+        enClientes.PageSize.Should().Be(10);
+        enClientes.Items.Should().BeEmpty();
+    }
+
+    // ====================================================================
+    // #182 T12 — GetEstadoIdByCodigoAsync
+    //
+    // Lookup puntual codigo -> Id del catalogo estados_garrafa. Reemplaza el
+    // hardcode EstadoGarrafaId=1 en GarrafasController.Create. Tests planos
+    // sobre el InMemory seed (mismo patron que el resto de la suite).
+    // ====================================================================
+
+    [Fact]
+    public async Task GetEstadoIdByCodigoAsync_DevuelveIdDelCatalogo_ParaCodigoCanonico()
+    {
+        // Happy path: LLENA_DEPOSITO existe en el catalogo sembrado por
+        // SeedCatalogos con Id=1 (mismo Id que la convencion del seed real
+        // de MySQL). El helper devuelve ese Id numerico.
+        var (service, _) = NewService(
+            nameof(GetEstadoIdByCodigoAsync_DevuelveIdDelCatalogo_ParaCodigoCanonico),
+            seedCatalogos: true);
+
+        var id = await service.GetEstadoIdByCodigoAsync(GarrafaEstados.LlenaDeposito);
+
+        id.Should().Be(EstadoLlenaDepositoId,
+            "LLENA_DEPOSITO debe estar sembrado con Id=1 — mismo orden que el seed real");
+    }
+
+    [Fact]
+    public async Task GetEstadoIdByCodigoAsync_DevuelveCero_ParaCodigoInexistente()
+    {
+        // Codigo que NO esta en el catalogo. El helper devuelve 0 (ulong
+        // default de FirstOrDefaultAsync) sin lanzar — el caller decide si
+        // 0 es valido o no. Cobertura: verifica que no rompe la query y que
+        // no asume que todo codigo existe.
+        var (service, _) = NewService(
+            nameof(GetEstadoIdByCodigoAsync_DevuelveCero_ParaCodigoInexistente),
+            seedCatalogos: true);
+
+        var id = await service.GetEstadoIdByCodigoAsync("CODIGO_INVENTADO");
+
+        id.Should().Be(0UL,
+            "FirstOrDefault sobre una condicion que no matchea devuelve default(ulong)=0");
+    }
+
+    [Fact]
+    public async Task GetEstadoIdByCodigoAsync_DevuelveCero_ParaCodigoNullOVacio()
+    {
+        // Null/empty: el helper hace guardia explicita y devuelve 0 sin
+        // tocar la query. Es defensivo contra inputs sucios (form
+        // hand-crafted con campo vacio).
+        var (service, _) = NewService(
+            nameof(GetEstadoIdByCodigoAsync_DevuelveCero_ParaCodigoNullOVacio),
+            seedCatalogos: true);
+
+        (await service.GetEstadoIdByCodigoAsync(null!)).Should().Be(0UL);
+        (await service.GetEstadoIdByCodigoAsync(string.Empty)).Should().Be(0UL);
+        (await service.GetEstadoIdByCodigoAsync("   ")).Should().Be(0UL);
+    }
+
+    // ====================================================================
+    // #182 T13 — StringLength(500) en Observaciones
+    //
+    // La columna garrafas.observaciones es TEXT (~64KB) en BD. La app debe
+    // enforce un tope defensivo a nivel modelo para que el Controller
+    // rechche el POST antes de invocar al Service. Test plano sobre las
+    // anotaciones del DTO, sin EF (mismo patron que
+    // ProductoServiceRobustezTests.MotivoCambioPrecio_Falla_ExcedeLimite).
+    // ====================================================================
+
+    [Fact]
+    public void GarrafaDto_Observaciones_TieneStringLength500()
+    {
+        // El read DTO (GarrafaDto) debe declarar el mismo tope que los
+        // DTOs de input. Es informativo a nivel runtime pero mantiene el
+        // contrato coherente en toda la familia.
+        typeof(GarrafaDto).GetProperty(nameof(GarrafaDto.Observaciones))
+            .Should().NotBeNull();
+        var attrs = typeof(GarrafaDto)
+            .GetProperty(nameof(GarrafaDto.Observaciones))!
+            .GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.StringLengthAttribute), inherit: true)
+            .Cast<System.ComponentModel.DataAnnotations.StringLengthAttribute>()
+            .ToList();
+        attrs.Should().ContainSingle("Observaciones debe tener exactamente un StringLength");
+        attrs[0].MaximumLength.Should().Be(500);
+    }
+
+    [Fact]
+    public void GarrafaDto_CreateUpdate_CambiarEstado_Observaciones_TodosTienenStringLength500()
+    {
+        // Los 3 DTOs de input deben compartir el mismo tope (500).
+        // Verificacion reflectiva: mas fragil que un test de Validator pero
+        // mas barato de mantener que 3 TryValidateObject separados.
+        var dtypes = new[]
+        {
+            typeof(CreateGarrafaDto),
+            typeof(UpdateGarrafaDto),
+            typeof(CambiarEstadoGarrafaDto),
+        };
+
+        foreach (var t in dtypes)
+        {
+            var prop = t.GetProperty(nameof(CambiarEstadoGarrafaDto.Observaciones));
+            prop.Should().NotBeNull($"{t.Name} debe exponer Observaciones");
+            var attr = prop!.GetCustomAttributes(
+                    typeof(System.ComponentModel.DataAnnotations.StringLengthAttribute), inherit: true)
+                .Cast<System.ComponentModel.DataAnnotations.StringLengthAttribute>()
+                .SingleOrDefault();
+            attr.Should().NotBeNull($"{t.Name}.Observaciones debe tener [StringLength]");
+            attr!.MaximumLength.Should().Be(500,
+                $"{t.Name}.Observaciones debe topear en 500 caracteres consistente con motivo_cancelacion");
+        }
+    }
+
+    [Fact]
+    public void GarrafaDto_CreateUpdate_CambiarEstado_Observaciones_FallaValidacion_Excede500Chars()
+    {
+        // Verifica el comportamiento observable: Validator.TryValidateObject
+        // rechaza observaciones de 501 chars con un ValidationResult
+        // referenciando Observaciones. Esto es lo que el Controller chequea
+        // implicitamente con ModelState.IsValid.
+        var dtoo = new CreateGarrafaDto
+        {
+            Codigo = "GAR-VAL",
+            CapacidadKg = 10,
+            FechaCompra = new DateOnly(2024, 1, 15),
+            EstadoGarrafaId = 1,
+            Observaciones = new string('x', 501), // 501 > 500
+        };
+
+        var ctx = new System.ComponentModel.DataAnnotations.ValidationContext(dtoo);
+        var results = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        var isValid = System.ComponentModel.DataAnnotations.Validator.TryValidateObject(
+            dtoo, ctx, results, validateAllProperties: true);
+
+        isValid.Should().BeFalse(
+            "501 chars debe fallar la validacion [StringLength(500)] antes de llegar al Service");
+        results.Should().Contain(r =>
+            r.MemberNames.Contains(nameof(CreateGarrafaDto.Observaciones)),
+            "el ValidationResult debe referenciar la propiedad Observaciones para que la UI muestre el error en el campo correcto");
     }
 
     [Fact]
