@@ -14,6 +14,12 @@ public class GarrafaDto
     public ulong? ClienteId { get; set; }
     public bool Activo { get; set; }
     public DateTime? FechaUltimoMovimiento { get; set; }
+
+    // Issue #182 T13: la columna `garrafas.observaciones` es TEXT en BD (~64KB).
+    // Tope defensivo de 500 caracteres consistente con `motivo_cancelacion`
+    // en pedidos y con la convencion del proyecto para campos de texto libre
+    // de longitud media. No se migra la columna (fuera de scope).
+    [StringLength(500, ErrorMessage = "Las observaciones no pueden superar {1} caracteres.")]
     public string? Observaciones { get; set; }
 
     /// <summary>
@@ -83,6 +89,8 @@ public class CreateGarrafaDto
 
     public ulong? ClienteId { get; set; }
 
+    // Issue #182 T13: ver GarrafaDto.Observaciones para justificacion del limite 500.
+    [StringLength(500, ErrorMessage = "Las observaciones no pueden superar {1} caracteres.")]
     public string? Observaciones { get; set; }
 }
 
@@ -125,6 +133,8 @@ public class UpdateGarrafaDto
 
     public ulong? ClienteId { get; set; }
 
+    // Issue #182 T13: ver GarrafaDto.Observaciones para justificacion del limite 500.
+    [StringLength(500, ErrorMessage = "Las observaciones no pueden superar {1} caracteres.")]
     public string? Observaciones { get; set; }
 }
 
@@ -132,6 +142,9 @@ public class CambiarEstadoGarrafaDto
 {
     public ulong NuevoEstadoId { get; set; }
     public ulong? ClienteId { get; set; }
+
+    // Issue #182 T13: ver GarrafaDto.Observaciones para justificacion del limite 500.
+    [StringLength(500, ErrorMessage = "Las observaciones no pueden superar {1} caracteres.")]
     public string? Observaciones { get; set; }
 
     /// <summary>

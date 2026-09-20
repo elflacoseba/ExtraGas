@@ -1492,6 +1492,88 @@ public class GarrafaServiceTests
         (await service.GetEstadoIdByCodigoAsync("   ")).Should().Be(0UL);
     }
 
+    // ====================================================================
+    // #182 T13 — StringLength(500) en Observaciones
+    //
+    // La columna garrafas.observaciones es TEXT (~64KB) en BD. La app debe
+    // enforce un tope defensivo a nivel modelo para que el Controller
+    // rechche el POST antes de invocar al Service. Test plano sobre las
+    // anotaciones del DTO, sin EF (mismo patron que
+    // ProductoServiceRobustezTests.MotivoCambioPrecio_Falla_ExcedeLimite).
+    // ====================================================================
+
+    [Fact]
+    public void GarrafaDto_Observaciones_TieneStringLength500()
+    {
+        // El read DTO (GarrafaDto) debe declarar el mismo tope que los
+        // DTOs de input. Es informativo a nivel runtime pero mantiene el
+        // contrato coherente en toda la familia.
+        typeof(GarrafaDto).GetProperty(nameof(GarrafaDto.Observaciones))
+            .Should().NotBeNull();
+        var attrs = typeof(GarrafaDto)
+            .GetProperty(nameof(GarrafaDto.Observaciones))!
+            .GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.StringLengthAttribute), inherit: true)
+            .Cast<System.ComponentModel.DataAnnotations.StringLengthAttribute>()
+            .ToList();
+        attrs.Should().ContainSingle("Observaciones debe tener exactamente un StringLength");
+        attrs[0].MaximumLength.Should().Be(500);
+    }
+
+    [Fact]
+    public void GarrafaDto_CreateUpdate_CambiarEstado_Observaciones_TodosTienenStringLength500()
+    {
+        // Los 3 DTOs de input deben compartir el mismo tope (500).
+        // Verificacion reflectiva: mas fragil que un test de Validator pero
+        // mas barato de mantener que 3 TryValidateObject separados.
+        var dtypes = new[]
+        {
+            typeof(CreateGarrafaDto),
+            typeof(UpdateGarrafaDto),
+            typeof(CambiarEstadoGarrafaDto),
+        };
+
+        foreach (var t in dtypes)
+        {
+            var prop = t.GetProperty(nameof(CambiarEstadoGarrafaDto.Observaciones));
+            prop.Should().NotBeNull($"{t.Name} debe exponer Observaciones");
+            var attr = prop!.GetCustomAttributes(
+                    typeof(System.ComponentModel.DataAnnotations.StringLengthAttribute), inherit: true)
+                .Cast<System.ComponentModel.DataAnnotations.StringLengthAttribute>()
+                .SingleOrDefault();
+            attr.Should().NotBeNull($"{t.Name}.Observaciones debe tener [StringLength]");
+            attr!.MaximumLength.Should().Be(500,
+                $"{t.Name}.Observaciones debe topear en 500 caracteres consistente con motivo_cancelacion");
+        }
+    }
+
+    [Fact]
+    public void GarrafaDto_CreateUpdate_CambiarEstado_Observaciones_FallaValidacion_Excede500Chars()
+    {
+        // Verifica el comportamiento observable: Validator.TryValidateObject
+        // rechaza observaciones de 501 chars con un ValidationResult
+        // referenciando Observaciones. Esto es lo que el Controller chequea
+        // implicitamente con ModelState.IsValid.
+        var dtoo = new CreateGarrafaDto
+        {
+            Codigo = "GAR-VAL",
+            CapacidadKg = 10,
+            FechaCompra = new DateOnly(2024, 1, 15),
+            EstadoGarrafaId = 1,
+            Observaciones = new string('x', 501), // 501 > 500
+        };
+
+        var ctx = new System.ComponentModel.DataAnnotations.ValidationContext(dtoo);
+        var results = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        var isValid = System.ComponentModel.DataAnnotations.Validator.TryValidateObject(
+            dtoo, ctx, results, validateAllProperties: true);
+
+        isValid.Should().BeFalse(
+            "501 chars debe fallar la validacion [StringLength(500)] antes de llegar al Service");
+        results.Should().Contain(r =>
+            r.MemberNames.Contains(nameof(CreateGarrafaDto.Observaciones)),
+            "el ValidationResult debe referenciar la propiedad Observaciones para que la UI muestre el error en el campo correcto");
+    }
+
     [Fact]
     public async Task GetEstadosAsync_DevuelveTodosLosEstadosDelCatalogo_OrdenadosPorNombre()
     {
