@@ -48,6 +48,17 @@ public class GarrafaServiceTests
     private static readonly string[] CodigosGetAllEsperados = ["GAR-A", "GAR-M", "GAR-Z"];
     private static readonly string[] CodigosPorEstadoEsperados = ["GAR-LL", "GAR-LL-2"];
 
+    // IDs de tipos de movimiento Garrafa sembrados para T07 (canje con
+    // PedidoService). Coinciden con el orden del seed: CAMBIO_ESTADO=1,
+    // ENTREGA_CLIENTE=2, DEVOLUCION_CLIENTE=3.
+    private const ulong TipoMovimientoEntregaClienteId = 2;
+    private const ulong TipoMovimientoDevolucionClienteId = 3;
+
+    // IDs de proveedores sembrados para T10 (validar FK ProveedorId no
+    // soft-deleted). Mismo patron que los clientes: id=1 vivo, id=2 baja.
+    private const ulong ProveedorVivoId = 1;
+    private const ulong ProveedorSoftDeletedId = 2;
+
     /// <summary>
     /// Crea un service con un DbContext aislado (un InMemory DB por nombre de test).
     /// El DbContext se devuelve para que los tests que necesitan releer la fila
@@ -135,12 +146,30 @@ public class GarrafaServiceTests
                 RequiereCliente = false
             });
 
-        context.TiposMovimientoGarrafa.Add(new TipoMovimientoGarrafa
-        {
-            Id = TipoMovimientoCambioEstadoId,
-            Codigo = "CAMBIO_ESTADO",
-            Nombre = "Cambio de estado manual"
-        });
+        context.TiposMovimientoGarrafa.AddRange(
+            new TipoMovimientoGarrafa
+            {
+                Id = TipoMovimientoCambioEstadoId,
+                Codigo = "CAMBIO_ESTADO",
+                Nombre = "Cambio de estado manual"
+            },
+            // Issue #182 T07: RegistrarMovimientoPorCanjeAsync recibe el tipo
+            // por codigo (ENTREGA_CLIENTE / DEVOLUCION_CLIENTE) y lo resuelve
+            // contra el catalogo. Sembramos los dos para que los tests
+            // dedicados al canje unitario (sin Docker/Testcontainers) puedan
+            // ejercitar el path completo de escritura del MovimientoGarrafa.
+            new TipoMovimientoGarrafa
+            {
+                Id = TipoMovimientoEntregaClienteId,
+                Codigo = "ENTREGA_CLIENTE",
+                Nombre = "Entrega a cliente (canje pedido)"
+            },
+            new TipoMovimientoGarrafa
+            {
+                Id = TipoMovimientoDevolucionClienteId,
+                Codigo = "DEVOLUCION_CLIENTE",
+                Nombre = "Devolucion de cliente (canje pedido)"
+            });
 
         // Issue #182 T05: algunos tests necesitan un cliente activo (no soft-deleted)
         // para validar Create/Update/Cambiar estado. Sembramos dos: el id=1 está
@@ -171,6 +200,35 @@ public class GarrafaServiceTests
                 FechaAlta = new DateOnly(2024, 1, 1),
                 CreatedBy = 1,
                 UpdatedBy = 1,
+                DeletedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            });
+
+        // Issue #182 T10: la validacion de ProveedorId en Create/Update sigue
+        // el mismo patron que ClienteId (PR #183). Sembramos un proveedor vivo
+        // y uno soft-deleted; el query filter global de proveedores oculta los
+        // soft-deleted, asi que ValidarProveedorActivoAsync los rechaza via
+        // AnyAsync. ProveedorConfiguration exige CUIT (regex 11 digitos).
+        var now = DateTime.UtcNow;
+        context.Proveedores.AddRange(
+            new Proveedor
+            {
+                Id = ProveedorVivoId,
+                Codigo = "PROV-001",
+                RazonSocial = "Proveedor Vivo SA",
+                Cuit = "20123456789",
+                Activo = true,
+                CreatedAt = now,
+                UpdatedAt = now,
+            },
+            new Proveedor
+            {
+                Id = ProveedorSoftDeletedId,
+                Codigo = "PROV-002",
+                RazonSocial = "Proveedor Dado de Baja SA",
+                Cuit = "20987654321",
+                Activo = false,
+                CreatedAt = now,
+                UpdatedAt = now,
                 DeletedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
             });
 
@@ -1070,5 +1128,739 @@ public class GarrafaServiceTests
         version.Should().NotBeNull("Version debe ser una property de la entity");
         version!.IsConcurrencyToken.Should().BeTrue(
             "Version debe ser IsConcurrencyToken para que EF Core lo agregue al WHERE del UPDATE");
+    }
+
+    // ====================================================================
+    // #182 T06 — Tests de los metodos de lectura que faltaban cobertura.
+    //
+    // Los 5 Gets simples (GetById/ByCodigo/All/ByCliente/ByEstado) ya tienen
+    // tests en PR #181 (marcados como 'Reads'). Esta bateria agrega cobertura
+    // dedicada para los 7 que quedaron descubiertos: GetPagedAsync (cubierto
+    // por T08), GetTransicionesDisponiblesAsync, GetHistorialAsync,
+    // GetMovimientosByPedidoAsync, GetStockAsync, GetEnClientesAsync,
+    // GetEstadosAsync.
+    // ====================================================================
+
+    [Fact]
+    public async Task GetTransicionesDisponiblesAsync_DevuelveLosDestinosDeLaMatriz_ParaOrigenNoTerminal()
+    {
+        // Happy path: LLENA_DEPOSITO tiene 4 destinos validos en la matriz
+        // (EN_TRANSITO, EN_CLIENTE, VACIA_DEPOSITO, DANADA). El servicio los
+        // devuelve como DTOs de EstadoGarrafa, ordenados por nombre.
+        var (service, _) = NewService(
+            nameof(GetTransicionesDisponiblesAsync_DevuelveLosDestinosDeLaMatriz_ParaOrigenNoTerminal),
+            seedCatalogos: true);
+        var garrafa = await service.CreateAsync(NewCreateDto("GAR-TRANS"), usuarioId: 1);
+
+        var destinos = (await service.GetTransicionesDisponiblesAsync(garrafa.Id)).ToList();
+
+        destinos.Should().HaveCount(4);
+        destinos.Select(d => d.Codigo).Should().BeEquivalentTo(new[]
+        {
+            GarrafaEstados.EnTransito,
+            GarrafaEstados.EnCliente,
+            GarrafaEstados.VaciaDeposito,
+            GarrafaEstados.Danada
+        });
+    }
+
+    [Fact]
+    public async Task GetTransicionesDisponiblesAsync_DevuelveEnumerableVacio_DesdeEstadoTerminal()
+    {
+        // Caso del borde de la matriz: FUERA_SERVICIO no tiene transiciones
+        // salientes (es estado terminal, ver GarrafaTransiciones.Matriz). El
+        // servicio devuelve enumerable vacio para que la UI oculte el dropdown
+        // de "Cambiar estado".
+        var (service, _) = NewService(
+            nameof(GetTransicionesDisponiblesAsync_DevuelveEnumerableVacio_DesdeEstadoTerminal),
+            seedCatalogos: true);
+        // CreateAsync permite setear el estado inicial en cualquier codigo del
+        // catalogo (no hay matriz para el alta). Sembramos directo en
+        // FUERA_SERVICIO para testear la lectura.
+        var garrafa = await service.CreateAsync(
+            NewCreateDto("GAR-TERM", EstadoFueraServicioId), usuarioId: 1);
+
+        var destinos = await service.GetTransicionesDisponiblesAsync(garrafa.Id);
+
+        destinos.Should().BeEmpty(
+            "FUERA_SERVICIO es terminal — la matriz no expone destinos salientes");
+    }
+
+    [Fact]
+    public async Task GetTransicionesDisponiblesAsync_DevuelveEnumerableVacio_SiGarrafaNoExiste()
+    {
+        // Si el controller recibe un id inexistente (URL hand-crafted), el
+        // servicio no debe lanzar — devuelve enumerable vacio y el caller
+        // decide si mostrar un 404 o un dropdown vacio.
+        var (service, _) = NewService(
+            nameof(GetTransicionesDisponiblesAsync_DevuelveEnumerableVacio_SiGarrafaNoExiste));
+
+        var destinos = await service.GetTransicionesDisponiblesAsync(99_999);
+
+        destinos.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetHistorialAsync_DevuelveMovimientosOrdenadosPorFechaDesc_YGarrafaExiste()
+    {
+        // Happy path: garrafa con 2 movimientos en orden distinto al natural.
+        // El servicio debe ordenarlos por Fecha DESC, Id DESC (tiebreaker
+        // estable para que la paginacion o el group-by en la UI sea estable).
+        var (service, context) = NewService(
+            nameof(GetHistorialAsync_DevuelveMovimientosOrdenadosPorFechaDesc_YGarrafaExiste),
+            seedCatalogos: true);
+        var garrafa = await service.CreateAsync(NewCreateDto("GAR-HIST"), usuarioId: 1);
+        var tipoCambioEstadoId = TipoMovimientoCambioEstadoId;
+
+        var ahora = DateTime.UtcNow;
+        context.MovimientosGarrafa.AddRange(
+            new MovimientoGarrafa
+            {
+                GarrafaId = garrafa.Id,
+                Fecha = ahora.AddHours(-2),
+                TipoMovimientoId = tipoCambioEstadoId,
+                EstadoOrigenId = EstadoLlenaDepositoId,
+                EstadoDestinoId = EstadoVaciaDepositoId,
+                CreatedAt = ahora.AddHours(-2),
+            },
+            new MovimientoGarrafa
+            {
+                GarrafaId = garrafa.Id,
+                Fecha = ahora.AddHours(-1),
+                TipoMovimientoId = tipoCambioEstadoId,
+                EstadoOrigenId = EstadoVaciaDepositoId,
+                EstadoDestinoId = EstadoLlenaDepositoId,
+                CreatedAt = ahora.AddHours(-1),
+            });
+        await context.SaveChangesAsync();
+
+        var historial = (await service.GetHistorialAsync(garrafa.Id)).ToList();
+
+        historial.Should().HaveCount(2);
+        // El mas reciente primero.
+        historial[0].EstadoOrigenId.Should().Be(EstadoVaciaDepositoId);
+        historial[1].EstadoOrigenId.Should().Be(EstadoLlenaDepositoId);
+    }
+
+    [Fact]
+    public async Task GetHistorialAsync_DevuelveEnumerableVacio_SiGarrafaNoTieneMovimientos()
+    {
+        // Garrafa existe (la acabamos de crear) pero no tiene movimientos.
+        // Devolver enumerable vacio — NO lanzar.
+        var (service, _) = NewService(
+            nameof(GetHistorialAsync_DevuelveEnumerableVacio_SiGarrafaNoTieneMovimientos),
+            seedCatalogos: true);
+        var garrafa = await service.CreateAsync(NewCreateDto("GAR-SIN-MOV"), usuarioId: 1);
+
+        var historial = await service.GetHistorialAsync(garrafa.Id);
+
+        historial.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetHistorialAsync_DevuelveEnumerableVacio_SiGarrafaNoExiste()
+    {
+        // El servicio chequea existencia via IgnoreQueryFilters (incluye
+        // soft-deleted) para distinguir "garrafa borrada" de "garrafa sin
+        // historial". Si no existe, enumerable vacio.
+        var (service, _) = NewService(
+            nameof(GetHistorialAsync_DevuelveEnumerableVacio_SiGarrafaNoExiste));
+
+        var historial = await service.GetHistorialAsync(99_999);
+
+        historial.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetMovimientosByPedidoAsync_DevuelveSoloLosDelPedido_OrdenadosPorId()
+    {
+        // Sembramos movimientos para 2 pedidos distintos. El servicio debe
+        // devolver solo los del pedido solicitado, en orden de Id (cronologico
+        // de insercion — el servicio NO ordena por Fecha porque para movimientos
+        // de un mismo pedido el Id es correlativo).
+        var (service, context) = NewService(
+            nameof(GetMovimientosByPedidoAsync_DevuelveSoloLosDelPedido_OrdenadosPorId),
+            seedCatalogos: true);
+        var garrafa = await service.CreateAsync(NewCreateDto("GAR-PED"), usuarioId: 1);
+        var now = DateTime.UtcNow;
+
+        const ulong pedidoA = 100;
+        const ulong pedidoB = 200;
+
+        context.MovimientosGarrafa.AddRange(
+            new MovimientoGarrafa
+            {
+                GarrafaId = garrafa.Id, Fecha = now.AddMinutes(-2),
+                TipoMovimientoId = TipoMovimientoEntregaClienteId,
+                PedidoId = pedidoA, EstadoDestinoId = EstadoEnClienteId,
+                CreatedAt = now.AddMinutes(-2),
+            },
+            new MovimientoGarrafa
+            {
+                GarrafaId = garrafa.Id, Fecha = now.AddMinutes(-1),
+                TipoMovimientoId = TipoMovimientoDevolucionClienteId,
+                PedidoId = pedidoB, EstadoDestinoId = EstadoLlenaDepositoId,
+                CreatedAt = now.AddMinutes(-1),
+            });
+        await context.SaveChangesAsync();
+
+        var delPedidoA = (await service.GetMovimientosByPedidoAsync(pedidoA)).ToList();
+
+        delPedidoA.Should().HaveCount(1);
+        delPedidoA[0].PedidoId.Should().Be(pedidoA);
+        delPedidoA[0].TipoMovimientoId.Should().Be(TipoMovimientoEntregaClienteId);
+    }
+
+    [Fact]
+    public async Task GetMovimientosByPedidoAsync_DevuelveEnumerableVacio_SiPedidoNoTieneCanje()
+    {
+        // Pedido sin movimientos vinculados (no se hizo canje o nunca existio).
+        var (service, _) = NewService(
+            nameof(GetMovimientosByPedidoAsync_DevuelveEnumerableVacio_SiPedidoNoTieneCanje));
+
+        var movimientos = await service.GetMovimientosByPedidoAsync(99_999);
+
+        movimientos.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetStockAsync_DevuelveEnumerableVacio_CuandoVistaEstaVaciaEnInMemory()
+    {
+        // Las views (`v_stock_garrafas`, etc.) no existen en InMemory — la
+        // configuracion las registra con `ToView(...)` y `HasNoKey()`, asi
+        // que la query no devuelve filas aunque la tabla base tenga datos.
+        // El test verifica que el metodo no lance y devuelva enumerable (no
+        // explosiones de SQL). Cobertura real se valida en integration tests
+        // contra MySQL (v_stock_garrafas se ejercita desde el controller).
+        var (service, _) = NewService(nameof(GetStockAsync_DevuelveEnumerableVacio_CuandoVistaEstaVaciaEnInMemory));
+
+        var stock = await service.GetStockAsync();
+
+        stock.Should().NotBeNull();
+        stock.Should().BeEmpty(
+            "la view v_stock_garrafas no se popula en InMemory — los datos reales se validan contra MySQL");
+    }
+
+    [Fact]
+    public async Task GetEnClientesAsync_DevuelveEnumerableVacio_CuandoVistaEstaVaciaEnInMemory_SinFiltro()
+    {
+        // Idem GetStockAsync: la view v_garrafas_en_clientes no existe en
+        // InMemory. El metodo acepta clienteId=null (todas) o clienteId=X
+        // (filtra); ambos devuelven vacio sin lanzar.
+        var (service, _) = NewService(
+            nameof(GetEnClientesAsync_DevuelveEnumerableVacio_CuandoVistaEstaVaciaEnInMemory_SinFiltro));
+
+        var enClientes = await service.GetEnClientesAsync(clienteId: null);
+
+        enClientes.Should().NotBeNull();
+        enClientes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEnClientesAsync_DevuelveEnumerableVacio_CuandoVistaEstaVaciaEnInMemory_ConFiltro()
+    {
+        // Acepta clienteId sin lanzar — el controller puede pasar el filtro
+        // del dropdown sin necesidad de chequear si la view tiene datos.
+        var (service, _) = NewService(
+            nameof(GetEnClientesAsync_DevuelveEnumerableVacio_CuandoVistaEstaVaciaEnInMemory_ConFiltro));
+
+        var enClientes = await service.GetEnClientesAsync(clienteId: 1);
+
+        enClientes.Should().NotBeNull();
+        enClientes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEstadosAsync_DevuelveTodosLosEstadosDelCatalogo_OrdenadosPorNombre()
+    {
+        // SeedCatalogos siembra 6 estados; GetEstadosAsync los devuelve todos,
+        // ordenados por nombre para que el dropdown de UI sea estable.
+        var (service, _) = NewService(
+            nameof(GetEstadosAsync_DevuelveTodosLosEstadosDelCatalogo_OrdenadosPorNombre),
+            seedCatalogos: true);
+
+        var estados = (await service.GetEstadosAsync()).ToList();
+
+        estados.Should().HaveCount(6,
+            "SeedCatalogos siembra los 6 codigos canonicos de GarrafaEstados");
+        // Orden por nombre alfabetico ascendente.
+        var nombresOrdenados = estados.Select(e => e.Nombre).OrderBy(n => n).ToList();
+        estados.Select(e => e.Nombre).Should().Equal(nombresOrdenados);
+    }
+
+    [Fact]
+    public async Task GetEstadosAsync_DevuelveEnumerableVacio_SinCatalogoSembrado()
+    {
+        // Cuando seedCatalogos=false el catalogo queda vacio — el metodo no
+        // debe lanzar y debe devolver enumerable vacio (consistente con el
+        // comportamiento del resto de los Gets).
+        var (service, _) = NewService(
+            nameof(GetEstadosAsync_DevuelveEnumerableVacio_SinCatalogoSembrado),
+            seedCatalogos: false);
+
+        var estados = await service.GetEstadosAsync();
+
+        estados.Should().BeEmpty();
+    }
+
+    // ====================================================================
+    // #182 T07 — RegistrarMovimientoPorCanjeAsync (path unitario, sin Docker)
+    //
+    // Hoy el flujo de canje esta cubierto indirectamente via
+    // PedidoCanjeIntegrationTests (MySQL real + trigger trg_mov_garrafa_ai).
+    // Estos tests apuntan al path unitario del GarrafaService para que un
+    // fallo en la escritura del MovimientoGarrafa o el seteo de clienteId
+    // se detecte sin necesidad de Docker/Testcontainers.
+    //
+    // El trigger de BD actualiza garrafas.estado_garrafa_id en respuesta al
+    // INSERT del movimiento — eso NO se aplica en InMemory, asi que estos
+    // tests verifican lo que la APP escribe (MovimientoGarrafa + clienteId de
+    // la garrafa), no lo que la BD hace despues. La cobertura del trigger se
+    // mantiene en PedidoCanjeIntegrationTests.
+    // ====================================================================
+
+    [Fact]
+    public async Task RegistrarMovimientoPorCanjeAsync_Entrega_CreaMovimientoYAsignaClienteALaGarrafa()
+    {
+        // Happy path ENTREGA: garrafa LLENA_DEPOSITO se entrega a un cliente.
+        // El servicio debe (1) crear MovimientoGarrafa con tipo=ENTREGA_CLIENTE,
+        // origen=LLENA_DEPOSITO, destino=EN_CLIENTE, ClienteId, PedidoId;
+        // (2) setear garrafa.ClienteId al cliente del pedido. El trigger de BD
+        // luego cambia estado_garrafa_id a EN_CLIENTE — fuera del alcance del
+        // path unitario.
+        var (service, context) = NewService(
+            nameof(RegistrarMovimientoPorCanjeAsync_Entrega_CreaMovimientoYAsignaClienteALaGarrafa),
+            seedCatalogos: true);
+        var garrafa = await service.CreateAsync(NewCreateDto("GAR-CANJE-E"), usuarioId: 1);
+        const ulong pedidoId = 500;
+
+        await service.RegistrarMovimientoPorCanjeAsync(
+            garrafaId: garrafa.Id,
+            estadoDestinoId: EstadoEnClienteId,
+            clienteId: 1,
+            pedidoId: pedidoId,
+            tipoMovimientoCodigo: "ENTREGA_CLIENTE",
+            usuarioId: 7);
+
+        var movimiento = await context.MovimientosGarrafa
+            .SingleAsync(m => m.GarrafaId == garrafa.Id);
+        movimiento.TipoMovimientoId.Should().Be(TipoMovimientoEntregaClienteId,
+            "el tipo de movimiento debe ser ENTREGA_CLIENTE (resuelto por codigo en el service)");
+        movimiento.EstadoOrigenId.Should().Be(EstadoLlenaDepositoId,
+            "el origen es el estado actual de la garrafa al momento del canje");
+        movimiento.EstadoDestinoId.Should().Be(EstadoEnClienteId,
+            "el destino lo paso el caller como parametro estadoDestinoId");
+        movimiento.ClienteId.Should().Be(1, "el cliente del movimiento es el del pedido");
+        movimiento.PedidoId.Should().Be(pedidoId, "el pedido debe quedar registrado en el movimiento");
+        movimiento.CreatedBy.Should().Be(7, "CreatedBy refleja el usuario del parametro usuarioId");
+
+        var garrafaActualizada = await context.Garrafas.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstAsync(g => g.Id == garrafa.Id);
+        garrafaActualizada.ClienteId.Should().Be(1,
+            "el service debe actualizar garrafa.cliente_id al cliente del pedido en ENTREGAs");
+    }
+
+    [Fact]
+    public async Task RegistrarMovimientoPorCanjeAsync_Devolucion_CreaMovimientoYLimpiaClienteDeLaGarrafa()
+    {
+        // Hermano del anterior: DEVOLUCION_CLIENTE. La garrafa estaba
+        // EN_CLIENTE del cliente 1 (se la devuelven), el servicio registra
+        // movimiento con destino=LLENA_DEPOSITO y setea garrafa.ClienteId=null.
+        var (service, context) = NewService(
+            nameof(RegistrarMovimientoPorCanjeAsync_Devolucion_CreaMovimientoYLimpiaClienteDeLaGarrafa),
+            seedCatalogos: true);
+        // Sembramos directo en EN_CLIENTE del cliente 1 — simula garrafa que
+        // esta en el domicilio del cliente y nos la devuelven vacia.
+        var now = DateTime.UtcNow;
+        var garrafa = new Garrafa
+        {
+            Codigo = "GAR-CANJE-D",
+            CapacidadKg = 10,
+            FechaCompra = new DateOnly(2024, 1, 1),
+            EstadoGarrafaId = EstadoEnClienteId,
+            ClienteId = 1,
+            Activo = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        context.Garrafas.Add(garrafa);
+        await context.SaveChangesAsync();
+        const ulong pedidoId = 600;
+
+        await service.RegistrarMovimientoPorCanjeAsync(
+            garrafaId: garrafa.Id,
+            estadoDestinoId: EstadoLlenaDepositoId,
+            clienteId: null,
+            pedidoId: pedidoId,
+            tipoMovimientoCodigo: "DEVOLUCION_CLIENTE",
+            usuarioId: 9);
+
+        var movimiento = await context.MovimientosGarrafa
+            .SingleAsync(m => m.GarrafaId == garrafa.Id);
+        movimiento.TipoMovimientoId.Should().Be(TipoMovimientoDevolucionClienteId);
+        movimiento.EstadoOrigenId.Should().Be(EstadoEnClienteId);
+        movimiento.EstadoDestinoId.Should().Be(EstadoLlenaDepositoId);
+        movimiento.ClienteId.Should().BeNull("una devolucion no lleva cliente");
+        movimiento.PedidoId.Should().Be(pedidoId);
+
+        var garrafaActualizada = await context.Garrafas.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstAsync(g => g.Id == garrafa.Id);
+        garrafaActualizada.ClienteId.Should().BeNull(
+            "el service debe limpiar garrafa.cliente_id en DEVOLUCIONes");
+    }
+
+    [Fact]
+    public async Task RegistrarMovimientoPorCanjeAsync_CanjeMultiple_AmbosMovimientosApuntanAlMismoPedido()
+    {
+        // Canje multiple en el mismo pedido: 1 ENTREGA + 1 DEVOLUCION sobre
+        // distintas garrafas. Ambos movimientos deben quedar vinculados al
+        // mismo PedidoId para que el reporte de canje agrupe correctamente.
+        var (service, context) = NewService(
+            nameof(RegistrarMovimientoPorCanjeAsync_CanjeMultiple_AmbosMovimientosApuntanAlMismoPedido),
+            seedCatalogos: true);
+
+        // Garrafa A: LLENA_DEPOSITO (la entregamos al cliente).
+        var garrafaA = await service.CreateAsync(NewCreateDto("GAR-CANJE-MULTI-A"), usuarioId: 1);
+        // Garrafa B: EN_CLIENTE del cliente 1 (nos la devuelven vacia).
+        var now = DateTime.UtcNow;
+        var garrafaB = new Garrafa
+        {
+            Codigo = "GAR-CANJE-MULTI-B",
+            CapacidadKg = 10,
+            FechaCompra = new DateOnly(2024, 1, 1),
+            EstadoGarrafaId = EstadoEnClienteId,
+            ClienteId = 1,
+            Activo = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        context.Garrafas.Add(garrafaB);
+        await context.SaveChangesAsync();
+
+        const ulong pedidoId = 700;
+
+        await service.RegistrarMovimientoPorCanjeAsync(
+            garrafaId: garrafaA.Id, estadoDestinoId: EstadoEnClienteId,
+            clienteId: 1, pedidoId: pedidoId,
+            tipoMovimientoCodigo: "ENTREGA_CLIENTE", usuarioId: 1);
+
+        await service.RegistrarMovimientoPorCanjeAsync(
+            garrafaId: garrafaB.Id, estadoDestinoId: EstadoLlenaDepositoId,
+            clienteId: null, pedidoId: pedidoId,
+            tipoMovimientoCodigo: "DEVOLUCION_CLIENTE", usuarioId: 1);
+
+        var movimientos = await context.MovimientosGarrafa
+            .Where(m => m.PedidoId == pedidoId)
+            .OrderBy(m => m.Id)
+            .ToListAsync();
+
+        movimientos.Should().HaveCount(2,
+            "un pedido con 1 ENTREGA + 1 DEVOLUCION debe generar exactamente 2 movimientos");
+        movimientos.Should().OnlyContain(m => m.PedidoId == pedidoId,
+            "ambos movimientos quedan vinculados al pedido del canje");
+        movimientos.Should().Contain(m =>
+            m.TipoMovimientoId == TipoMovimientoEntregaClienteId
+            && m.ClienteId == 1
+            && m.EstadoDestinoId == EstadoEnClienteId);
+        movimientos.Should().Contain(m =>
+            m.TipoMovimientoId == TipoMovimientoDevolucionClienteId
+            && m.ClienteId == null
+            && m.EstadoDestinoId == EstadoLlenaDepositoId);
+    }
+
+    [Fact]
+    public async Task RegistrarMovimientoPorCanjeAsync_SeteaPedidoIdEnElMovimiento_Explicitamente()
+    {
+        // Caso explicito: el PedidoId es propiedad central de la
+        // trazabilidad del canje (lo usa el reporte de canje y
+        // GetMovimientosByPedidoAsync). El servicio debe persistirlo en la
+        // fila del MovimientoGarrafa — sin esto, el pedido queda sin vinculo
+        // con las garrafas que se canjearon.
+        var (service, context) = NewService(
+            nameof(RegistrarMovimientoPorCanjeAsync_SeteaPedidoIdEnElMovimiento_Explicitamente),
+            seedCatalogos: true);
+        var garrafa = await service.CreateAsync(NewCreateDto("GAR-PEDIDO-ID"), usuarioId: 1);
+        const ulong pedidoIdEsperado = 12_345;
+
+        await service.RegistrarMovimientoPorCanjeAsync(
+            garrafaId: garrafa.Id, estadoDestinoId: EstadoEnClienteId,
+            clienteId: 1, pedidoId: pedidoIdEsperado,
+            tipoMovimientoCodigo: "ENTREGA_CLIENTE", usuarioId: 1);
+
+        var movimiento = await context.MovimientosGarrafa
+            .SingleAsync(m => m.GarrafaId == garrafa.Id);
+        movimiento.PedidoId.Should().Be(pedidoIdEsperado,
+            "RegistrarMovimientoPorCanjeAsync debe persistir el PedidoId del parametro");
+    }
+
+    // ====================================================================
+    // #182 T08 — GetPagedAsync: normalizacion defensiva + escape de LIKE.
+    //
+    // La normalizacion de page/pageSize/sortBy/sortDir ya existia
+    // (introducida en PR #181); esta bateria la blinda con tests. El escape
+    // de % y _ en el input de busqueda era un bug abierto — code fix + tests.
+    // ====================================================================
+
+    [Fact]
+    public async Task GetPagedAsync_NormalizaPageNegativo_AUno()
+    {
+        // page=-5 cae por la guarda `if (page < 1) page = 1`. La query no
+        // debe explotar ni devolver OFFSET negativo.
+        var (service, _) = NewService(
+            nameof(GetPagedAsync_NormalizaPageNegativo_AUno));
+
+        var result = await service.GetPagedAsync(codigo: null, capacidad: null, page: -5);
+
+        result.Page.Should().Be(1,
+            "page < 1 debe normalizarse a 1 para que OFFSET no sea negativo");
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_CapPageSizeA100_CuandoExcedeTope()
+    {
+        // pageSize=9999 debe caer al tope maximo (100) — ver la guarda
+        // `if (pageSize > 100) pageSize = 100` en GetPagedAsync. Sin esto un
+        // cliente podia pedir una query de 10k filas y tumbar la UI.
+        var (service, _) = NewService(
+            nameof(GetPagedAsync_CapPageSizeA100_CuandoExcedeTope));
+
+        var result = await service.GetPagedAsync(codigo: null, capacidad: null, page: 1, pageSize: 9999);
+
+        result.PageSize.Should().Be(100,
+            "pageSize > 100 debe coercerarse al tope maximo para evitar queries enormes");
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_SortByDesconocido_NoLanza_YUsaDefault()
+    {
+        // sortBy arbitrario (incluyendo intento de SQL injection) cae al
+        // default `_ => OrderByCampoOrId(query, g => g.Codigo, desc)`. El
+        // servicio debe devolver resultados ordenados por Codigo, no explotar.
+        var (service, _) = NewService(
+            nameof(GetPagedAsync_SortByDesconocido_NoLanza_YUsaDefault),
+            seedCatalogos: true);
+        await service.CreateAsync(NewCreateDto("GAR-Z"), usuarioId: 1);
+        await service.CreateAsync(NewCreateDto("GAR-A"), usuarioId: 1);
+
+        var result = await service.GetPagedAsync(
+            codigo: null, capacidad: null,
+            sortBy: "CodigoMalicioso; DROP TABLE garrafas--",
+            sortDir: "asc");
+
+        result.Items.Should().HaveCount(2);
+        result.Items[0].Codigo.Should().Be("GAR-A",
+            "sortBy desconocido cae al default (Codigo asc)");
+        result.Items[1].Codigo.Should().Be("GAR-Z");
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_SortDirInvalido_NoLanza_YUsaAsc()
+    {
+        // sortDir != "desc" cae a asc (ver `var desc = string.Equals(sortDir, "desc", ...)`).
+        var (service, _) = NewService(
+            nameof(GetPagedAsync_SortDirInvalido_NoLanza_YUsaAsc),
+            seedCatalogos: true);
+        await service.CreateAsync(NewCreateDto("GAR-A"), usuarioId: 1);
+        await service.CreateAsync(NewCreateDto("GAR-Z"), usuarioId: 1);
+
+        var result = await service.GetPagedAsync(
+            codigo: null, capacidad: null,
+            sortBy: "codigo",
+            sortDir: "sideways");
+
+        result.Items.Should().HaveCount(2);
+        result.Items[0].Codigo.Should().Be("GAR-A",
+            "sortDir != 'desc' cae a asc");
+        result.Items[1].Codigo.Should().Be("GAR-Z");
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_BusquedaConPorcentajeLiteral_NoDevuelveTodasLasFilas()
+    {
+        // T08: el codigo "%" en el input NO debe interpretarse como wildcard.
+        // Sin el code fix (escapar % antes del LIKE), un POST con codigo=% 
+        // matcheaba cualquier codigo (porque % es wildcard en SQL). Con el
+        // fix, % se escapa a \% y solo matchea codigos que literalmente
+        // contienen % — ninguno de los nuestros.
+        var (service, _) = NewService(
+            nameof(GetPagedAsync_BusquedaConPorcentajeLiteral_NoDevuelveTodasLasFilas),
+            seedCatalogos: true);
+        await service.CreateAsync(NewCreateDto("GAR-001"), usuarioId: 1);
+        await service.CreateAsync(NewCreateDto("GAR-002"), usuarioId: 1);
+        await service.CreateAsync(NewCreateDto("GAR-003"), usuarioId: 1);
+
+        var result = await service.GetPagedAsync(codigo: "%", capacidad: null);
+
+        result.Items.Should().BeEmpty(
+            "el % literal del input debe escapar a \\% y NO actuar como wildcard");
+        result.Total.Should().Be(0,
+            "el conteo total tambien debe ser 0 — confirma que la query LIKE usa el caracter escapado");
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_BusquedaConUnderscoreLiteral_NoActuaComoWildcardDeUnCaracter()
+    {
+        // T08: el codigo "_" tampoco debe interpretarse como wildcard. Sin
+        // el fix, "_" matchearia cualquier codigo con al menos 1 caracter
+        // (porque _ es wildcard de 1 char en SQL). Con el fix, _ se escapa
+        // a \_ y solo matchea codigos que contienen _ literal.
+        var (service, _) = NewService(
+            nameof(GetPagedAsync_BusquedaConUnderscoreLiteral_NoActuaComoWildcardDeUnCaracter),
+            seedCatalogos: true);
+        await service.CreateAsync(NewCreateDto("GAR-001"), usuarioId: 1);
+        await service.CreateAsync(NewCreateDto("GAR-002"), usuarioId: 1);
+
+        var result = await service.GetPagedAsync(codigo: "_", capacidad: null);
+
+        result.Items.Should().BeEmpty(
+            "el _ literal debe escapar a \\_ y NO actuar como wildcard de 1 caracter");
+    }
+
+    // ====================================================================
+    // #182 T09 — Estado terminal como origen + self-transition.
+    //
+    // La matriz GarrafaTransiciones.Matriz ya rechaza ambos casos (FUERA_SERVICIO
+    // tiene destinos vacios y EsValida() rechaza origen==destino explicitamente).
+    // Los tests blindo el comportamiento desde el CambiarEstadoAsync para que
+    // un cambio accidental en la matriz o la logica del service los rompa
+    // visiblemente.
+    // ====================================================================
+
+    [Fact]
+    public async Task CambiarEstadoAsync_RechazaTransicion_DesdeEstadoTerminalHaciaCualquierOtro()
+    {
+        // FUERA_SERVICIO es terminal en la matriz (ver GarrafaTransiciones).
+        // Intentar salir de ahi (a cualquier otro estado) debe ser rechazado
+        // con el mensaje claro de la matriz.
+        var (service, _) = NewService(
+            nameof(CambiarEstadoAsync_RechazaTransicion_DesdeEstadoTerminalHaciaCualquierOtro),
+            seedCatalogos: true);
+        // CreateAsync permite setear el estado inicial en cualquier codigo
+        // del catalogo (no hay matriz para el alta), asi que sembramos una
+        // garrafa ya en FUERA_SERVICIO.
+        var garrafa = await service.CreateAsync(
+            NewCreateDto("GAR-TERMINAL", EstadoFueraServicioId), usuarioId: 1);
+
+        var dto = new CambiarEstadoGarrafaDto
+        {
+            NuevoEstadoId = EstadoVaciaDepositoId, // cualquier estado -> rechazar
+            Observaciones = "Intento desde terminal"
+        };
+
+        var act = () => service.CambiarEstadoAsync(
+            garrafa.Id, garrafa.EstadoGarrafaId, dto, currentUserId: 1);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Transición inválida*",
+                "la matriz debe rechazar cualquier salida desde FUERA_SERVICIO");
+    }
+
+    [Fact]
+    public async Task CambiarEstadoAsync_RechazaSelfTransition_CuandoOrigenEsIgualADestino()
+    {
+        // Auto-transicion (LLENA_DEPOSITO -> LLENA_DEPOSITO) es un no-op
+        // semantico que la matriz rechaza explicitamente (ver
+        // GarrafaTransiciones.EsValida). El test confirma que el path del
+        // CambiarEstadoAsync tambien lo bloquea — un POST hand-crafted no
+        // debe poder "refrescar" una garrafa sin registrar un movimiento real.
+        var (service, _) = NewService(
+            nameof(CambiarEstadoAsync_RechazaSelfTransition_CuandoOrigenEsIgualADestino),
+            seedCatalogos: true);
+        var garrafa = await service.CreateAsync(NewCreateDto("GAR-SELF"), usuarioId: 1);
+
+        var dto = new CambiarEstadoGarrafaDto
+        {
+            NuevoEstadoId = EstadoLlenaDepositoId, // == origen
+            Observaciones = "Self-transition"
+        };
+
+        var act = () => service.CambiarEstadoAsync(
+            garrafa.Id, garrafa.EstadoGarrafaId, dto, currentUserId: 1);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Transición inválida*",
+                "la matriz rechaza self-transitions explicitamente (origen == destino)");
+    }
+
+    // ====================================================================
+    // #182 T10 — Validacion de ProveedorId en Create/Update (FK soft-deleted).
+    //
+    // CreateAsync y UpdateAsync NO validaban ProveedorId contra el query
+    // filter global de proveedores (solo validaban ClienteId, ver PR #183).
+    // Esta bateria agrega la validacion analoga + los tests. Los tests de
+    // ClienteId soft-deleted en Create/Update/CambiarEstado ya quedaron
+    // cubiertos por PR #183 (no se duplican).
+    // ====================================================================
+
+    [Fact]
+    public async Task CreateAsync_LanzaExcepcion_SiProveedorIdApuntaASoftDeleted()
+    {
+        // T10: la cobertura por dropdown de proveedores (que filtra Activos)
+        // no basta — un POST hand-crafted con un ProveedorId soft-deleted
+        // podia crear una garrafa con FK invalida. Mismo patron que
+        // ValidarClienteActivoAsync (PR #183) aplicado a proveedores.
+        var (service, _) = NewService(
+            nameof(CreateAsync_LanzaExcepcion_SiProveedorIdApuntaASoftDeleted),
+            seedCatalogos: true);
+
+        var dto = new CreateGarrafaDto
+        {
+            Codigo = "GAR-PROV-DEAD",
+            CapacidadKg = 10,
+            FechaCompra = new DateOnly(2024, 1, 15),
+            EstadoGarrafaId = EstadoLlenaDepositoId, // RequiereCliente=false, ClienteId puede ser null
+            ProveedorId = ProveedorSoftDeletedId,    // sembrado en SeedCatalogos con DeletedAt
+        };
+
+        var act = () => service.CreateAsync(dto, usuarioId: 1);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*proveedor*",
+                "CreateAsync debe rechazar un ProveedorId que el query filter global ya oculta como soft-deleted");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_LanzaExcepcion_SiProveedorIdQuedaApuntandoASoftDeleted()
+    {
+        // Caso analogo al de ClienteId: la garrafa se crea con proveedor
+        // vivo, despues se da de baja el proveedor, y un Update posterior
+        // (incluso sin cambiar el ProveedorId del DTO) debe revalidar.
+        var (service, context) = NewService(
+            nameof(UpdateAsync_LanzaExcepcion_SiProveedorIdQuedaApuntandoASoftDeleted),
+            seedCatalogos: true);
+        var creada = await service.CreateAsync(
+            new CreateGarrafaDto
+            {
+                Codigo = "GAR-T10-UPD",
+                CapacidadKg = 10,
+                FechaCompra = new DateOnly(2024, 1, 15),
+                EstadoGarrafaId = EstadoLlenaDepositoId,
+                ProveedorId = ProveedorVivoId,
+            },
+            usuarioId: 1);
+
+        // Soft-delete del proveedor.
+        var proveedor = await context.Proveedores.IgnoreQueryFilters()
+            .FirstAsync(p => p.Id == ProveedorVivoId);
+        proveedor.DeletedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        await context.SaveChangesAsync();
+
+        var updateDto = new UpdateGarrafaDto
+        {
+            Id = creada.Id,
+            Codigo = creada.Codigo,
+            CapacidadKg = 15, // solo cambia capacidad — el ProveedorId se mantiene
+            FechaCompra = creada.FechaCompra,
+            EstadoGarrafaId = creada.EstadoGarrafaId,
+            ProveedorId = creada.ProveedorId,
+        };
+
+        var act = () => service.UpdateAsync(updateDto, usuarioId: 1);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*proveedor*",
+                "UpdateAsync debe revalidar el ProveedorId contra el catalogo antes de SaveChanges");
     }
 }
