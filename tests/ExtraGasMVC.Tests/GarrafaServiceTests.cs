@@ -54,7 +54,16 @@ public class GarrafaServiceTests
     /// tras la operacion (soft-delete, movimiento registrado) puedan usar
     /// <c>IgnoreQueryFilters()</c> cuando corresponda.
     /// </summary>
-    private static (GarrafaService service, ExtraGasDbContext context) NewService(string dbName, bool seedCatalogos = false)
+    /// <param name="seedCatalogos">
+    /// Default <c>true</c>: siembra el catálogo mínimo (estados_garrafa y
+    /// tipos_movimiento_garrafa). El default cambió con la issue #182 T02 —
+    /// <c>CreateAsync</c> ahora valida que el <c>EstadoGarrafaId</c> exista en
+    /// el catálogo, así que los tests deben reflejar la realidad de producción
+    /// (donde el catálogo siempre está sembrado por la migration inicial).
+    /// Pasarlo en <c>false</c> sólo tiene sentido para tests que validan
+    /// explícitamente el rechazo por estado inexistente.
+    /// </param>
+    private static (GarrafaService service, ExtraGasDbContext context) NewService(string dbName, bool seedCatalogos = true)
     {
         var options = new DbContextOptionsBuilder<ExtraGasDbContext>()
             .UseInMemoryDatabase(databaseName: dbName)
@@ -133,15 +142,51 @@ public class GarrafaServiceTests
             Nombre = "Cambio de estado manual"
         });
 
+        // Issue #182 T05: algunos tests necesitan un cliente activo (no soft-deleted)
+        // para validar Create/Update/Cambiar estado. Sembramos dos: el id=1 está
+        // "vivo" (DeletedAt=null), el id=2 está dado de baja (DeletedAt set). El
+        // query filter global oculta los soft-deleted, así que ValidarClienteActivoAsync
+        // los rechaza vía AnyAsync.
+        context.Clientes.AddRange(
+            new Cliente
+            {
+                Id = 1,
+                Codigo = "CLI-001",
+                Apellido = "Garrafa",
+                Nombre = "Test",
+                Dni = "11111111",
+                TelefonoPrincipal = "1111111111",
+                FechaAlta = new DateOnly(2024, 1, 1),
+                CreatedBy = 1,
+                UpdatedBy = 1,
+            },
+            new Cliente
+            {
+                Id = 2,
+                Codigo = "CLI-002",
+                Apellido = "Dado",
+                Nombre = "Baja",
+                Dni = "22222222",
+                TelefonoPrincipal = "2222222222",
+                FechaAlta = new DateOnly(2024, 1, 1),
+                CreatedBy = 1,
+                UpdatedBy = 1,
+                DeletedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            });
+
         context.SaveChanges();
     }
 
-    private static CreateGarrafaDto NewCreateDto(string codigo = "GAR-001", ulong estadoId = EstadoLlenaDepositoId) => new()
+    private static CreateGarrafaDto NewCreateDto(
+        string codigo = "GAR-001",
+        ulong estadoId = EstadoLlenaDepositoId,
+        ulong? clienteId = null) => new()
     {
         Codigo = codigo,
         CapacidadKg = 10,
         FechaCompra = new DateOnly(2024, 1, 15),
         EstadoGarrafaId = estadoId,
+        ClienteId = clienteId,
     };
 
     private static UpdateGarrafaDto NewUpdateDto(GarrafaDto source, string nuevoCodigo, byte? nuevaCapacidad = null) => new()
@@ -414,7 +459,7 @@ public class GarrafaServiceTests
             seedCatalogos: true);
 
         var creada = await service.CreateAsync(
-            NewCreateDto("GAR-CLI-DEL", estadoId: EstadoEnClienteId),
+            NewCreateDto("GAR-CLI-DEL", estadoId: EstadoEnClienteId, clienteId: 1),
             usuarioId: 1);
 
         var act = () => service.DeleteAsync(creada.Id, updatedBy: 1);
@@ -459,7 +504,7 @@ public class GarrafaServiceTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Reads (issue #47: navegaciones cargadas para mostrar nombres en UI)
+    // Reads (issue #47: navegaciones cargadas para mostrar nombres en UI) — PR #181
     //
     // Estos tests cubren los 5 Get* del Service que NO estaban testeados.
     // Cada uno ejercita una rama de LINQ distinta (FirstOrDefault / Where /
@@ -577,5 +622,245 @@ public class GarrafaServiceTests
 
         llenas.Should().HaveCount(2);
         llenas.Select(d => d.Codigo).Should().BeEquivalentTo(CodigosPorEstadoEsperados);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // #182 T01 — UpdateAsync rechaza cambios de EstadoGarrafaId / ClienteId
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateAsync_RechazaCambioDeEstadoGarrafaId_DirectamenteEnElDto()
+    {
+        // Backdoor de la issue #182 T01: un POST hand-crafted al endpoint Edit
+        // podría cambiar el EstadoGarrafaId de la garrafa sin pasar por
+        // CambiarEstadoAsync (que registra el MovimientoGarrafa). UpdateAsync
+        // debe rechazarlo desde la app — el trigger trg_garrafas_bi_validate
+        // sólo cubre INSERT.
+        var (service, context) = NewService(
+            nameof(UpdateAsync_RechazaCambioDeEstadoGarrafaId_DirectamenteEnElDto));
+        var creada = await service.CreateAsync(NewCreateDto("GAR-T01"), usuarioId: 1);
+
+        var dto = new UpdateGarrafaDto
+        {
+            Id = creada.Id,
+            Codigo = creada.Codigo,
+            CapacidadKg = creada.CapacidadKg,
+            FechaCompra = creada.FechaCompra,
+            EstadoGarrafaId = EstadoEnClienteId, // cambio respecto a LLENA_DEPOSITO
+        };
+
+        var act = () => service.UpdateAsync(dto, usuarioId: 2);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Cambiar estado*",
+                "UpdateAsync debe forzar el flujo dedicado Cambiar estado, no permitir el cambio directo");
+
+        // La fila en BD no debe haberse tocado. Usamos AsNoTracking() porque la
+        // entity devuelta por FindAsync (dentro del service) fue mutada por
+        // AutoMapper antes de que lanzáramos la excepción; queremos leer el
+        // estado REAL persistido, no la copia en memoria del tracker.
+        var entity = await context.Garrafas.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstAsync(g => g.Id == creada.Id);
+        entity.EstadoGarrafaId.Should().Be(EstadoLlenaDepositoId,
+            "el rechazo no debe haber tocado el estado original de la fila");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_RechazaCambioDeClienteId_DirectamenteEnElDto()
+    {
+        // Hermano del anterior: cambiar ClienteId sin registrar un MovimientoGarrafa
+        // rompe la trazabilidad de la garrafa (no queda historial de a quién se la
+        // entregamos / quién nos la devolvió). Misma defensa, mismo rechazo.
+        var (service, context) = NewService(
+            nameof(UpdateAsync_RechazaCambioDeClienteId_DirectamenteEnElDto));
+        var creada = await service.CreateAsync(NewCreateDto("GAR-T01B"), usuarioId: 1);
+
+        var dto = new UpdateGarrafaDto
+        {
+            Id = creada.Id,
+            Codigo = creada.Codigo,
+            CapacidadKg = creada.CapacidadKg,
+            FechaCompra = creada.FechaCompra,
+            EstadoGarrafaId = creada.EstadoGarrafaId,
+            ClienteId = 1, // antes era null — cambio directo
+        };
+
+        var act = () => service.UpdateAsync(dto, usuarioId: 2);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Cambiar estado*");
+
+        // Ver nota de AsNoTracking() en el otro test de T01 — la entity tracker
+        // ya tiene ClienteId=1 después del map; queremos leer el valor real.
+        var entity = await context.Garrafas.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstAsync(g => g.Id == creada.Id);
+        entity.ClienteId.Should().BeNull("el rechazo no debe persistir el cambio");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_PermiteEditarOtrosCampos_SinTocarEstadoNiCliente()
+    {
+        // Happy path del fix T01: editar CapacidadKg, Observaciones o Codigo
+        // (sin cambiar EstadoGarrafaId ni ClienteId) debe seguir funcionando
+        // como antes. Esto confirma que el rechazo no sobre-restringe.
+        var (service, context) = NewService(
+            nameof(UpdateAsync_PermiteEditarOtrosCampos_SinTocarEstadoNiCliente));
+        var creada = await service.CreateAsync(NewCreateDto("GAR-T01C"), usuarioId: 1);
+
+        var dto = new UpdateGarrafaDto
+        {
+            Id = creada.Id,
+            Codigo = "GAR-T01C-V2",
+            CapacidadKg = 15,
+            FechaCompra = creada.FechaCompra,
+            EstadoGarrafaId = creada.EstadoGarrafaId, // se mantiene
+            ClienteId = creada.ClienteId,          // se mantiene
+            Observaciones = "Editada sin tocar estado",
+        };
+
+        var actualizado = await service.UpdateAsync(dto, usuarioId: 7);
+
+        actualizado.Codigo.Should().Be("GAR-T01C-V2");
+        actualizado.CapacidadKg.Should().Be((byte)15);
+        actualizado.Observaciones.Should().Be("Editada sin tocar estado");
+
+        var entity = await context.Garrafas.IgnoreQueryFilters().FirstAsync(g => g.Id == creada.Id);
+        entity.EstadoGarrafaId.Should().Be(creada.EstadoGarrafaId, "el rechazo no aplica si el campo no cambió");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // #182 T02 — CreateAsync valida estado destino y RequiereCliente
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateAsync_LanzaExcepcion_SiEstadoGarrafaIdNoExisteEnCatalogo()
+    {
+        var (service, _) = NewService(
+            nameof(CreateAsync_LanzaExcepcion_SiEstadoGarrafaIdNoExisteEnCatalogo),
+            seedCatalogos: false); // forzamos catálogo vacío para verificar el rechazo
+
+        var dto = new CreateGarrafaDto
+        {
+            Codigo = "GAR-EST-NOEXISTE",
+            CapacidadKg = 10,
+            FechaCompra = new DateOnly(2024, 1, 15),
+            EstadoGarrafaId = 9999,
+        };
+
+        var act = () => service.CreateAsync(dto, usuarioId: 1);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*9999*",
+                "CreateAsync debe rechazar un EstadoGarrafaId que no existe en el catálogo");
+    }
+
+    [Fact]
+    public async Task CreateAsync_LanzaExcepcion_SiEstadoRequiereCliente_YDtoNoLoTrae()
+    {
+        // Red de seguridad en la app, además del trigger trg_garrafas_bi_validate.
+        // El InMemory del test no aplica triggers, así que verificamos que la
+        // app también lo valida y devuelve un mensaje útil.
+        var (service, _) = NewService(
+            nameof(CreateAsync_LanzaExcepcion_SiEstadoRequiereCliente_YDtoNoLoTrae));
+
+        var dto = new CreateGarrafaDto
+        {
+            Codigo = "GAR-REQC",
+            CapacidadKg = 10,
+            FechaCompra = new DateOnly(2024, 1, 15),
+            EstadoGarrafaId = EstadoEnClienteId, // RequiereCliente = true
+            ClienteId = null,                   // omitido → debe rechazar
+        };
+
+        var act = () => service.CreateAsync(dto, usuarioId: 1);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*requiere asignar un cliente*");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // #182 T05 — ClienteId activo (no soft-deleted) en Create/Update/CambiarEstado
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateAsync_LanzaExcepcion_SiClienteIdApuntaASoftDeleted()
+    {
+        // T05: la cobertura por dropdown (GetActivosAsync) no basta — un POST
+        // hand-crafted podría llegar con un ClienteId que el catálogo ya
+        // filtraba como baja. La app debe rechazar.
+        var (service, _) = NewService(
+            nameof(CreateAsync_LanzaExcepcion_SiClienteIdApuntaASoftDeleted));
+
+        var dto = new CreateGarrafaDto
+        {
+            Codigo = "GAR-CLI-DEAD",
+            CapacidadKg = 10,
+            FechaCompra = new DateOnly(2024, 1, 15),
+            EstadoGarrafaId = EstadoEnClienteId,
+            ClienteId = 2, // cliente sembrado con DeletedAt no nulo
+        };
+
+        var act = () => service.CreateAsync(dto, usuarioId: 1);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*dado de baja*");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_LanzaExcepcion_SiClienteIdQuedaApuntandoASoftDeleted()
+    {
+        // La garrafa se crea válida. Después se da de baja el cliente.
+        // Un Update posterior (incluso sin cambiar el DTO del cliente) debe
+        // detectar la inconsistencia porque la app re-valida antes de SaveChanges.
+        var (service, context) = NewService(
+            nameof(UpdateAsync_LanzaExcepcion_SiClienteIdQuedaApuntandoASoftDeleted));
+        var creada = await service.CreateAsync(
+            NewCreateDto("GAR-T05-UPD", estadoId: EstadoEnClienteId, clienteId: 1),
+            usuarioId: 1);
+
+        // Soft-delete del cliente vía EF directo.
+        var cliente = await context.Clientes.IgnoreQueryFilters().FirstAsync(c => c.Id == 1);
+        cliente.DeletedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        await context.SaveChangesAsync();
+
+        var dto = new UpdateGarrafaDto
+        {
+            Id = creada.Id,
+            Codigo = creada.Codigo,
+            CapacidadKg = 15, // sólo cambia la capacidad
+            FechaCompra = creada.FechaCompra,
+            EstadoGarrafaId = creada.EstadoGarrafaId,
+            ClienteId = creada.ClienteId,
+        };
+
+        var act = () => service.UpdateAsync(dto, usuarioId: 1);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*dado de baja*",
+                "UpdateAsync debe revalidar el ClienteId contra el catálogo antes de SaveChanges");
+    }
+
+    [Fact]
+    public async Task CambiarEstadoAsync_LanzaExcepcion_SiClienteIdApuntaASoftDeleted()
+    {
+        // T05 también aplica a CambiarEstadoAsync — alineamos las 3 rutas de
+        // escritura para que ninguna acepte un cliente soft-deleted.
+        var (service, _) = NewService(
+            nameof(CambiarEstadoAsync_LanzaExcepcion_SiClienteIdApuntaASoftDeleted),
+            seedCatalogos: true);
+        var creada = await service.CreateAsync(NewCreateDto("GAR-T05-CE"), usuarioId: 1);
+
+        var dto = new CambiarEstadoGarrafaDto
+        {
+            NuevoEstadoId = EstadoEnClienteId,
+            ClienteId = 2, // soft-deleted, sembrado en SeedCatalogos
+        };
+
+        var act = () => service.CambiarEstadoAsync(creada.Id, dto, currentUserId: 1);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*dado de baja*");
     }
 }

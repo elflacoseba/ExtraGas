@@ -218,6 +218,26 @@ public class GarrafaService : IGarrafaService
         if (await _context.Garrafas.AnyAsync(g => g.Codigo == garrafa.Codigo, ct))
             throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafa.Codigo}.");
 
+        // Issue #182 T02: validar que el estado destino exista en el catálogo
+        // estados_garrafa. El trigger trg_garrafas_bi_validate cubre INSERT pero
+        // sólo chequea RequiereCliente con un SIGNAL feo; acá damos un mensaje
+        // accionable antes de que SaveChanges pueda fallar.
+        var estadoDestino = await _context.EstadosGarrafa
+            .AsNoTracking()
+            .Where(e => e.Id == garrafa.EstadoGarrafaId)
+            .Select(e => new { e.RequiereCliente })
+            .FirstOrDefaultAsync(ct)
+            ?? throw new InvalidOperationException(
+                $"El estado con Id {garrafa.EstadoGarrafaId} no existe en el catálogo estados_garrafa.");
+
+        if (estadoDestino.RequiereCliente && !garrafa.ClienteId.HasValue)
+            throw new InvalidOperationException("El estado seleccionado requiere asignar un cliente.");
+
+        // Issue #182 T05: si el operador especificó un ClienteId, validar que
+        // exista y no esté soft-deleted. El query filter global de clientes ya
+        // excluye los soft-deleted, así que AnyAsync alcanza.
+        await ValidarClienteActivoAsync(garrafa.ClienteId, ct);
+
         var entity = _mapper.Map<Garrafa>(garrafa);
         // Issue #114: Activo no viene del DTO. Lo setea el Service en true
         // porque es estado (soft-delete), no dato de carga del operador.
@@ -242,16 +262,33 @@ public class GarrafaService : IGarrafaService
         if (await _context.Garrafas.AnyAsync(g => g.Codigo == garrafa.Codigo && g.Id != garrafa.Id, ct))
             throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafa.Codigo}.");
 
-        // Snapshot de Activo ANTES del AutoMapper: el formulario de Edit no
-        // debe poder modificarlo. Si el operador lo manda distinto, lo
-        // restauramos silenciosamente. El estado operacional
-        // (estado_garrafa_id) NO se preserva — lo cambia la acción dedicada.
+        // Snapshot pre-mapper de los campos que Edit tiene prohibido modificar.
+        // - Activo: solo cambia vía Delete (lo preserva GarrafaEditRules abajo).
+        // - EstadoGarrafaId y ClienteId: solo cambian vía la acción dedicada
+        //   "Cambiar estado", que registra un MovimientoGarrafa. Modificarlos
+        //   desde Edit rompería la trazabilidad del módulo (#182 T01).
+        //   Si difieren del valor actual, rechazamos el POST hand-crafted que
+        //   intentaría esquivar esa validación.
         var activoOriginal = entity.Activo;
+        var estadoAnterior = entity.EstadoGarrafaId;
+        var clienteAnterior = entity.ClienteId;
 
         _mapper.Map(garrafa, entity);
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = usuarioId;
         GarrafaEditRules.PreservarFlagsNoEditables(entity, activoOriginal);
+
+        if (entity.EstadoGarrafaId != estadoAnterior || entity.ClienteId != clienteAnterior)
+        {
+            throw new InvalidOperationException(
+                "El estado y el cliente de la garrafa sólo pueden modificarse desde la acción 'Cambiar estado', " +
+                "que registra el movimiento en la tabla de trazabilidad.");
+        }
+
+        // Issue #182 T05: si por algún motivo válido quedó un ClienteId seteado,
+        // validar que exista y no esté soft-deleted. La cobertura por dropdown
+        // no alcanza para un POST hand-crafted con un id soft-deleted.
+        await ValidarClienteActivoAsync(entity.ClienteId, ct);
 
         await SaveOrThrowDuplicateAsync(garrafa.Codigo, ct);
 
@@ -300,6 +337,11 @@ public class GarrafaService : IGarrafaService
             throw new InvalidOperationException(
                 $"El estado {destino.Nombre} requiere seleccionar un cliente.");
         }
+
+        // Issue #182 T05: si se proporcionó un ClienteId en el DTO, validar que
+        // exista y no esté soft-deleted. Alinea CambiarEstadoAsync con las
+        // validaciones equivalentes de CreateAsync/UpdateAsync.
+        await ValidarClienteActivoAsync(dto.ClienteId, ct);
 
         var tipoCambioEstadoId = await _context.TiposMovimientoGarrafa
             .AsNoTracking()
@@ -575,6 +617,26 @@ public class GarrafaService : IGarrafaService
         {
             throw new InvalidOperationException($"Ya existe una garrafa con el código {codigo}.");
         }
+    }
+
+    /// <summary>
+    /// Valida que el cliente referenciado exista y no esté soft-deleted. La
+    /// cobertura por dropdown (<c>GetActivosAsync</c>) no es suficiente porque
+    /// un POST hand-crafted podría llegar con un id soft-deleted. El query
+    /// filter global de clientes excluye los soft-deleted — <c>AnyAsync</c>
+    /// alcanza. Issue #182 T05.
+    /// </summary>
+    private async Task ValidarClienteActivoAsync(ulong? clienteId, CancellationToken ct)
+    {
+        if (!clienteId.HasValue) return;
+
+        var existe = await _context.Clientes
+            .AsNoTracking()
+            .AnyAsync(c => c.Id == clienteId.Value, ct);
+
+        if (!existe)
+            throw new InvalidOperationException(
+                $"El cliente con Id {clienteId.Value} no existe o fue dado de baja.");
     }
 
     public async Task<IEnumerable<VStockGarrafa>> GetStockAsync(CancellationToken ct = default)
