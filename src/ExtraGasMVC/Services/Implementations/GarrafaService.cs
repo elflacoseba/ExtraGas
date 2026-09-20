@@ -839,4 +839,25 @@ public class GarrafaService : IGarrafaService
             Total = total
         };
     }
+
+    public async Task<ulong> GetEstadoIdByCodigoAsync(string codigo, CancellationToken ct = default)
+    {
+        // Issue #182 T12: lookup puntual por código canónico. Reemplaza el
+        // hardcode EstadoGarrafaId=1 en GarrafasController.Create para que
+        // un reorden del seed no rompa el alta en silencio.
+        //
+        // Nota: si en el futuro hay alta concurrencia de altas, este lookup
+        // podría cachearse en memoria (los códigos del catálogo son estáticos).
+        // Por ahora no hace falta — el costo es 1 query AsNoTracking con
+        // índice unique por codigo, y la cantidad de altas concurrentes es
+        // despreciable.
+        if (string.IsNullOrWhiteSpace(codigo))
+            return 0;
+
+        return await _context.EstadosGarrafa
+            .AsNoTracking()
+            .Where(e => e.Codigo == codigo)
+            .Select(e => e.Id)
+            .FirstOrDefaultAsync(ct);
+    }
 }

@@ -154,4 +154,13 @@ public interface IGarrafaService
         int page = 1,
         int pageSize = 20,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Resuelve el <c>Id</c> numérico de un estado de garrafa a partir de su
+    /// código canónico (ej. <c>LLENA_DEPOSITO</c>). Devuelve <c>0</c> cuando
+    /// el código no existe en el catálogo <c>estados_garrafa</c>. Usado por
+    /// el Controller para asignar el estado inicial del alta sin depender del
+    /// Id físico (que puede cambiar si el seed se reordena). Issue #182 T12.
+    /// </summary>
+    Task<ulong> GetEstadoIdByCodigoAsync(string codigo, CancellationToken ct = default);
 }

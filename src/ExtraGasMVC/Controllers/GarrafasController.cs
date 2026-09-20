@@ -120,9 +120,15 @@ public class GarrafasController : BaseController
         await LoadViewBagsAsync(ct);
         // Issue #114: CreateGarrafaDto ya no expone Activo — lo setea el
         // Service en true.
+        // Issue #182 T12: el estado inicial se resuelve por código canónico
+        // (LLENA_DEPOSITO) en lugar de hardcodear el Id=1. Si el seed
+        // reordena los Ids, el alta sigue apuntando al estado correcto.
+        var estadoInicialId = await _garrafaService.GetEstadoIdByCodigoAsync(
+            GarrafaEstados.LlenaDeposito, ct);
+
         return View(new CreateGarrafaDto
         {
-            EstadoGarrafaId = 1,
+            EstadoGarrafaId = estadoInicialId,
             FechaCompra = DateOnly.FromDateTime(DateTime.UtcNow)
         });
     }

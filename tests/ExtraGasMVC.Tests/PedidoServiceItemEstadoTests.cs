@@ -406,5 +406,6 @@ public class PedidoServiceItemEstadoTests
         public Task RegistrarMovimientoPorCanjeAsync(ulong garrafaId, ulong estadoDestinoId, ulong? clienteId, ulong pedidoId, string tipoMovimientoCodigo, ulong? usuarioId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IEnumerable<VStockGarrafa>> GetStockAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task<PagedResult<VGarrafaEnCliente>> GetEnClientesAsync(ulong? clienteId = null, int page = 1, int pageSize = 20, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<ulong> GetEstadoIdByCodigoAsync(string codigo, CancellationToken ct = default) => throw new NotImplementedException();
     }
 }

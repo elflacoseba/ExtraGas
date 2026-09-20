@@ -1436,6 +1436,62 @@ public class GarrafaServiceTests
         enClientes.Items.Should().BeEmpty();
     }
 
+    // ====================================================================
+    // #182 T12 — GetEstadoIdByCodigoAsync
+    //
+    // Lookup puntual codigo -> Id del catalogo estados_garrafa. Reemplaza el
+    // hardcode EstadoGarrafaId=1 en GarrafasController.Create. Tests planos
+    // sobre el InMemory seed (mismo patron que el resto de la suite).
+    // ====================================================================
+
+    [Fact]
+    public async Task GetEstadoIdByCodigoAsync_DevuelveIdDelCatalogo_ParaCodigoCanonico()
+    {
+        // Happy path: LLENA_DEPOSITO existe en el catalogo sembrado por
+        // SeedCatalogos con Id=1 (mismo Id que la convencion del seed real
+        // de MySQL). El helper devuelve ese Id numerico.
+        var (service, _) = NewService(
+            nameof(GetEstadoIdByCodigoAsync_DevuelveIdDelCatalogo_ParaCodigoCanonico),
+            seedCatalogos: true);
+
+        var id = await service.GetEstadoIdByCodigoAsync(GarrafaEstados.LlenaDeposito);
+
+        id.Should().Be(EstadoLlenaDepositoId,
+            "LLENA_DEPOSITO debe estar sembrado con Id=1 — mismo orden que el seed real");
+    }
+
+    [Fact]
+    public async Task GetEstadoIdByCodigoAsync_DevuelveCero_ParaCodigoInexistente()
+    {
+        // Codigo que NO esta en el catalogo. El helper devuelve 0 (ulong
+        // default de FirstOrDefaultAsync) sin lanzar — el caller decide si
+        // 0 es valido o no. Cobertura: verifica que no rompe la query y que
+        // no asume que todo codigo existe.
+        var (service, _) = NewService(
+            nameof(GetEstadoIdByCodigoAsync_DevuelveCero_ParaCodigoInexistente),
+            seedCatalogos: true);
+
+        var id = await service.GetEstadoIdByCodigoAsync("CODIGO_INVENTADO");
+
+        id.Should().Be(0UL,
+            "FirstOrDefault sobre una condicion que no matchea devuelve default(ulong)=0");
+    }
+
+    [Fact]
+    public async Task GetEstadoIdByCodigoAsync_DevuelveCero_ParaCodigoNullOVacio()
+    {
+        // Null/empty: el helper hace guardia explicita y devuelve 0 sin
+        // tocar la query. Es defensivo contra inputs sucios (form
+        // hand-crafted con campo vacio).
+        var (service, _) = NewService(
+            nameof(GetEstadoIdByCodigoAsync_DevuelveCero_ParaCodigoNullOVacio),
+            seedCatalogos: true);
+
+        (await service.GetEstadoIdByCodigoAsync(null!)).Should().Be(0UL);
+        (await service.GetEstadoIdByCodigoAsync(string.Empty)).Should().Be(0UL);
+        (await service.GetEstadoIdByCodigoAsync("   ")).Should().Be(0UL);
+    }
+
     [Fact]
     public async Task GetEstadosAsync_DevuelveTodosLosEstadosDelCatalogo_OrdenadosPorNombre()
     {
