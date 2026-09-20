@@ -20,6 +20,11 @@ public class GarrafaService : IGarrafaService
     private readonly IMapper _mapper;
     private readonly ILogger<GarrafaService> _logger;
 
+    // S1192: literal duplicado en 4 sitios de este archivo. Cualquier copy/paste
+    // futuro debe usar esta constante — el operador ve este mensaje en pantalla
+    // cuando hay conflicto de concurrencia o un fallo transaccional recuperable.
+    private const string RecargarPaginaMsg = "Recargá la página y volvé a intentar.";
+
     public GarrafaService(ExtraGasDbContext context, IMapper mapper, ILogger<GarrafaService> logger)
     {
         _context = context;
@@ -338,7 +343,7 @@ public class GarrafaService : IGarrafaService
                 entity.Id, entity.Codigo, usuarioId);
             throw new InvalidOperationException(
                 $"La garrafa {entity.Codigo} fue modificada por otro operador mientras editabas. " +
-                "Recargá la página y volvé a intentar.", ex);
+                RecargarPaginaMsg, ex);
         }
         catch (DbUpdateException dbex) when (dbex.InnerException is MySqlException my && my.Number == 1062)
         {
@@ -366,7 +371,7 @@ public class GarrafaService : IGarrafaService
             throw new InvalidOperationException(
                 $"La garrafa {garrafa.Codigo} fue modificada por otro operador mientras editabas " +
                 $"(estado esperado: id={estadoOrigenEsperadoId}, estado actual: id={garrafa.EstadoGarrafaId}). " +
-                "Recargá la página y volvé a intentar.");
+                RecargarPaginaMsg);
         }
 
         // Cargar ambos extremos de la transición (origen y destino) en una sola
@@ -489,7 +494,7 @@ public class GarrafaService : IGarrafaService
             await transaction.RollbackAsync(ct);
             throw new InvalidOperationException(
                 $"La garrafa {garrafa.Codigo} fue modificada por otro operador mientras editabas. " +
-                "Recargá la página y volvé a intentar.", ex);
+                RecargarPaginaMsg, ex);
         }
         catch (Exception ex)
         {
@@ -501,7 +506,12 @@ public class GarrafaService : IGarrafaService
                 "Error al cambiar estado de la garrafa {GarrafaId} (origen={EstadoOrigenId}, destino={EstadoDestinoId}). Se realiza rollback de la transacción.",
                 id, estadoOrigenEsperadoId, dto.NuevoEstadoId);
             await transaction.RollbackAsync(ct);
-            throw;
+            // S2139: re-lanzamos envolviendo con contexto (código + origen/destino)
+            // para que el controller muestre un mensaje claro. La excepción original
+            // queda accesible como InnerException para diagnóstico.
+            throw new InvalidOperationException(
+                $"Error al cambiar estado de la garrafa {garrafa.Codigo} (origen={estadoOrigenEsperadoId}, destino={dto.NuevoEstadoId}). " +
+                RecargarPaginaMsg, ex);
         }
     }
 
@@ -722,7 +732,7 @@ public class GarrafaService : IGarrafaService
                 garrafa.Id, garrafa.Codigo, pedidoId);
             throw new InvalidOperationException(
                 $"La garrafa {garrafa.Codigo} fue modificada por otro operador mientras se procesaba el canje. " +
-                "Recargá la página y volvé a intentar.", ex);
+                RecargarPaginaMsg, ex);
         }
     }
 
