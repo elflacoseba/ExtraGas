@@ -290,17 +290,27 @@ public class GarrafasController : BaseController
         return View(stock);
     }
 
-    public async Task<IActionResult> EnClientes(ulong? clienteId, CancellationToken ct = default)
+    public async Task<IActionResult> EnClientes(
+        ulong? clienteId,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken ct = default)
     {
         // Issue #51: la vista v_garrafas_en_clientes ya excluye las que no
         // están en estado EN_CLIENTE, aplica soft-delete y calcula días; el
         // Controller ya no necesita pedir el listado completo y filtrar acá.
-        var enClientes = await _garrafaService.GetEnClientesAsync(clienteId, ct);
+        // Issue #182 T11: pasamos page/pageSize al service para que pagine
+        // en SQL. El service normaliza los valores fuera de rango.
+        var resultado = await _garrafaService.GetEnClientesAsync(clienteId, page, pageSize, ct);
 
         if (clienteId.HasValue)
             ViewBag.Cliente = await _clienteService.GetByIdAsync(clienteId.Value, ct);
 
-        return View("EnClientes", enClientes);
+        // Issue #182 T11: ViewBag expone clienteId para que los links de
+        // paginación lo preserven al cambiar de página.
+        ViewBag.ClienteId = clienteId;
+
+        return View("EnClientes", resultado);
     }
 
     public async Task<IActionResult> CambiarEstado(ulong id, CancellationToken ct = default)

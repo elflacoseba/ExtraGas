@@ -358,7 +358,7 @@ public class ControllersActivoViewBagTests
         public Task<IEnumerable<MovimientoGarrafaDto>> GetMovimientosByPedidoAsync(ulong p, CancellationToken ct = default) => throw new NotImplementedException();
         public Task RegistrarMovimientoPorCanjeAsync(ulong g, ulong ed, ulong? c, ulong p, string t, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IEnumerable<VStockGarrafa>> GetStockAsync(CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<IEnumerable<VGarrafaEnCliente>> GetEnClientesAsync(ulong? c, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<PagedResult<VGarrafaEnCliente>> GetEnClientesAsync(ulong? c = null, int page = 1, int pageSize = 20, CancellationToken ct = default) => throw new NotImplementedException();
     }
 
     private sealed class FakeProveedorService : IProveedorService

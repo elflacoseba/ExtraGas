@@ -2,8 +2,10 @@ using AutoMapper;
 using ExtraGasMVC.Constants;
 using ExtraGasMVC.Data.Context;
 using ExtraGasMVC.Data.Entities;
+using ExtraGasMVC.Data.Entities.Views;
 using ExtraGasMVC.DTOs;
 using ExtraGasMVC.Mappings;
+using ExtraGasMVC.Models.ViewModels;
 using ExtraGasMVC.Services.Implementations;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -1346,14 +1348,19 @@ public class GarrafaServiceTests
     {
         // Idem GetStockAsync: la view v_garrafas_en_clientes no existe en
         // InMemory. El metodo acepta clienteId=null (todas) o clienteId=X
-        // (filtra); ambos devuelven vacio sin lanzar.
+        // (filtra); ambos devuelven PagedResult vacio sin lanzar.
+        // Issue #182 T11: la firma ahora devuelve PagedResult<VGarrafaEnCliente>.
         var (service, _) = NewService(
             nameof(GetEnClientesAsync_DevuelveEnumerableVacio_CuandoVistaEstaVaciaEnInMemory_SinFiltro));
 
         var enClientes = await service.GetEnClientesAsync(clienteId: null);
 
-        enClientes.Should().NotBeNull();
-        enClientes.Should().BeEmpty();
+        enClientes.Items.Should().NotBeNull();
+        enClientes.Items.Should().BeEmpty();
+        enClientes.Total.Should().Be(0,
+            "el count de la view en InMemory es 0 — CountAsync traduce a SELECT COUNT(*) que no devuelve filas");
+        enClientes.Page.Should().Be(1, "page default = 1 cuando no se especifica");
+        enClientes.PageSize.Should().Be(20, "pageSize default = 20 cuando no se especifica");
     }
 
     [Fact]
@@ -1361,13 +1368,72 @@ public class GarrafaServiceTests
     {
         // Acepta clienteId sin lanzar — el controller puede pasar el filtro
         // del dropdown sin necesidad de chequear si la view tiene datos.
+        // Issue #182 T11: paginación en SQL, count = 0, items vacio.
         var (service, _) = NewService(
             nameof(GetEnClientesAsync_DevuelveEnumerableVacio_CuandoVistaEstaVaciaEnInMemory_ConFiltro));
 
         var enClientes = await service.GetEnClientesAsync(clienteId: 1);
 
-        enClientes.Should().NotBeNull();
-        enClientes.Should().BeEmpty();
+        enClientes.Items.Should().NotBeNull();
+        enClientes.Items.Should().BeEmpty();
+        enClientes.Total.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetEnClientesAsync_NormalizaPageNegativoAPagina1()
+    {
+        // Issue #182 T11: page < 1 cae a 1 — la query no debe explotar ni
+        // devolver un universo. Mismo patron defensivo que GetPagedAsync.
+        var (service, _) = NewService(
+            nameof(GetEnClientesAsync_NormalizaPageNegativoAPagina1));
+
+        var enClientes = await service.GetEnClientesAsync(clienteId: null, page: -5);
+
+        enClientes.Page.Should().Be(1, "page < 1 debe normalizarse a 1");
+        enClientes.Items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEnClientesAsync_NormalizaPageSizeExcedidoACap100()
+    {
+        // Issue #182 T11: pageSize > 100 cae a 100 (cap defensivo). Patron
+        // identico a GetPagedAsync.pageSize>100 -> 100.
+        var (service, _) = NewService(
+            nameof(GetEnClientesAsync_NormalizaPageSizeExcedidoACap100));
+
+        var enClientes = await service.GetEnClientesAsync(clienteId: null, pageSize: 50_000);
+
+        enClientes.PageSize.Should().Be(100, "pageSize > 100 debe capearse a 100");
+    }
+
+    [Fact]
+    public async Task GetEnClientesAsync_NormalizaPageSizeCeroODefault()
+    {
+        // Issue #182 T11: pageSize <= 0 cae a 20 (default razonable).
+        var (service, _) = NewService(
+            nameof(GetEnClientesAsync_NormalizaPageSizeCeroODefault));
+
+        var enClientes = await service.GetEnClientesAsync(clienteId: null, pageSize: 0);
+
+        enClientes.PageSize.Should().Be(20, "pageSize <= 0 debe caer al default (20)");
+    }
+
+    [Fact]
+    public async Task GetEnClientesAsync_PaginaDos_UsaSkipCorrecto()
+    {
+        // Issue #182 T11: page=2 con pageSize=10 debe traducirse a
+        // Skip((2-1)*10)=Skip(10). En InMemory la view no se popula, asi
+        // que validamos que la query no lance y devuelva items vacios (la
+        // cobertura real del Skip se valida contra MySQL en el Controller).
+        var (service, _) = NewService(
+            nameof(GetEnClientesAsync_PaginaDos_UsaSkipCorrecto));
+
+        var enClientes = await service.GetEnClientesAsync(clienteId: null, page: 2, pageSize: 10);
+
+        enClientes.Page.Should().Be(2,
+            "page=2 debe respetarse despues de la normalizacion (pageSize valido)");
+        enClientes.PageSize.Should().Be(10);
+        enClientes.Items.Should().BeEmpty();
     }
 
     [Fact]
