@@ -48,7 +48,19 @@ public interface IGarrafaService
     Task<IEnumerable<EstadoGarrafaDto>> GetEstadosAsync(CancellationToken ct = default);
     Task<GarrafaDto> CreateAsync(CreateGarrafaDto garrafa, ulong? usuarioId, CancellationToken ct = default);
     Task<GarrafaDto> UpdateAsync(UpdateGarrafaDto garrafa, ulong? usuarioId, CancellationToken ct = default);
-    Task<bool> CambiarEstadoAsync(ulong id, CambiarEstadoGarrafaDto dto, ulong? currentUserId = null, CancellationToken ct = default);
+    /// <summary>
+    /// Cambia el estado operacional de la garrafa, registrando un
+    /// <c>movimiento_garrafa</c> con tipo <c>CAMBIO_ESTADO</c>. La transicion
+    /// se valida contra <see cref="GarrafaTransiciones"/>.
+    /// </summary>
+    /// <param name="estadoOrigenEsperadoId">
+    /// <c>EstadoGarrafaId</c> que el caller (controller) leyo antes de
+    /// invocar el service. Si difiere del valor actual en BD (otro operador
+    /// cambio la garrafa en el medio), se rechaza con
+    /// <see cref="InvalidOperationException"/> y no se ejecuta ninguna
+    /// escritura. Issue #182 T03.
+    /// </param>
+    Task<bool> CambiarEstadoAsync(ulong id, ulong estadoOrigenEsperadoId, CambiarEstadoGarrafaDto dto, ulong? currentUserId = null, CancellationToken ct = default);
     /// <summary>
     /// Soft-delete de la garrafa: setea <c>deleted_at</c>, baja <c>activo</c> y
     /// actualiza <c>updated_at</c>/<c>updated_by</c>. Bloquea garrafas en estado

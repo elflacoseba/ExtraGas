@@ -328,6 +328,14 @@ public class GarrafasController : BaseController
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CambiarEstado(ulong id, CambiarEstadoGarrafaDto dto, CancellationToken ct = default)
     {
+        // Issue #182 T03: una sola lectura por request. La vista (GET) ya
+        // cargo ViewBag.Garrafa; aca volvemos a leer solo para re-pintar el
+        // snapshot consistente con lo que mostro el dropdown (la matriz de
+        // transiciones se consulta al service que hace su propio FindAsync
+        // — fuente fresca). El EstadoGarrafaId del snapshot se pasa al
+        // service como "estadoOrigenEsperadoId"; si difiere del estado
+        // actual al momento del write, el service rechaza el cambio antes
+        // de tocar SaveChanges.
         var garrafa = await _garrafaService.GetByIdAsync(id, ct);
         if (garrafa is null) return NotFound();
 
@@ -342,7 +350,7 @@ public class GarrafasController : BaseController
         try
         {
             var currentUserId = GetCurrentUserId();
-            var ok = await _garrafaService.CambiarEstadoAsync(id, dto, currentUserId, ct);
+            var ok = await _garrafaService.CambiarEstadoAsync(id, garrafa.EstadoGarrafaId, dto, currentUserId, ct);
             if (!ok) return NotFound();
             TempData["Success"] = $"Estado de la garrafa {garrafa.Codigo} actualizado correctamente.";
             return RedirectToAction(nameof(Details), new { id });
@@ -351,7 +359,10 @@ public class GarrafasController : BaseController
         {
             // Incluye: transición inválida (matriz GarrafaTransiciones), estado
             // destino inexistente en catálogo, estado destino que requiere
-            // cliente, tipo de movimiento CAMBIO_ESTADO no encontrado, etc.
+            // cliente, tipo de movimiento CAMBIO_ESTADO no encontrado,
+            // y (T03/T04) conflicto de concurrencia / race entre este read
+            // y el FindAsync interno del service. El mensaje del service
+            // es seguro y accionable.
             _logger.LogWarning(ex, "Validación de negocio al cambiar estado de garrafa {Id}", id);
             ModelState.AddModelError(string.Empty, ex.Message);
             return View(dto);

@@ -351,7 +351,7 @@ public class ControllersActivoViewBagTests
         public Task<IEnumerable<EstadoGarrafaDto>> GetEstadosAsync(CancellationToken ct = default) => Task.FromResult<IEnumerable<EstadoGarrafaDto>>(new List<EstadoGarrafaDto>());
         public Task<GarrafaDto> CreateAsync(CreateGarrafaDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<GarrafaDto> UpdateAsync(UpdateGarrafaDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<bool> CambiarEstadoAsync(ulong id, CambiarEstadoGarrafaDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<bool> CambiarEstadoAsync(ulong id, ulong estadoOrigenEsperadoId, CambiarEstadoGarrafaDto d, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IEnumerable<EstadoGarrafaDto>> GetTransicionesDisponiblesAsync(ulong g, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> DeleteAsync(ulong id, ulong? u, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IEnumerable<MovimientoGarrafaDto>> GetHistorialAsync(ulong g, CancellationToken ct = default) => throw new NotImplementedException();

@@ -68,6 +68,25 @@ public class GarrafaConfiguration : IEntityTypeConfiguration<Garrafa>
             .HasColumnName("deleted_at")
             .HasColumnType("datetime");
 
+        // Issue #182 T04: concurrencia optimista via `version` BIGINT.
+        // Patron BIGINT manual-increment (no trigger BINARY(8) + RANDOM_BYTES
+        // como Producto.RowVersion): el service hace
+        // `entity.Version = originalVersion + 1` antes de SaveChangesAsync y
+        // EF agrega el `originalVersion` al WHERE del UPDATE. Si la fila
+        // fue modificada por otro operador entre el read y el write, el
+        // WHERE no matchea -> 0 filas afectadas -> DbUpdateConcurrencyException
+        // que el service traduce a InvalidOperationException con mensaje
+        // "fue modificada por otro operador".
+        //
+        // Migracion: db/migrations/20260920_175040_add_concurrency_version_garrafas.sql
+        // (columna + backfill a 1). Ver GarrafaService.UpdateAsync y
+        // CambiarEstadoAsync para el manejo de la excepcion.
+        builder.Property(g => g.Version)
+            .HasColumnName("version")
+            .HasColumnType("bigint unsigned")
+            .HasDefaultValue(1UL)
+            .IsConcurrencyToken();
+
         builder.HasOne(g => g.Proveedor)
             .WithMany()
             .HasForeignKey(g => g.ProveedorId)
