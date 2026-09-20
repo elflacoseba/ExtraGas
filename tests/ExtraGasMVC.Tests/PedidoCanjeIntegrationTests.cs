@@ -1041,6 +1041,11 @@ public class PedidoCanjeMySqlFixture : IAsyncLifetime
             created_by BIGINT UNSIGNED NULL,
             updated_by BIGINT UNSIGNED NULL,
             deleted_at DATETIME NULL,
+            -- Issue #182 T04: columna de concurrencia optimista. Debe existir
+            -- para que el INSERT/UPDATE de GarrafaService no falle con
+            -- "Unknown column 'version' in 'field list'". Mantener sincronizado
+            -- con db/migrations/20260920_175040_add_concurrency_version_garrafas.sql.
+            version BIGINT UNSIGNED NOT NULL DEFAULT 1,
             CONSTRAINT uq_garrafas_codigo UNIQUE (codigo),
             CONSTRAINT chk_garrafas_capacidad CHECK (capacidad_kg IN (10, 15, 45)),
             CONSTRAINT fk_garrafas_estado FOREIGN KEY (estado_garrafa_id) REFERENCES estados_garrafa(id),

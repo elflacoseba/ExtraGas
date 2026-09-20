@@ -242,6 +242,13 @@ public class GarrafaService : IGarrafaService
         // Issue #114: Activo no viene del DTO. Lo setea el Service en true
         // porque es estado (soft-delete), no dato de carga del operador.
         entity.Activo = true;
+        // Issue #182 T04: version arranca en 1 para que el primer UPDATE
+        // (despues de la lectura) compare contra 1 e incremente a 2. Si
+        // dejamos el default 0 de BD, la primera lectura ve 0 y el primer
+        // UPDATE seria WHERE version=0, que matchea — funciona pero deja un
+        // piso confuso al debugging. Empezar en 1 es consistente con el
+        // backfill de la migration.
+        entity.Version = 1;
         entity.CreatedAt = DateTime.UtcNow;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.CreatedBy = usuarioId;
@@ -269,13 +276,18 @@ public class GarrafaService : IGarrafaService
         //   desde Edit rompería la trazabilidad del módulo (#182 T01).
         //   Si difieren del valor actual, rechazamos el POST hand-crafted que
         //   intentaría esquivar esa validación.
+        // - Version (#182 T04): token de concurrencia optimista. Lo
+        //   incrementamos manualmente antes de SaveChanges; EF agrega el
+        //   valor leido al WHERE del UPDATE.
         var activoOriginal = entity.Activo;
         var estadoAnterior = entity.EstadoGarrafaId;
         var clienteAnterior = entity.ClienteId;
+        var versionOriginal = entity.Version;
 
         _mapper.Map(garrafa, entity);
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = usuarioId;
+        entity.Version = versionOriginal + 1;
         GarrafaEditRules.PreservarFlagsNoEditables(entity, activoOriginal);
 
         if (entity.EstadoGarrafaId != estadoAnterior || entity.ClienteId != clienteAnterior)
@@ -290,32 +302,71 @@ public class GarrafaService : IGarrafaService
         // no alcanza para un POST hand-crafted con un id soft-deleted.
         await ValidarClienteActivoAsync(entity.ClienteId, ct);
 
-        await SaveOrThrowDuplicateAsync(garrafa.Codigo, ct);
+        try
+        {
+            await _context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // Issue #182 T04: si dos operadores editan la misma garrafa a la
+            // vez, el WHERE id=X AND version=original no matchea -> 0 filas
+            // afectadas. Traducimos a InvalidOperationException (mismo canal
+            // que las validaciones de T01/T02/T05) para que el Controller
+            // renderice un mensaje claro en lugar de un 500.
+            _logger.LogWarning(ex,
+                "Garrafa {Id} ({Codigo}) — conflicto de concurrencia al actualizar por {UsuarioId}",
+                entity.Id, entity.Codigo, usuarioId);
+            throw new InvalidOperationException(
+                $"La garrafa {entity.Codigo} fue modificada por otro operador mientras editabas. " +
+                "Recargá la página y volvé a intentar.", ex);
+        }
+        catch (DbUpdateException dbex) when (dbex.InnerException is MySqlException my && my.Number == 1062)
+        {
+            throw new InvalidOperationException($"Ya existe una garrafa con el código {garrafa.Codigo}.");
+        }
 
         return _mapper.Map<GarrafaDto>(entity);
     }
 
-    public async Task<bool> CambiarEstadoAsync(ulong id, CambiarEstadoGarrafaDto dto, ulong? currentUserId = null, CancellationToken ct = default)
+    public async Task<bool> CambiarEstadoAsync(ulong id, ulong estadoOrigenEsperadoId, CambiarEstadoGarrafaDto dto, ulong? currentUserId = null, CancellationToken ct = default)
     {
         var garrafa = await _context.Garrafas.FindAsync(new object[] { id }, ct);
         if (garrafa == null)
             return false;
 
+        // Issue #182 T03: deteccion temprana del race entre el read del
+        // controller (ViewBag.Garrafa) y nuestro read. Si el estado leido por
+        // el controller difiere del que tenemos aca, otro operador cambio la
+        // garrafa en el medio. Rechazamos ANTES de cargar catalogos /
+        // transicionar / abrir transaccion — sin escrituras, sin
+        // MovimientoGarrafa fantasma, sin retry silencioso. El controller
+        // muestra el mensaje y le pide al operador recargar.
+        if (garrafa.EstadoGarrafaId != estadoOrigenEsperadoId)
+        {
+            throw new InvalidOperationException(
+                $"La garrafa {garrafa.Codigo} fue modificada por otro operador mientras editabas " +
+                $"(estado esperado: id={estadoOrigenEsperadoId}, estado actual: id={garrafa.EstadoGarrafaId}). " +
+                "Recargá la página y volvé a intentar.");
+        }
+
         // Cargar ambos extremos de la transición (origen y destino) en una sola
         // consulta para poder validar contra GarrafaTransiciones y contra las
-        // reglas del catálogo (requiere_cliente, etc.).
+        // reglas del catálogo (requiere_cliente, etc.). Usamos el estadoOrigen
+        // del snapshot (estadoOrigenEsperadoId == entity.EstadoGarrafaId ya
+        // validado arriba) para mantener una sola fuente de verdad entre lo
+        // que vio el controller y lo que valida el service.
         var extremos = await _context.EstadosGarrafa
             .AsNoTracking()
-            .Where(e => e.Id == garrafa.EstadoGarrafaId || e.Id == dto.NuevoEstadoId)
+            .Where(e => e.Id == estadoOrigenEsperadoId || e.Id == dto.NuevoEstadoId)
             .Select(e => new { e.Id, e.Codigo, e.RequiereCliente, e.Nombre })
             .ToListAsync(ct);
 
-        var origen = extremos.FirstOrDefault(e => e.Id == garrafa.EstadoGarrafaId);
+        var origen = extremos.FirstOrDefault(e => e.Id == estadoOrigenEsperadoId);
         var destino = extremos.FirstOrDefault(e => e.Id == dto.NuevoEstadoId);
 
         if (origen is null)
             throw new InvalidOperationException(
-                $"El estado actual de la garrafa (id={garrafa.EstadoGarrafaId}) no existe en el catálogo estados_garrafa.");
+                $"El estado actual de la garrafa (id={estadoOrigenEsperadoId}) no existe en el catálogo estados_garrafa.");
 
         if (destino is null)
             throw new InvalidOperationException(
@@ -352,7 +403,12 @@ public class GarrafaService : IGarrafaService
         if (tipoCambioEstadoId == 0)
             throw new InvalidOperationException("No se encontró el tipo de movimiento CAMBIO_ESTADO en la base de datos.");
 
-        var estadoOrigen = garrafa.EstadoGarrafaId;
+        // Issue #182 T04: snapshot del version antes de mutar la entity. Lo
+        // incrementamos antes de SaveChanges; EF agrega el original al WHERE
+        // del UPDATE. Si la fila fue tocada por otro operador entre el
+        // FindAsync de arriba y el SaveChanges, el WHERE no matchea y EF
+        // tira DbUpdateConcurrencyException que capturamos abajo.
+        var versionOriginal = garrafa.Version;
 
         // Resolver el empleado asociado al usuario autenticado (issue #43 -
         // auditoría completa de CambiarEstadoAsync). Si el usuario no tiene
@@ -378,6 +434,7 @@ public class GarrafaService : IGarrafaService
             // de verdad. La app solo actualiza los campos que el trigger no toca.
             garrafa.ClienteId = dto.ClienteId;
             garrafa.UpdatedAt = DateTime.UtcNow;
+            garrafa.Version = versionOriginal + 1;
 
             var movimiento = new MovimientoGarrafa
             {
@@ -385,7 +442,7 @@ public class GarrafaService : IGarrafaService
                 Fecha = DateTime.UtcNow,
                 TipoMovimientoId = tipoCambioEstadoId,
                 ClienteId = dto.ClienteId,
-                EstadoOrigenId = estadoOrigen,
+                EstadoOrigenId = estadoOrigenEsperadoId,
                 EstadoDestinoId = dto.NuevoEstadoId,
                 EmpleadoId = empleadoId,
                 CreatedBy = currentUserId,
@@ -399,6 +456,21 @@ public class GarrafaService : IGarrafaService
 
             return true;
         }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // Issue #182 T04: concurrencia contra otra escritura concurrente
+            // (ej. otro operador haciendo Cambiar estado o Delete entre
+            // nuestro FindAsync y SaveChanges). Traducimos a
+            // InvalidOperationException con el mismo mensaje claro que usamos
+            // para T03 — el operador debe recargar y volver a intentar.
+            _logger.LogWarning(ex,
+                "Garrafa {Id} ({Codigo}) — conflicto de concurrencia al cambiar estado por {UsuarioId}",
+                garrafa.Id, garrafa.Codigo, currentUserId);
+            await transaction.RollbackAsync(ct);
+            throw new InvalidOperationException(
+                $"La garrafa {garrafa.Codigo} fue modificada por otro operador mientras editabas. " +
+                "Recargá la página y volvé a intentar.", ex);
+        }
         catch (Exception ex)
         {
             // Issue #56: registrar el error antes del rollback para auditoría
@@ -407,7 +479,7 @@ public class GarrafaService : IGarrafaService
             // logs internos de MySQL/EF que no llegan al operador.
             _logger.LogError(ex,
                 "Error al cambiar estado de la garrafa {GarrafaId} (origen={EstadoOrigenId}, destino={EstadoDestinoId}). Se realiza rollback de la transacción.",
-                id, estadoOrigen, dto.NuevoEstadoId);
+                id, estadoOrigenEsperadoId, dto.NuevoEstadoId);
             await transaction.RollbackAsync(ct);
             throw;
         }
@@ -578,9 +650,17 @@ public class GarrafaService : IGarrafaService
         // fecha_ultimo_movimiento al hacer INSERT en movimientos_garrafa.
         // Acá solo actualizamos lo que el trigger no toca: cliente_id en la
         // garrafa (ENTREGA → cliente del pedido, DEVOLUCION → NULL).
+        //
+        // Issue #182 T04: incrementamos `version` para que el token de
+        // concurrencia optimista detecte escrituras concurrentes entre el
+        // FindAsync de arriba y este SaveChanges. El caller
+        // (PedidoService.RegistrarCanjePedidoAsync) ya está dentro de su
+        // propia transacción, así que no hace falta SaveChanges adicional.
+        var versionOriginal = garrafa.Version;
         garrafa.ClienteId = clienteId;
         garrafa.UpdatedAt = DateTime.UtcNow;
         garrafa.UpdatedBy = usuarioId;
+        garrafa.Version = versionOriginal + 1;
 
         var estadoOrigen = garrafa.EstadoGarrafaId;
 
@@ -601,10 +681,29 @@ public class GarrafaService : IGarrafaService
 
         _context.MovimientosGarrafa.Add(movimiento);
 
-        // NO abrimos transacción propia: dependemos de la transacción ambiente
-        // que abrió PedidoService.RegistrarCanjePedidoAsync. Si no hay una, EF
-        // usa su SaveChanges implícito — suficiente para un solo movimiento.
-        await _context.SaveChangesAsync(ct);
+        try
+        {
+            // NO abrimos transacción propia: dependemos de la transacción ambiente
+            // que abrió PedidoService.RegistrarCanjePedidoAsync. Si no hay una, EF
+            // usa su SaveChanges implícito — suficiente para un solo movimiento.
+            await _context.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // Issue #182 T04: si la garrafa fue modificada por otro flujo
+            // entre el FindAsync y este SaveChanges, el WHERE version=original
+            // no matchea. Re-lanzamos como InvalidOperationException para que
+            // el caller (PedidoService) aborte la registracion del canje del
+            // pedido entero — no tiene sentido registrar movimientos de una
+            // garrafa que ya está en estado distinto al que asumimos al
+            // recolectar los codigos.
+            _logger.LogWarning(ex,
+                "Garrafa {Id} ({Codigo}) — conflicto de concurrencia al registrar movimiento por canje (pedido {PedidoId})",
+                garrafa.Id, garrafa.Codigo, pedidoId);
+            throw new InvalidOperationException(
+                $"La garrafa {garrafa.Codigo} fue modificada por otro operador mientras se procesaba el canje. " +
+                "Recargá la página y volvé a intentar.", ex);
+        }
     }
 
     private async Task SaveOrThrowDuplicateAsync(string codigo, CancellationToken ct)

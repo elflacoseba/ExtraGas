@@ -357,7 +357,7 @@ public class GarrafaServiceTests
             Observaciones = "Vacia para reposicion"
         };
 
-        var ok = await service.CambiarEstadoAsync(creada.Id, dto, currentUserId: 5);
+        var ok = await service.CambiarEstadoAsync(creada.Id, creada.EstadoGarrafaId, dto, currentUserId: 5);
 
         ok.Should().BeTrue();
         var movimiento = await context.MovimientosGarrafa
@@ -387,7 +387,7 @@ public class GarrafaServiceTests
             Observaciones = "Intento invalido"
         };
 
-        var act = () => service.CambiarEstadoAsync(creada.Id, dto, currentUserId: 1);
+        var act = () => service.CambiarEstadoAsync(creada.Id, creada.EstadoGarrafaId, dto, currentUserId: 1);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*Transición inválida*",
@@ -408,7 +408,7 @@ public class GarrafaServiceTests
             ClienteId = null,                  // omitido -> debe rechazar
         };
 
-        var act = () => service.CambiarEstadoAsync(creada.Id, dto, currentUserId: 1);
+        var act = () => service.CambiarEstadoAsync(creada.Id, creada.EstadoGarrafaId, dto, currentUserId: 1);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*requiere seleccionar un cliente*",
@@ -424,6 +424,7 @@ public class GarrafaServiceTests
 
         var ok = await service.CambiarEstadoAsync(
             id: 12_345,
+            estadoOrigenEsperadoId: EstadoLlenaDepositoId,
             dto: new CambiarEstadoGarrafaDto { NuevoEstadoId = EstadoVaciaDepositoId },
             currentUserId: 1);
 
@@ -858,9 +859,216 @@ public class GarrafaServiceTests
             ClienteId = 2, // soft-deleted, sembrado en SeedCatalogos
         };
 
-        var act = () => service.CambiarEstadoAsync(creada.Id, dto, currentUserId: 1);
+        var act = () => service.CambiarEstadoAsync(creada.Id, creada.EstadoGarrafaId, dto, currentUserId: 1);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*dado de baja*");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // #182 T03 — Race en CambiarEstado POST: una sola lectura por request
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CambiarEstadoAsync_LanzaExcepcion_SiEstadoOrigenEsperadoDifiereDelActual()
+    {
+        // T03: el controller hace una sola lectura (ViewBag.Garrafa) y pasa
+        // ese EstadoGarrafaId al service como `estadoOrigenEsperadoId`. Si
+        // entre el read del controller y el FindAsync interno del service
+        // otro operador cambio la garrafa, el entity del controller y el
+        // entity del service quedan desfasados. El service debe rechazar
+        // ANTES de cargar catalogos / transicionar / abrir transaccion,
+        // con un mensaje claro que invite al operador a recargar.
+        var (service, context) = NewService(
+            nameof(CambiarEstadoAsync_LanzaExcepcion_SiEstadoOrigenEsperadoDifiereDelActual),
+            seedCatalogos: true);
+        var creada = await service.CreateAsync(NewCreateDto("GAR-T03"), usuarioId: 1);
+
+        // Simulamos la mutacion del otro operador: cambiamos directamente el
+        // EstadoGarrafaId de la fila persistida a otro estado valido.
+        var entityStale = await context.Garrafas.IgnoreQueryFilters()
+            .FirstAsync(g => g.Id == creada.Id);
+        entityStale.EstadoGarrafaId = EstadoVaciaDepositoId;
+        await context.SaveChangesAsync();
+
+        // El controller llama CambiarEstadoAsync con el EstadoGarrafaId VIEJO
+        // (el que vio en su read original). El service tiene la fila con
+        // EstadoGarrafaId NUEVO en su FindAsync y debe detectar la dif.
+        var dto = new CambiarEstadoGarrafaDto
+        {
+            NuevoEstadoId = EstadoDanadaId,
+            Observaciones = "Intento con origen stale"
+        };
+
+        var act = () => service.CambiarEstadoAsync(
+            creada.Id,
+            estadoOrigenEsperadoId: EstadoLlenaDepositoId, // lo que vio el controller
+            dto,
+            currentUserId: 1);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*modificada por otro operador*",
+                "el service debe detectar el race entre el read del controller y su FindAsync interno");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // #182 T04 — Token de concurrencia (BIGINT version manual-increment)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateAsync_ExitosoIncrementaVersion_EnBD()
+    {
+        // Triangulacion del fix T04: el service hace snapshot del Version
+        // antes del map y setea entity.Version = original + 1 antes de
+        // SaveChanges. EF agrega el original al WHERE del UPDATE.
+        var (service, context) = NewService(
+            nameof(UpdateAsync_ExitosoIncrementaVersion_EnBD));
+        var creada = await service.CreateAsync(NewCreateDto("GAR-T04-B"), usuarioId: 1);
+
+        var entityInicial = await context.Garrafas.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstAsync(g => g.Id == creada.Id);
+        var versionInicial = entityInicial.Version;
+        versionInicial.Should().BeGreaterThan(0,
+            "la migration hace backfill a 1 y CreateAsync setea explicitamente Version = 1");
+
+        // Edit menor (solo capacidad) para ejercitar el path de UpdateAsync
+        // sin disparar los rechazos de T01 (que bloquearia cambiar
+        // EstadoGarrafaId / ClienteId).
+        var updateDto = new UpdateGarrafaDto
+        {
+            Id = creada.Id,
+            Codigo = creada.Codigo,
+            CapacidadKg = 15,
+            FechaCompra = creada.FechaCompra,
+            EstadoGarrafaId = creada.EstadoGarrafaId,
+            ClienteId = creada.ClienteId,
+            Observaciones = "Cambio de capacidad para ejercicio del version"
+        };
+        await service.UpdateAsync(updateDto, usuarioId: 7);
+
+        var entityFinal = await context.Garrafas.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstAsync(g => g.Id == creada.Id);
+        entityFinal.Version.Should().Be(versionInicial + 1,
+            "UpdateAsync debe incrementar Version antes de SaveChanges para que EF detecte concurrencia");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ConVersionStale_LanzaInvalidOperationException()
+    {
+        // T04-a: simulamos el race clasico de Edit concurrente. Patron:
+        //   1. Operador A lee la entity (OriginalValue.Version = X).
+        //   2. Operador B lee la entity, modifica y guarda primero
+        //      (la fila en BD queda con Version = X + 1).
+        //   3. Operador A modifica su copia en memoria (con OriginalValue
+        //      todavia en X), intenta SaveChanges — el WHERE version=X no
+        //      matchea (BD tiene X+1) y EF tira DbUpdateConcurrencyException.
+        //   4. El service traduce a InvalidOperationException con mensaje
+        //      claro (el mismo patron que ProductoService.UpdateAsync).
+        //
+        // Para reproducirlo en InMemory precisamos dos contextos contra la
+        // misma base. El factory `NewService(...)` devuelve un solo contexto,
+        // asi que abrimos un segundo contexto a mano con el mismo
+        // databaseName.
+        var dbName = nameof(UpdateAsync_ConVersionStale_LanzaInvalidOperationException);
+        var (service, _) = NewService(dbName);
+        var creada = await service.CreateAsync(NewCreateDto("GAR-T04-A"), usuarioId: 1);
+
+        var options = new DbContextOptionsBuilder<ExtraGasDbContext>()
+            .UseInMemoryDatabase(databaseName: dbName)
+            .ConfigureWarnings(w => w.Ignore(
+                Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+
+        // Paso 2: Operador B modifica y guarda primero.
+        using (var ctxB = new ExtraGasDbContext(options))
+        {
+            var entityB = await ctxB.Garrafas.IgnoreQueryFilters()
+                .FirstAsync(g => g.Id == creada.Id);
+            entityB.CapacidadKg = 45;
+            entityB.Version += 1;
+            await ctxB.SaveChangesAsync();
+        }
+
+        // Paso 3: Operador A construye su updateDto y llama al service.
+        // Su copia en memoria tiene OriginalValue.Version = X (lo que
+        // OriginalValue.AsNoTracking().FirstAsync arriba no altero).
+        var updateDto = new UpdateGarrafaDto
+        {
+            Id = creada.Id,
+            Codigo = creada.Codigo,
+            CapacidadKg = 25,
+            FechaCompra = creada.FechaCompra,
+            EstadoGarrafaId = creada.EstadoGarrafaId,
+            ClienteId = creada.ClienteId,
+        };
+
+        var act = () => service.UpdateAsync(updateDto, usuarioId: 7);
+
+        // El service debe traducir DbUpdateConcurrencyException a
+        // InvalidOperationException con mensaje claro.
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*modificada por otro operador*",
+                "el service debe atrapar DbUpdateConcurrencyException y traducirla a InvalidOperationException");
+    }
+
+    [Fact]
+    public async Task CambiarEstadoAsync_ExitosoIncrementaVersion_EnBD()
+    {
+        // T04-c: CambiarEstadoAsync exitoso debe incrementar el version
+        // de la garrafa (el path de canje via RegistrarMovimientoPorCanje
+        // tambien lo hace, pero este test cubre el flujo manual
+        // CAMBIO_ESTADO que es el del Controller CambiarEstado POST).
+        var (service, context) = NewService(
+            nameof(CambiarEstadoAsync_ExitosoIncrementaVersion_EnBD),
+            seedCatalogos: true);
+        var creada = await service.CreateAsync(NewCreateDto("GAR-T04-C"), usuarioId: 1);
+
+        var versionInicial = (await context.Garrafas.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstAsync(g => g.Id == creada.Id)).Version;
+
+        var ok = await service.CambiarEstadoAsync(
+            creada.Id,
+            creada.EstadoGarrafaId,
+            new CambiarEstadoGarrafaDto
+            {
+                NuevoEstadoId = EstadoVaciaDepositoId,
+                Observaciones = "Ejercicio del token de concurrencia"
+            },
+            currentUserId: 5);
+
+        ok.Should().BeTrue();
+        var versionFinal = (await context.Garrafas.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstAsync(g => g.Id == creada.Id)).Version;
+        versionFinal.Should().Be(versionInicial + 1,
+            "CambiarEstadoAsync exitoso debe incrementar Version para que el token detecte races");
+    }
+
+    [Fact]
+    public void GarrafaEntity_ExponeVersion_ComoConcurrencyToken()
+    {
+        // Triangulacion: la entity tiene la propiedad Version (ulong) y el
+        // Configuration la marca como IsConcurrencyToken. Patron paralelo
+        // a Robustez146_4_ProductoConfiguration_TieneRowVersion_ComoConcurrencyToken.
+        typeof(Garrafa).GetProperty(nameof(Garrafa.Version))
+            .Should().NotBeNull("la entity debe exponer Version para IsConcurrencyToken");
+        typeof(Garrafa).GetProperty(nameof(Garrafa.Version))!
+            .PropertyType.Should().Be<ulong>();
+
+        using var context = new ExtraGasDbContext(
+            new DbContextOptionsBuilder<ExtraGasDbContext>()
+                .UseInMemoryDatabase(databaseName: nameof(GarrafaEntity_ExponeVersion_ComoConcurrencyToken))
+                .Options);
+
+        var entityType = context.Model.FindEntityType(typeof(Garrafa));
+        entityType.Should().NotBeNull("la entity Garrafa debe estar registrada en el modelo");
+
+        var version = entityType!.FindProperty(nameof(Garrafa.Version));
+        version.Should().NotBeNull("Version debe ser una property de la entity");
+        version!.IsConcurrencyToken.Should().BeTrue(
+            "Version debe ser IsConcurrencyToken para que EF Core lo agregue al WHERE del UPDATE");
     }
 }
