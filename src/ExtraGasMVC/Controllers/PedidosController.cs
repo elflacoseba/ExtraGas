@@ -407,21 +407,25 @@ public class PedidosController : BaseController
         CreatePedidoDto pedido,
         CancellationToken ct = default)
     {
-        // Lookups are independent — fan them out in parallel.
-        var clientesTask = _clienteService.GetActivosAsync(ct);
-        var empleadosTask = _pedidoService.GetEmpleadosActivosAsync(ct);
-        var canalesTask = _pedidoService.GetCanalesVentaAsync(ct);
-        var mediosTask = _pedidoService.GetMediosContactoAsync(ct);
-
-        await Task.WhenAll(clientesTask, empleadosTask, canalesTask, mediosTask);
+        // Secuencial a proposito: todos estos lookups pegan al MISMO
+        // ExtraGasDbContext (registrado como Scoped, ver Program.cs). DbContext
+        // no es thread-safe y el ConcurrencyDetector de EF Core tira
+        // "A second operation was started on this context instance" en cuanto
+        // dos queries se solapan. Que los lookups sean logicamente
+        // independientes NO los hace seguros para un Task.WhenAll: comparten
+        // la instancia scoped. No re-optimizar esto a un fan-out paralelo.
+        var clientes = await _clienteService.GetActivosAsync(ct);
+        var empleados = await _pedidoService.GetEmpleadosActivosAsync(ct);
+        var canales = await _pedidoService.GetCanalesVentaAsync(ct);
+        var medios = await _pedidoService.GetMediosContactoAsync(ct);
 
         return new PedidoCreateViewModel
         {
             Pedido = pedido,
-            Clientes = clientesTask.Result,
-            Empleados = empleadosTask.Result,
-            Canales = canalesTask.Result,
-            MediosContacto = mediosTask.Result
+            Clientes = clientes,
+            Empleados = empleados,
+            Canales = canales,
+            MediosContacto = medios
         };
     }
 
@@ -430,20 +434,18 @@ public class PedidosController : BaseController
         UpdatePedidoDto pedido,
         CancellationToken ct = default)
     {
-        // All of these are read-only reads against the pedido + lookups — safe to fan out.
-        var pedidoDbTask = _pedidoService.GetByIdAsync(id, ct);
-        var clientesTask = _clienteService.GetActivosAsync(ct);
-        var empleadosTask = _pedidoService.GetEmpleadosActivosAsync(ct);
-        var canalesTask = _pedidoService.GetCanalesVentaAsync(ct);
-        var mediosTask = _pedidoService.GetMediosContactoAsync(ct);
-        var productosTask = _productoService.GetActivosAsync(ct);
-        var transicionesTask = _pedidoService.GetTransicionesDisponiblesAsync(id, ct);
-
-        await Task.WhenAll(
-            pedidoDbTask, clientesTask, empleadosTask, canalesTask,
-            mediosTask, productosTask, transicionesTask);
-
-        var pedidoDb = pedidoDbTask.Result;
+        // Secuencial a proposito: los services Scoped (Pedido, Cliente, Producto)
+        // comparten la misma instancia de ExtraGasDbContext, y DbContext no es
+        // thread-safe. Un Task.WhenAll sobre lookups "read-only" los solapa
+        // contra el ConcurrencyDetector de EF Core y revienta la request con
+        // InvalidOperationException. Ver BuildCreateViewModelAsync.
+        var pedidoDb = await _pedidoService.GetByIdAsync(id, ct);
+        var clientes = await _clienteService.GetActivosAsync(ct);
+        var empleados = await _pedidoService.GetEmpleadosActivosAsync(ct);
+        var canales = await _pedidoService.GetCanalesVentaAsync(ct);
+        var medios = await _pedidoService.GetMediosContactoAsync(ct);
+        var productos = await _productoService.GetActivosAsync(ct);
+        var transiciones = await _pedidoService.GetTransicionesDisponiblesAsync(id, ct);
         var estadoCodigo = pedidoDb?.EstadoCodigo ?? "";
 
         // Issue #44: el modal de canje solo aplica a items GARRAFA-capaces con
@@ -466,14 +468,14 @@ public class PedidosController : BaseController
         return new PedidoEditViewModel
         {
             Pedido = pedido,
-            Clientes = clientesTask.Result,
-            Empleados = empleadosTask.Result,
-            Canales = canalesTask.Result,
-            MediosContacto = mediosTask.Result,
-            Productos = productosTask.Result,
+            Clientes = clientes,
+            Empleados = empleados,
+            Canales = canales,
+            MediosContacto = medios,
+            Productos = productos,
             Items = items,
             ItemsGarrafaCanje = itemsGarrafaCanje,
-            Transiciones = transicionesTask.Result,
+            Transiciones = transiciones,
             EstadoActual = new PedidoEstadoActualInfo
             {
                 Id = pedidoDb?.EstadoPedidoId ?? 0,
